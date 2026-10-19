@@ -1,0 +1,41 @@
+[project]
+name = "aiolab"
+version = "0.2.0"
+description = "Hands-on cluster simulator and mock exam for the NVIDIA NCP-AIO (AI Operations) certification"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Rehmana Younis" }]
+dependencies = ["pyyaml>=6.0"]
+
+[project.scripts]
+aiolab = "aiolab.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["uv_build>=0.8,<0.12"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+ignore = [
+    "E501",    # long realistic command output lines are intentional
+    "SIM102",  # nested ifs mirror the command-line parsing they emulate
+    "SIM108",
+    "E741",    # short names like `l` for NVLink ids mirror the tools' own terminology
+    "B904",    # CommandError deliberately replaces the Python traceback with tool-style output
+    "B905",    # zip() over equal-length parsed columns
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["aiolab"]
