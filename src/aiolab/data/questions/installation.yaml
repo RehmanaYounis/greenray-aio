@@ -1,0 +1,636 @@
+# Installation and Deployment (blueprint weight 31%)
+# Original practice questions. Not taken from any real exam.
+
+- id: ins-001
+  domain: Installation and Deployment
+  difficulty: easy
+  question: |
+    An administrator is new to NVIDIA Base Command Manager (BCM) and wants to
+    script cluster changes from the head node shell instead of using the web
+    GUI. Which tool should they use?
+  choices:
+    - cm-chroot-sw-img
+    - cmsh
+    - nvsm
+    - Base View
+- id: ins-002
+  domain: Installation and Deployment
+  difficulty: medium
+  question: |
+    A compute node's local drive was replaced. The administrator wants BCM to
+    repartition and reformat the disk and lay down the whole software image the
+    next time the node boots, even if the disk layout looks valid. Which install
+    mode should be set for the node before rebooting it?
+  choices:
+    - FULL
+    - NOSYNC
+    - AUTO
+    - MAIN
+- id: ins-003
+  domain: Installation and Deployment
+  difficulty: medium
+  question: |
+    A BCM-managed node uses the default install mode. Its disk partitions match
+    the category's disk setup. What happens to the node's filesystem when the
+    node is rebooted?
+  choices:
+    - The node-installer syncs the local filesystem with the assigned software image, copying only the differences
+    - The disk is always wiped and the full image is copied from scratch
+    - The node boots from its local disk without contacting the head node
+    - The node mounts its root filesystem read-only over NFS from the head node
+- id: ins-004
+  domain: Installation and Deployment
+  difficulty: medium
+  question: |
+    An engineer has been debugging a driver issue on node007 and made several
+    local changes that are not in the software image. They need to reboot the
+    node but do NOT want BCM to overwrite those changes during the boot. Which
+    install mode fits this need?
+  choices:
+    - FULL
+    - AUTO
+    - MAIN
+    - NOSYNC
+- id: ins-005
+  domain: Installation and Deployment
+  difficulty: medium
+  lab: ins-bcm-softwareimage-update
+  question: |
+    An administrator installed a new package into the software image
+    /cm/images/gpu-image. The 16 running nodes that use this image must get the
+    package without being rebooted. What should the administrator do?
+  choices:
+    - Run grabimage on one of the nodes
+    - Run imageupdate on the nodes (or their category) in cmsh device mode
+    - Change the nodes' install mode to FULL
+    - Copy the package to /cm/shared and reboot nodes one by one
+- id: ins-006
+  domain: Installation and Deployment
+  difficulty: easy
+  lab: ins-bcm-softwareimage-update
+  question: |
+    A BCM administrator needs to add a diagnostic package to the software image
+    that all GPU nodes boot from. Which approach is correct?
+  choices:
+    - Install the package on the head node with apt; nodes inherit head node packages
+    - Enter the image with cm-chroot-sw-img /cm/images/<image> and install the package there
+    - SSH to each node and install the package locally
+    - Edit the category and add the package name to its "packages" property
+- id: ins-007
+  domain: Installation and Deployment
+  difficulty: medium
+  question: |
+    An engineer hand-tuned configuration files on node001 and verified that they
+    work. They want to capture node001's current filesystem back into the
+    software image so that other nodes get the same changes. Which cmsh command
+    does this?
+  choices:
+    - imageupdate
+    - grabimage
+    - clone
+    - commit
+- id: ins-008
+  domain: Installation and Deployment
+  difficulty: medium
+  lab: ins-bcm-add-node-category
+  question: |
+    Thirty-two DGX nodes are in the BCM category "dgx-h100". The administrator
+    built a new software image, "dgx-h100-v2", and wants all 32 nodes to use it.
+    What is the most efficient way to do this?
+  choices:
+    - Set the softwareimage property on each of the 32 device objects
+    - In category mode, set softwareimage for the dgx-h100 category to dgx-h100-v2 and commit
+    - Rename dgx-h100-v2 to default-image
+    - Use grabimage to copy dgx-h100-v2 to each node
+- id: ins-009
+  domain: Installation and Deployment
+  difficulty: medium
+  lab: ins-bcm-add-node-category
+  question: |
+    A new DGX node arrives and is cabled to the provisioning network. Its MAC
+    address is known. In cmsh, what is the quickest correct way to define it so
+    that it gets the same settings as existing node dgx-07?
+  choices:
+    - In device mode, clone dgx-07 to dgx-08, set its MAC address (and IP if needed), then commit
+    - Run grabimage from dgx-07 using dgx-08 as the target
+    - Create a new category named dgx-08 and add the MAC to it
+    - Copy /cm/images/default-image to /cm/images/dgx-08
+- id: ins-010
+  domain: Installation and Deployment
+  difficulty: medium
+  question: |
+    The team wants to test a new CUDA driver on two nodes before rolling it out
+    to the whole cluster. Which BCM workflow lowers the risk the most?
+  choices:
+    - Clone the current image, install the driver in the clone, assign the clone to a test category containing the two nodes, and reboot them
+    - Install the driver on the head node and reboot the two test nodes
+    - Install the driver directly into default-image and run imageupdate on all nodes, then roll back if needed
+    - Set the two nodes to NOSYNC and install the driver on all nodes
+- id: ins-011
+  domain: Installation and Deployment
+  difficulty: easy
+  question: |
+    Which statement about Base View and cmsh in NVIDIA Base Command Manager is
+    correct?
+  choices:
+    - Base View is read-only; all changes must be made with cmsh
+    - Base View runs on each compute node and manages that node only
+    - cmsh edits configuration files directly and bypasses CMDaemon
+    - Both are front ends to CMDaemon, so a change made in one is visible in the other
+- id: ins-012
+  domain: Installation and Deployment
+  difficulty: hard
+  question: |
+    An administrator is configuring high availability for two BCM head nodes with
+    cmha-setup. The setup asks for power control (BMC) of both head nodes. Why
+    is this needed?
+  choices:
+    - BMC access is only needed to update head node firmware during setup
+    - So both head nodes can be powered on together and share the load equally
+    - So the passive head node can power off (fence) a failed active head node before taking over, avoiding split-brain
+    - So compute nodes can PXE boot from the BMC network instead of the internal network
+- id: ins-013
+  domain: Installation and Deployment
+  difficulty: hard
+  question: |
+    Put the BCM compute node provisioning steps in the correct order:
+      1. The node-installer checks or creates partitions and syncs the software image
+      2. The node PXE boots and gets an address from the head node's DHCP server
+      3. The node-installer identifies the node (for example, by MAC address)
+      4. The node switches to its local root filesystem and starts its services
+  choices:
+    - 3, 2, 1, 4
+    - 2, 1, 3, 4
+    - 2, 3, 4, 1
+    - 2, 3, 1, 4
+- id: ins-014
+  domain: Installation and Deployment
+  difficulty: medium
+  question: |
+    A freshly racked node keeps showing "PXE-E51: No DHCP or proxyDHCP offers were
+    received" on its console. The BCM head node has been working for other nodes.
+    What should the administrator check FIRST?
+  choices:
+    - Whether the node's NVIDIA driver version matches the head node
+    - Whether the node's provisioning NIC is connected to the BCM internal (provisioning) network and is first in the boot order
+    - Whether Slurm is running on the head node
+    - Whether the software image has the latest CUDA toolkit
+- id: ins-015
+  domain: Installation and Deployment
+  difficulty: easy
+  question: |
+    Which description best fits NVIDIA Mission Control?
+  choices:
+    - A software stack for operating large AI infrastructure such as DGX SuperPOD, combining provisioning and cluster management, workload orchestration, observability and health automation
+    - A replacement for the NVIDIA GPU driver on DGX OS
+    - A firmware flashing tool for individual DGX systems
+    - A Kubernetes device plugin that exposes NVLink domains
+- id: ins-016
+  domain: Installation and Deployment
+  difficulty: easy
+  question: |
+    In a Slurm cluster, which daemon must run on every compute node?
+  choices:
+    - slurmdbd
+    - slurmctld
+    - slurmd
+    - slurmrestd
+- id: ins-017
+  domain: Installation and Deployment
+  difficulty: medium
+  lab: ins-slurm-gres-config
+  question: |
+    Each DGX node has 8 GPUs at /dev/nvidia0 through /dev/nvidia7. The
+    administrator writes /etc/slurm/gres.conf by hand (no autodetection). Which
+    line correctly describes the GPUs?
+  choices:
+    - Name=gpu File=/dev/nvidia[0-7]
+    - GresTypes=gpu
+    - Gres=gpu:8
+    - NodeName=dgx-01 Gpus=8
+- id: ins-018
+  domain: Installation and Deployment
+  difficulty: medium
+  lab: ins-slurm-gres-config
+  question: |
+    gres.conf on all GPU nodes is correct, but jobs submitted with --gres=gpu:1
+    fail with "Invalid generic resource (gres) specification". Which TWO
+    settings in slurm.conf are needed? (Choose two.)
+  choices:
+    - SelectType=select/linear
+    - ConstrainDevices=yes
+    - MpiDefault=pmix
+    - GresTypes=gpu
+    - Gres=gpu:8 on the NodeName lines for the GPU nodes
+- id: ins-019
+  domain: Installation and Deployment
+  difficulty: medium
+  question: |
+    After adding a parameter to slurm.conf on the controller only, the slurmctld
+    log shows:
+      error: Node dgx-05 appears to have a different slurm.conf than the slurmctld.
+    What is the correct fix?
+  choices:
+    - Delete slurm.conf from the compute nodes so they download it from the controller each time
+    - Ignore it; the message is cosmetic
+    - Restart munge on dgx-05
+    - Distribute the same slurm.conf to every node (or use a shared or configless setup) and restart or reconfigure the daemons
+- id: ins-020
+  domain: Installation and Deployment
+  difficulty: hard
+  question: |
+    After adding new compute nodes, slurmd on the new nodes cannot register and
+    the controller logs munge credential decode errors for those hosts. Which
+    TWO causes are most likely? (Choose two.)
+  choices:
+    - The GPUs on the new nodes are in MIG mode
+    - The /etc/munge/munge.key on the new nodes differs from the one on the controller
+    - The nodes' clocks are not synchronized with the controller
+    - slurmdbd is not running
+    - The new nodes have a different number of CPU cores
+- id: ins-021
+  domain: Installation and Deployment
+  difficulty: easy
+  question: |
+    Which ownership and permissions are appropriate for /etc/munge/munge.key?
+  choices:
+    - Owned by root, mode 0644 so all users can read it
+    - Owned by slurm, mode 0777
+    - Owned by the munge user, readable only by that user (mode 0400)
+    - Owned by nobody, mode 0600
+- id: ins-022
+  domain: Installation and Deployment
+  difficulty: hard
+  question: |
+    On shared DGX nodes, a user who requested --gres=gpu:2 can still see and use
+    all 8 GPUs inside their job. Which TWO changes are needed so that jobs can
+    only access their allocated GPUs? (Choose two.)
+  choices:
+    - Set CUDA_VISIBLE_DEVICES=0,1 in /etc/environment on every node
+    - Enable GPU persistence mode
+    - Set ConstrainDevices=yes in cgroup.conf
+    - Set OverSubscribe=YES on the partition
+    - Use the cgroup task plugin (TaskPlugin includes task/cgroup) in slurm.conf
+- id: ins-023
+  domain: Installation and Deployment
+  difficulty: medium
+  question: |
+    A site wants to use fair-share scheduling, per-account GPU limits and job
+    history reports with sacct. What must be deployed?
+  choices:
+    - Only a second slurmctld as backup controller
+    - slurmdbd with a MySQL/MariaDB backend, and slurm.conf pointing accounting at slurmdbd
+    - Prometheus with the DCGM exporter
+    - A shared NFS /home directory
+- id: ins-024
+  domain: Installation and Deployment
+  difficulty: hard
+  question: |
+    Accounting is set up with slurmdbd, and a QOS with MaxTRESPerUser=gres/gpu=8
+    exists. Users can still submit jobs without any account association, and the
+    QOS limit is ignored. Which slurm.conf setting is most likely missing or
+    wrong?
+  choices:
+    - AccountingStorageEnforce (for example, associations,limits,qos)
+    - PriorityType
+    - SchedulerType
+    - JobAcctGatherType
+- id: ins-025
+  domain: Installation and Deployment
+  difficulty: easy
+  lab: ins-gpu-operator-preinstalled-driver
+  question: |
+    An administrator is installing the NVIDIA GPU Operator with Helm on a
+    Kubernetes cluster built from DGX nodes running DGX OS, which already ships
+    the NVIDIA GPU driver. Which Helm value is the key one to set?
+  choices:
+    - mig.strategy=mixed
+    - dcgmExporter.enabled=false
+    - devicePlugin.enabled=false
+    - driver.enabled=false
+- id: ins-026
+  domain: Installation and Deployment
+  difficulty: hard
+  lab: ins-gpu-operator-preinstalled-driver
+  question: |
+    The GPU nodes in a Kubernetes cluster already have both the NVIDIA driver and
+    the NVIDIA Container Toolkit installed on the host and configured for
+    containerd. Which TWO Helm values should be set when installing the GPU
+    Operator? (Choose two.)
+  choices:
+    - driver.enabled=false
+    - nfd.enabled=false
+    - validator.enabled=false
+    - toolkit.enabled=false
+    - operator.defaultRuntime=docker
+- id: ins-027
+  domain: Installation and Deployment
+  difficulty: easy
+  question: |
+    Which GPU Operator component tells the kubelet how many nvidia.com/gpu
+    resources a node has, so the scheduler can place GPU pods?
+  choices:
+    - NVIDIA Kubernetes device plugin
+    - DCGM exporter
+    - GPU Feature Discovery
+    - Operator validator
+- id: ins-028
+  domain: Installation and Deployment
+  difficulty: easy
+  question: |
+    A developer wants to schedule a pod only on nodes with a particular GPU
+    model, using labels such as nvidia.com/gpu.product. Which GPU Operator
+    component creates these labels?
+  choices:
+    - GPU Feature Discovery (GFD)
+    - MIG manager
+    - Container toolkit daemonset
+    - DCGM exporter
+- id: ins-029
+  domain: Installation and Deployment
+  difficulty: medium
+  question: |
+    After a GPU Operator install, the administrator wants proof that the driver,
+    container toolkit and device plugin all work together and that a CUDA
+    workload can run on each GPU node. Which component's pods should they check?
+  choices:
+    - gpu-feature-discovery
+    - nvidia-operator-validator
+    - node-feature-discovery-master
+    - nvidia-dcgm-exporter
+- id: ins-030
+  domain: Installation and Deployment
+  difficulty: hard
+  question: |
+    Before installing the GPU Operator, the cluster already runs Node Feature
+    Discovery (NFD) deployed by another team. What should the administrator do?
+  choices:
+    - Uninstall the existing NFD; the GPU Operator only works with its own copy
+    - Nothing; two copies of NFD are recommended for redundancy
+    - Set driver.enabled=false; NFD conflicts with the driver container
+    - Install the GPU Operator with nfd.enabled=false so it uses the existing NFD
+- id: ins-031
+  domain: Installation and Deployment
+  difficulty: medium
+  question: |
+    An administrator wants to change the DCGM exporter configuration of an
+    already installed GPU Operator, cluster-wide, in the way the operator
+    expects. Which object holds the operator's desired state for its components?
+  choices:
+    - The nvidia-device-plugin ConfigMap in kube-system
+    - The kubelet configuration file on each node
+    - The ClusterPolicy custom resource
+    - The NicClusterPolicy custom resource
+- id: ins-032
+  domain: Installation and Deployment
+  difficulty: easy
+  question: |
+    Which command sequence installs the NVIDIA GPU Operator from NVIDIA's Helm
+    repository into its own namespace?
+  choices:
+    - kubectl apply -f https://nvcr.io/gpu-operator.yaml
+    - apt install nvidia-gpu-operator && systemctl enable gpu-operator
+    - helm repo add nvidia https://helm.ngc.nvidia.com/nvidia && helm install --wait --generate-name -n gpu-operator --create-namespace nvidia/gpu-operator
+    - docker run nvcr.io/nvidia/gpu-operator --install
+- id: ins-033
+  domain: Installation and Deployment
+  difficulty: medium
+  question: |
+    Which TWO components are deployed and managed by the NVIDIA GPU Operator?
+    (Choose two.)
+  choices:
+    - RDMA shared device plugin
+    - NVIDIA Kubernetes device plugin
+    - Slurm controller
+    - DCGM exporter
+    - Run:ai scheduler
+- id: ins-034
+  domain: Installation and Deployment
+  difficulty: medium
+  lab: ins-network-operator-rdma
+  question: |
+    The NVIDIA Network Operator is installed with a NicClusterPolicy that enables
+    the RDMA shared device plugin. The node shows this allocatable resource:
+      rdma/rdma_shared_device_a: 63
+    How should a multi-node training pod get access to RDMA devices?
+  choices:
+    - Add the label rdma=true to the pod
+    - 'Request rdma/rdma_shared_device_a: 1 in the container resources (limits)'
+    - 'Request nvidia.com/rdma: 1 in the container resources'
+    - 'Run the pod with hostNetwork: true and no resource request'
+- id: ins-035
+  domain: Installation and Deployment
+  difficulty: hard
+  lab: ins-network-operator-rdma
+  question: |
+    A Kubernetes cluster uses the Network Operator to deploy the NVIDIA
+    networking driver (DOCA-OFED/MOFED) as a container, and the GPU Operator
+    for the GPU stack. Training jobs work over InfiniBand but NCCL logs show no
+    GPUDirect RDMA. What GPU Operator setting is most relevant?
+  choices:
+    - Enable RDMA support in the GPU Operator driver (driver.rdma.enabled=true) so the nvidia-peermem module is loaded
+    - Set mig.strategy=single
+    - Set dcgmExporter.serviceMonitor.enabled=true
+    - Disable the device plugin so the RDMA plugin can take over GPUs
+- id: ins-036
+  domain: Installation and Deployment
+  difficulty: medium
+  question: |
+    A team wants each training pod to have a second network interface on the
+    InfiniBand or RoCE fabric, in addition to the default cluster network. Which
+    component, often deployed by the Network Operator, lets a pod attach to
+    multiple networks?
+  choices:
+    - CoreDNS
+    - Multus CNI
+    - kube-proxy
+    - GPU Feature Discovery
+- id: ins-037
+  domain: Installation and Deployment
+  difficulty: easy
+  question: |
+    The NVIDIA Container Toolkit was just installed on an Ubuntu server running
+    Docker. What should the administrator run next so that docker run --gpus all
+    works?
+  choices:
+    - nvidia-ctk runtime configure --runtime=docker, then restart Docker
+    - nvidia-smi -pm 1
+    - modprobe nvidia-peermem
+    - docker plugin install nvidia
+- id: ins-038
+  domain: Installation and Deployment
+  difficulty: medium
+  question: |
+    A Kubernetes node uses containerd. The driver and NVIDIA Container Toolkit
+    are installed on the host, but the toolkit was never wired into containerd.
+    Which action fixes this?
+  choices:
+    - Run nvidia-ctk runtime configure --runtime=docker and restart kubelet
+    - Add --gpus all to the kubelet arguments
+    - Run nvidia-ctk runtime configure --runtime=containerd, then restart containerd
+    - Install nvidia-docker2 and reboot
+- id: ins-039
+  domain: Installation and Deployment
+  difficulty: hard
+  question: |
+    A site uses Podman and wants to give containers GPUs through the Container
+    Device Interface (CDI). Which steps are correct?
+  choices:
+    - Load the nvidia-fs kernel module
+    - Run podman with --gpus all; no setup is needed
+    - Set NVIDIA_VISIBLE_DEVICES=all in /etc/environment
+    - Generate a CDI spec with nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml, then run podman with --device nvidia.com/gpu=all
+- id: ins-040
+  domain: Installation and Deployment
+  difficulty: medium
+  question: |
+    On a new server, this command fails:
+      $ docker run --rm --gpus all nvcr.io/nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
+      docker: Error response from daemon: could not select device driver "" with capabilities: [[gpu]].
+    nvidia-smi works on the host. What is the MOST likely cause?
+  choices:
+    - The image tag doesn't exist
+    - The GPU driver is not installed on the host
+    - The GPU is in MIG mode
+    - The NVIDIA Container Toolkit is not installed or Docker was not configured for it and restarted
+- id: ins-041
+  domain: Installation and Deployment
+  difficulty: easy
+  lab: ins-ngc-registry-auth
+  question: |
+    An administrator needs to pull private NGC containers from nvcr.io with
+    Docker. They have an NGC API key. What username do they use with docker
+    login nvcr.io?
+  choices:
+    - Their NGC account email address
+    - The API key as the username, with an empty password
+    - nvidia
+    - $oauthtoken (literally), with the API key as the password
+- id: ins-042
+  domain: Installation and Deployment
+  difficulty: medium
+  lab: ins-ngc-registry-auth
+  question: |
+    Pods using an image from a private NGC org are stuck in ImagePullBackOff with
+    an authentication error. Which TWO actions fix this? (Choose two.)
+  choices:
+    - Create a docker-registry secret for nvcr.io with username $oauthtoken and the NGC API key as the password, in the pod's namespace
+    - Run docker login nvcr.io on the control-plane node
+    - Add the label nvidia.com/gpu.present=true to the node
+    - 'Set imagePullPolicy: Never'
+    - Reference the secret in the pod spec (or its service account) under imagePullSecrets
+- id: ins-043
+  domain: Installation and Deployment
+  difficulty: easy
+  question: |
+    A user just installed the NGC CLI and wants to browse and download models
+    from their NGC org. What must they do first?
+  choices:
+    - Export CUDA_VISIBLE_DEVICES
+    - Run docker login nvcr.io
+    - Run ngc config set and enter their API key, org and team
+    - Install the GPU Operator
+- id: ins-044
+  domain: Installation and Deployment
+  difficulty: hard
+  question: |
+    Slurm jobs that use pyxis/enroot to pull private images from nvcr.io fail
+    with an unauthorized error, although the same images pull fine with Docker
+    on a workstation. Where does enroot look for registry credentials?
+  choices:
+    - ~/.docker/config.json only
+    - The enroot credentials file (by default under ~/.config/enroot/.credentials) in netrc format, e.g. "machine nvcr.io login $oauthtoken password <API key>"
+    - /etc/slurm/plugstack.conf
+    - The NGC_API_KEY variable in slurm.conf
+- id: ins-045
+  domain: Installation and Deployment
+  difficulty: hard
+  question: |
+    After installing the pyxis package on all Slurm nodes, srun does not accept
+    --container-image. What configuration step is most likely missing?
+  choices:
+    - Adding GresTypes=pyxis to slurm.conf
+    - Starting a pyxis systemd service
+    - Enabling the pyxis SPANK plugin in plugstack.conf (for example, a line "required /path/to/spank_pyxis.so"), then restarting Slurm daemons
+    - Running enroot import on the controller
+- id: ins-046
+  domain: Installation and Deployment
+  difficulty: medium
+  question: |
+    A DGX H100 was upgraded to a new data center driver branch. Which statement
+    about NVIDIA Fabric Manager is correct?
+  choices:
+    - Fabric Manager is only needed for MIG
+    - Fabric Manager is optional on NVSwitch systems and only improves performance
+    - Fabric Manager must be the same version as the installed driver, so it has to be upgraded together with the driver
+    - Fabric Manager runs inside each CUDA container
+- id: ins-047
+  domain: Installation and Deployment
+  difficulty: medium
+  question: |
+    On which system is NVIDIA Fabric Manager required for multi-GPU CUDA jobs to
+    run?
+  choices:
+    - An 8-GPU HGX/DGX system where GPUs are connected through NVSwitch
+    - A server with four PCIe L40S GPUs and no NVLink
+    - A workstation with two PCIe GPUs connected by an NVLink bridge
+    - Any single-GPU cloud VM
+- id: ins-048
+  domain: Installation and Deployment
+  difficulty: medium
+  question: |
+    An administrator must re-image a BlueField-3 DPU from its host server with a
+    new BFB bundle (DOCA-based OS and firmware). What is the usual way to do
+    this?
+  choices:
+    - Run apt upgrade on the host; the DPU updates itself
+    - Flash the BFB with nvidia-smi -f
+    - PXE boot the DPU from the BCM head node using a GPU software image
+    - Copy the BFB to the DPU over the RShim interface from the host, for example with bfb-install --bfb <file>.bfb --rshim rshim0
+- id: ins-049
+  domain: Installation and Deployment
+  difficulty: medium
+  question: |
+    A team plans to install NVIDIA Run:ai on an existing Kubernetes cluster with
+    DGX nodes. Which statement about the deployment is correct?
+  choices:
+    - Run:ai replaces Kubernetes and is installed directly on bare metal
+    - Run:ai includes its own GPU driver, so the GPU Operator must be removed
+    - Run:ai has a control plane (SaaS or self-hosted) and a cluster component installed with Helm on Kubernetes; the GPU Operator is a prerequisite for GPU access
+    - Run:ai is installed as a Slurm plugin on the head node
+- id: ins-050
+  domain: Installation and Deployment
+  difficulty: medium
+  question: |
+    A DGX system running DGX OS needs a newer GPU driver to support a new CUDA
+    release. What is the recommended approach?
+  choices:
+    - Download the .run installer from the NVIDIA website and run it over the existing driver
+    - Use pip install nvidia-driver inside a container
+    - Drain the node, then install the driver packages for the target branch from the NVIDIA DGX software repositories with the package manager, following the DGX OS documentation, and reboot
+    - Upgrade only the CUDA toolkit; it updates the kernel driver automatically
+- id: ins-051
+  domain: Installation and Deployment
+  difficulty: hard
+  question: |
+    A firmware update bundle is available for a DGX system in a production
+    cluster. Which TWO steps belong in a safe firmware update procedure?
+    (Choose two.)
+  choices:
+    - Update firmware on all nodes at once to keep versions consistent during the update
+    - Skip verification after the update if the tool reports success
+    - Drain the node in the scheduler so no jobs are running during the update
+    - Check the release notes for the supported driver/OS versions and the required update order, then complete the power cycle or reboot the bundle requires
+    - Run the update while a dcgmi diag -r 4 is running to stress-test the new firmware
+- id: ins-052
+  domain: Installation and Deployment
+  difficulty: hard
+  question: |
+    A new 4-node DGX cluster is being set up with BCM. The administrator wants
+    Slurm installed and the GPU nodes ready for jobs with the least manual
+    effort. What is the most suitable approach?
+  choices:
+    - Compile Slurm from source on every node by hand
+    - Install Slurm only on the head node; BCM forwards jobs to nodes over SSH
+    - Install Kubernetes first; Slurm is installed automatically by the GPU Operator
+    - Use BCM's workload manager setup wizard (cm-wlm-setup) to deploy Slurm, assign the server and client roles, and generate the configuration including GPU GRES

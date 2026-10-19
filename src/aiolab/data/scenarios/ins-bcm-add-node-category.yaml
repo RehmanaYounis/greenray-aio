@@ -1,0 +1,54 @@
+id: ins-bcm-add-node-category
+title: Bring a newly racked DGX into the right BCM category
+domain: Installation and Deployment
+difficulty: medium
+time_limit_min: 15
+tags: [bcm, cmsh, provisioning, category]
+briefing: |
+  dgx-04 was racked last night. Base Command Manager identified it and gave it
+  the next free hostname, but it landed in the `default` category. It booted
+  the generic `default-image`: there is no NVIDIA driver, `nvidia-smi` fails,
+  and Slurm doesn't know the node exists.
+  Every other DGX H100 in this cluster is in the `dgx-h100` category. That
+  category supplies the DGX OS software image and the `slurmclient` role.
+  Make dgx-04 a proper member of the cluster, the way BCM is meant to be used.
+  Do not change other nodes or the `default` category itself.
+objectives:
+  - dgx-04 is in category dgx-h100 (committed, not just staged)
+  - dgx-04 is re-provisioned with the dgx-os-6.2-h100-image software image
+  - dgx-04 has a working NVIDIA driver and is a Slurm client
+  - The default category and the other DGX nodes are unchanged
+setup:
+  - python: |
+      d = state.bcm.devices['dgx-04']
+      d.category = 'default'
+      d.synced_image = 'default-image'
+      n = state.nodes['dgx-04']
+      # packages of the generic default-image (no NVIDIA driver stack)
+      n.packages = {'linux-image-5.15.0-1042-nvidia': '5.15.0-1042.42', 'openssh-server': '1:8.9p1-3ubuntu0.10',
+                    'rdma-core': '2307mlnx47-1.2310055', 'cm-node-installer': '10.0-100124'}
+      n.driver_loaded = False
+      n.modules = [m for m in n.modules if not m.startswith('nvidia')]
+      for s in ('nvidia-fabricmanager', 'nvidia-persistenced', 'nvidia-dcgm'):
+          n.services[s] = 'inactive'
+      del n.services['slurmd']
+      del state.slurm.nodes['dgx-04']
+      n.dmesg.append('[    6.120044] cm-node-installer: software image default-image, category default, install mode AUTO')
+checks:
+  - desc: dgx-04 is committed into category dgx-h100
+    expr: bcm.devices['dgx-04'].category == 'dgx-h100' and not any(v.name == 'dgx-04' for v in bcm.uncommitted.values())
+  - desc: dgx-04 was re-provisioned with the DGX OS image
+    expr: bcm.devices['dgx-04'].get('synced_image') == 'dgx-os-6.2-h100-image'
+  - desc: NVIDIA driver loaded and slurmd running on dgx-04, node known to Slurm
+    expr: nodes['dgx-04'].driver_loaded and nodes['dgx-04'].services.get('slurmd') == 'active' and 'dgx-04' in slurm.nodes
+  - desc: default category and the other DGX nodes were left alone
+    expr: bcm.categories['default'].softwareimage == 'default-image' and not bcm.categories['default'].get('roles') and all(d.category == 'dgx-h100' for k, d in bcm.devices.items() if k in ('dgx-01', 'dgx-02', 'dgx-03'))
+  - desc: you inspected the node / category in cmsh before changing it
+    expr: ran(r'cmsh .*(list|show|get |status)')
+hints:
+  - "Start with the BCM view of the cluster: cmsh -c \"device; list\". What category is dgx-04 in compared to its neighbours?"
+  - "Look at what the dgx-h100 category provides: cmsh -c \"category; use dgx-h100; show\". The software image and roles come from the category."
+  - "In cmsh, `set` only stages a change and nothing happens until `commit`. Check the prompt: a `*` means uncommitted changes."
+  - "A new category means a different software image. The running node only gets it when it is provisioned again. In device mode: reboot -n dgx-04."
+references:
+  - NVIDIA Base Command Manager 10 Administrator Manual (categories, node provisioning, install modes)

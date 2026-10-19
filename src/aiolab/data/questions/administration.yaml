@@ -1,0 +1,477 @@
+# Administration (blueprint weight 23%)
+# Original practice questions. Not taken from any real exam.
+
+- id: adm-001
+  domain: Administration
+  difficulty: easy
+  lab: adm-mig-h100-1g
+  question: |
+    An administrator needs to enable MIG mode on GPU 0 of a DGX H100 and leave
+    GPUs 1-7 unchanged. Which command should they run?
+  choices:
+    - nvidia-smi -mig 1
+    - nvidia-smi mig -cgi 19 -i 0
+    - nvidia-smi -i 0 -c EXCLUSIVE_PROCESS
+    - nvidia-smi -i 0 -mig 1
+- id: adm-002
+  domain: Administration
+  difficulty: medium
+  lab: adm-mig-h100-1g
+  question: |
+    An administrator enabled MIG on GPU 0 and ran:
+      nvidia-smi mig -i 0 -cgi 19,19,19,19,19,19,19
+    nvidia-smi mig -lgi lists seven GPU instances, but a CUDA application finds
+    no usable MIG devices. What is missing?
+  choices:
+    - Compute instances inside each GPU instance (for example, nvidia-smi mig -i 0 -cci, or -C when creating the GIs)
+    - A reboot; GPU instances only work after a reboot
+    - Persistence mode on GPU 0
+    - Fabric Manager must be restarted after every MIG change
+- id: adm-003
+  domain: Administration
+  difficulty: easy
+  question: |
+    What is the maximum number of GPU instances on a single H100 80GB GPU in MIG
+    mode?
+  choices:
+    - '4'
+    - '8'
+    - '16'
+    - '7'
+- id: adm-004
+  domain: Administration
+  difficulty: hard
+  question: |
+    Which MIG layout is NOT possible on a single H100 80GB GPU?
+  choices:
+    - 7 x 1g.10gb
+    - 3g.40gb + 3g.40gb
+    - 4g.40gb + 4g.40gb
+    - 4g.40gb + 3g.40gb
+- id: adm-005
+  domain: Administration
+  difficulty: medium
+  question: |
+    An administrator wants to return a MIG-partitioned GPU to normal full-GPU
+    mode. In what order should they do it?
+  choices:
+    - Destroy compute instances (-dci), then destroy GPU instances (-dgi), then disable MIG mode (-mig 0)
+    - Disable MIG mode, then destroy GPU instances, then destroy compute instances
+    - Destroy GPU instances; compute instances are removed with them, so MIG mode turns off automatically
+    - Reboot; MIG mode is always reset at boot
+- id: adm-006
+  domain: Administration
+  difficulty: medium
+  question: |
+    MIG instances created with nvidia-smi on a bare-metal node disappear after
+    every reboot. Which TWO approaches keep a MIG layout in place
+    automatically? (Choose two.)
+  choices:
+    - Enable persistence mode with nvidia-smi -pm 1
+    - Run nvidia-mig-parted at boot (for example, as a systemd service) to apply a declarative MIG config
+    - Enable MIG mode again after each reboot; instances are restored from NVRAM
+    - In Kubernetes, use the GPU Operator's MIG manager and set the nvidia.com/mig.config label on the node
+    - Set ECC mode to disabled
+- id: adm-007
+  domain: Administration
+  difficulty: medium
+  question: |
+    An administrator keeps MIG layouts in /etc/mig/config.yaml with named
+    configurations such as all-1g.10gb and all-3g.40gb. Which command applies
+    the all-1g.10gb layout?
+  choices:
+    - nvidia-mig-parted apply -f /etc/mig/config.yaml -c all-1g.10gb
+    - dcgmi mig --apply all-1g.10gb
+    - nvidia-smi mig -f /etc/mig/config.yaml all-1g.10gb
+    - kubectl apply -f /etc/mig/config.yaml
+- id: adm-008
+  domain: Administration
+  difficulty: medium
+  lab: adm-k8s-mig-mixed-strategy
+  question: |
+    A Kubernetes GPU node has GPU 0 split into 3g.40gb + 2g.20gb + 1g.10gb, and
+    the other GPUs split into seven 1g.10gb instances. Users must be able to ask
+    for a specific MIG size. Which GPU Operator MIG strategy should be used, and
+    how do resources appear?
+  choices:
+    - single; all instances appear as nvidia.com/gpu
+    - mixed; instances appear as profile-specific resources such as nvidia.com/mig-1g.10gb and nvidia.com/mig-3g.40gb
+    - none; MIG devices are hidden from Kubernetes
+    - mixed; all instances appear as nvidia.com/gpu with a profile label
+- id: adm-009
+  domain: Administration
+  difficulty: medium
+  lab: adm-k8s-mig-mixed-strategy
+  question: |
+    The GPU Operator with its MIG manager is running. An administrator wants node
+    dgx-03 to switch to the predefined all-1g.10gb layout. What should they do?
+  choices:
+    - SSH to dgx-03 and run nvidia-smi mig commands; the operator will pick them up
+    - Edit the ClusterPolicy and set mig.strategy=all-1g.10gb
+    - kubectl label node dgx-03 nvidia.com/mig.config=all-1g.10gb --overwrite, then watch the nvidia.com/mig.config.state label
+    - Restart the device plugin pod on dgx-03
+- id: adm-010
+  domain: Administration
+  difficulty: hard
+  question: |
+    A cluster uses the single MIG strategy. On one node an administrator created
+    a 3g.40gb instance and two 2g.20gb instances on each GPU. What is the
+    likely result?
+  choices:
+    - The node advertises nvidia.com/mig-3g.40gb and nvidia.com/mig-2g.20gb
+    - The single strategy expects all MIG devices on a node to have the same profile; with mixed profiles the node's MIG resources are not advertised correctly
+    - Kubernetes automatically switches the node to the mixed strategy
+    - The node advertises 21 nvidia.com/gpu resources
+- id: adm-011
+  domain: Administration
+  difficulty: hard
+  lab: adm-slurm-partition-qos
+  question: |
+    Slurm accounting and limit enforcement are configured. The administrator
+    wants to stop any single user from holding more than 8 GPUs at once through
+    the "normal" QOS. Which command does this?
+  choices:
+    - sacctmgr modify qos normal set MaxTRESPerUser=gres/gpu=8
+    - scontrol update partition=gpu MaxGPUs=8
+    - sbatch --gres=gpu:8 --qos=normal
+    - sacctmgr add user name=* maxgpus=8
+- id: adm-012
+  domain: Administration
+  difficulty: easy
+  question: |
+    A new researcher, alice, must submit jobs charged to the existing Slurm
+    account "vision". Which command creates the association?
+  choices:
+    - sacctmgr add user alice account=vision
+    - scontrol create user alice account=vision
+    - useradd -G vision alice
+    - sbatch --account=vision --uid=alice
+- id: adm-013
+  domain: Administration
+  difficulty: easy
+  question: |
+    Node dgx-04 needs a DIMM replaced tomorrow. Running jobs should finish but no
+    new jobs should start on it. Which command should the administrator run?
+  choices:
+    - scancel --nodelist=dgx-04
+    - scontrol update nodename=dgx-04 state=down reason="DIMM replacement"
+    - scontrol update nodename=dgx-04 state=drain reason="DIMM replacement"
+    - systemctl stop slurmd on dgx-04
+- id: adm-014
+  domain: Administration
+  difficulty: easy
+  question: |
+    After repairing dgx-04, the administrator verified its health. How do they
+    make it available for scheduling again?
+  choices:
+    - scontrol update nodename=dgx-04 state=resume
+    - scontrol reconfigure
+    - sinfo --resume dgx-04
+    - systemctl restart slurmctld
+- id: adm-015
+  domain: Administration
+  difficulty: easy
+  question: |
+    Which command lists drained and down Slurm nodes together with the reason
+    each was set?
+  choices:
+    - squeue -R
+    - sacct -N
+    - scontrol show partition
+    - sinfo -R
+- id: adm-016
+  domain: Administration
+  difficulty: medium
+  question: |
+    Users complain that their jobs wait while another group's jobs keep
+    starting. The cluster uses the multifactor priority plugin with fair-share.
+    Which TWO commands help the administrator explain the ordering? (Choose
+    two.)
+  choices:
+    - sprio, to show each pending job's priority broken down by factor
+    - scontrol reboot
+    - nvidia-smi topo -m
+    - sinfo -R
+    - sshare, to show accounts' shares, usage and fair-share values
+- id: adm-017
+  domain: Administration
+  difficulty: hard
+  question: |
+    A site wants jobs in QOS "urgent" to preempt (requeue) running jobs in QOS
+    "scavenger". Which TWO configuration items are needed? (Choose two.)
+  choices:
+    - Set Priority=0 on the scavenger partition
+    - Set ConstrainDevices=yes in cgroup.conf
+    - In slurm.conf, PreemptType=preempt/qos and a PreemptMode such as REQUEUE
+    - sacctmgr modify qos urgent set Preempt=scavenger
+    - Add OverSubscribe=FORCE to every partition
+- id: adm-018
+  domain: Administration
+  difficulty: medium
+  lab: adm-slurm-partition-qos
+  question: |
+    A new partition "h100-priority" should only be usable by members of the Slurm
+    accounts "llm" and "vision". Which slurm.conf partition setting is
+    appropriate?
+  choices:
+    - PriorityTier=100
+    - Hidden=YES
+    - Default=NO
+    - AllowAccounts=llm,vision
+- id: adm-019
+  domain: Administration
+  difficulty: medium
+  question: |
+    A Kubernetes administrator wants to keep non-GPU pods off the DGX nodes
+    while still allowing GPU workloads that explicitly opt in. What should they
+    do?
+  choices:
+    - Label the DGX nodes gpu=true
+    - Cordon the DGX nodes
+    - Delete the kube-proxy daemonset on the DGX nodes
+    - Taint the DGX nodes (e.g., kubectl taint nodes dgx-01 nvidia.com/gpu=present:NoSchedule) and add a matching toleration to GPU workloads
+- id: adm-020
+  domain: Administration
+  difficulty: medium
+  question: |
+    The "team-a" namespace must be limited to 4 GPUs in total across all its
+    pods. Which object enforces this?
+  choices:
+    - A LimitRange with default limits of 1 GPU per container
+    - A PriorityClass with value 4
+    - A NetworkPolicy in team-a
+    - A ResourceQuota in team-a with requests.nvidia.com/gpu set to "4"
+- id: adm-021
+  domain: Administration
+  difficulty: medium
+  question: |
+    A data scientist needs to create and delete Jobs and Pods in namespace
+    "research" only, without any cluster-wide permissions. What is the correct
+    RBAC setup?
+  choices:
+    - A ClusterRoleBinding to cluster-admin
+    - A Role in "research" with the needed verbs on pods and jobs, bound to the user with a RoleBinding in "research"
+    - A ClusterRole bound with a ClusterRoleBinding
+    - Add the user to the system:masters group
+- id: adm-022
+  domain: Administration
+  difficulty: hard
+  question: |
+    In Run:ai, Project A has a quota of 8 GPUs and is currently using 12 because
+    the cluster had idle GPUs. Project B, with a quota of 16 GPUs, now submits
+    workloads that need its quota. What is the expected behaviour?
+  choices:
+    - Workloads that Project A runs above its quota (over-quota) can be preempted so Project B can get its guaranteed quota
+    - Project A's quota is permanently raised to 12
+    - Project B waits until Project A's workloads finish by themselves
+    - Run:ai rejects Project B's workloads because the cluster is full
+- id: adm-023
+  domain: Administration
+  difficulty: medium
+  question: |
+    Several notebook users each need only a small part of one GPU. MIG is not
+    available on the cluster's GPUs. Which Run:ai feature fits best?
+  choices:
+    - Multi-node distributed training
+    - Node pools
+    - Fractional GPU sharing, where a workload requests a fraction of a GPU (e.g., 0.25) and Run:ai shares the GPU between workloads
+    - Departments
+- id: adm-024
+  domain: Administration
+  difficulty: hard
+  question: |
+    An administrator wants DCGM to continuously watch GPUs 0-3 on a node for
+    health problems and then query the result. Which TWO dcgmi steps are
+    needed? (Choose two.)
+  choices:
+    - Run dcgmi diag -r 4 every minute
+    - Create a group with dcgmi group -c mygroup -a 0,1,2,3
+    - Run nvidia-smi -pm 1 on the group
+    - Use dcgmi discovery -c to clear errors
+    - Enable health watches on the group with dcgmi health -g <groupId> -s a, then check with dcgmi health -g <groupId> -c
+- id: adm-025
+  domain: Administration
+  difficulty: hard
+  question: |
+    An administrator wants DCGM to react automatically when a GPU in a group
+    reports a double-bit ECC error or goes over a thermal threshold, for
+    example by notifying a script. Which DCGM feature is designed for this?
+  choices:
+    - dcgmi diag
+    - dcgmi stats
+    - dcgmi policy
+    - dcgmi discovery
+- id: adm-026
+  domain: Administration
+  difficulty: hard
+  question: |
+    The operations team wants a per-job report of GPU energy, utilization,
+    memory use and any XID errors seen during each Slurm job, collected by
+    DCGM. Which DCGM capability fits?
+  choices:
+    - Job statistics (dcgmi stats), started and stopped around each job, e.g. from Slurm prolog/epilog
+    - Health watches only
+    - dcgmi diag -r 1 at the end of each job
+    - nvidia-smi -q at the start of each job
+- id: adm-027
+  domain: Administration
+  difficulty: medium
+  question: |
+    In NVIDIA Base Command Manager, where are cluster user accounts normally
+    created so that they exist on all nodes?
+  choices:
+    - With useradd on each compute node
+    - In cmsh user mode (or Base View); BCM stores them in its LDAP directory, which the nodes use
+    - In the software image's /etc/passwd only
+    - In slurm.conf using AllowUsers
+- id: adm-028
+  domain: Administration
+  difficulty: easy
+  lab: adm-bcm-power-and-status
+  question: |
+    In cmsh, an administrator wants to see the power state of nodes node001 to
+    node008 through their BMCs. Which command, run in device mode, does this?
+  choices:
+    - status -n node001..node008
+    - ipmitool -n node001..node008
+    - power status -n node001..node008
+    - sinfo -n node001..node008
+- id: adm-029
+  domain: Administration
+  difficulty: medium
+  lab: adm-bcm-power-and-status
+  question: |
+    node005 has hung completely: SSH and the console don't respond, and cmsh
+    shows it as DOWN. BMC power control is configured. What is the appropriate
+    next step from cmsh?
+  choices:
+    - Run imageupdate on node005
+    - Set the install mode to NOSYNC
+    - Run grabimage on node005 to save its state
+    - Run power reset -n node005 (or power off, then power on) in device mode
+- id: adm-030
+  domain: Administration
+  difficulty: medium
+  question: |
+    The GPU Operator is deployed with the DCGM exporter. The monitoring team
+    runs Prometheus Operator and wants Prometheus to scrape GPU metrics
+    automatically. What should be configured?
+  choices:
+    - Run nvidia-smi dmon in a cron job and write the output to a file
+    - Install Grafana on each GPU node
+    - Point Prometheus at the device plugin's gRPC socket
+    - Enable the DCGM exporter's ServiceMonitor (for example, dcgmExporter.serviceMonitor.enabled=true) so Prometheus finds the metrics endpoint
+- id: adm-031
+  domain: Administration
+  difficulty: easy
+  question: |
+    In a Grafana dashboard fed by the DCGM exporter, which metric shows GPU
+    utilization?
+  choices:
+    - DCGM_FI_DEV_FB_USED
+    - DCGM_FI_DEV_GPU_UTIL
+    - DCGM_FI_DEV_GPU_TEMP
+    - DCGM_FI_DEV_POWER_USAGE
+- id: adm-032
+  domain: Administration
+  difficulty: easy
+  question: |
+    On a headless Linux GPU server, the first CUDA call after an idle period is
+    slow because the driver unloads and reinitializes the GPUs. What is the
+    recommended fix?
+  choices:
+    - Set the compute mode to PROHIBITED
+    - Disable ECC
+    - Run the nvidia-persistenced daemon so the driver stays initialized (persistence mode)
+    - Enable MIG mode
+- id: adm-033
+  domain: Administration
+  difficulty: medium
+  lab: tsh-power-cap-persistence
+  question: |
+    For a facility power budget, an administrator ran nvidia-smi -i 0 -pl 500 on
+    each GPU of several nodes. After a maintenance reboot, the GPUs are back at
+    their default power limit. Why, and what is a correct fix?
+  choices:
+    - The command failed silently; it must be run with -pm 0
+    - Power limits are stored in the VBIOS and need a firmware flash
+    - Power limits set with nvidia-smi -pl don't persist across reboots or driver reloads; reapply them at boot, for example with a systemd unit or the cluster manager
+    - The limit was overridden by Fabric Manager; disable FM
+- id: adm-034
+  domain: Administration
+  difficulty: medium
+  question: |
+    An administrator runs nvidia-smi -i 2 -e 1 to enable ECC on a GPU, then checks
+    nvidia-smi -q -d ECC:
+      Ecc Mode
+          Current                 : Disabled
+          Pending                 : Enabled
+    What is needed for the change to take effect?
+  choices:
+    - Nothing; it is already active
+    - A GPU reset or node reboot
+    - Restart the nvidia-persistenced service only
+    - Run dcgmi diag -r 1
+- id: adm-035
+  domain: Administration
+  difficulty: medium
+  question: |
+    On a shared server without a scheduler, an administrator wants each GPU used
+    by only one process at a time; a second process should fail to create a
+    context. Which nvidia-smi setting does this?
+  choices:
+    - nvidia-smi -i <id> -c PROHIBITED
+    - nvidia-smi -i <id> -c EXCLUSIVE_PROCESS
+    - nvidia-smi -i <id> -pm 1
+    - nvidia-smi -i <id> -mig 1
+- id: adm-036
+  domain: Administration
+  difficulty: medium
+  question: |
+    Two inference services from different customers must share an H100 with
+    guaranteed memory and fault isolation: one service crashing or using too
+    much memory must not affect the other. Which GPU sharing method fits?
+  choices:
+    - Time-slicing
+    - MIG
+    - CUDA MPS
+    - Running both in the same container
+- id: adm-037
+  domain: Administration
+  difficulty: hard
+  question: |
+    An administrator configured GPU time-slicing in the GPU Operator device
+    plugin with replicas: 4 for nvidia.com/gpu on 8-GPU nodes. Which TWO
+    statements are true? (Choose two.)
+  choices:
+    - Each node now advertises 32 nvidia.com/gpu resources
+    - Each pod gets a hardware-isolated quarter of a GPU's memory
+    - Pods sharing a GPU are not memory-isolated from each other; one pod can use most of the GPU memory
+    - Time-slicing needs MIG mode enabled
+    - Time-slicing is only supported on A100
+- id: adm-038
+  domain: Administration
+  difficulty: hard
+  question: |
+    Many small MPI ranks on one GPU each launch tiny kernels and underuse the
+    GPU. They belong to the same user and job, and isolation between them is
+    not needed. Which feature most directly increases GPU throughput for this
+    pattern?
+  choices:
+    - Disable ECC
+    - CUDA Multi-Process Service (MPS), so kernels from different processes can run on the GPU at the same time
+    - MIG with seven 1g instances, one per rank
+    - Set the compute mode to EXCLUSIVE_PROCESS
+- id: adm-039
+  domain: Administration
+  difficulty: hard
+  lab: adm-slurm-partition-qos
+  question: |
+    An administrator defines this partition:
+      PartitionName=gpu Nodes=dgx-[01-08] MaxTime=12:00:00 QOS=gpu-part State=UP
+    What does QOS=gpu-part on the partition line do?
+  choices:
+    - It attaches a partition QOS whose limits apply to all jobs in the partition, on top of the job's own QOS
+    - It sets the default QOS for jobs submitted without --qos
+    - It lists the only QOS that users may request in this partition
+    - It is ignored unless PriorityType=priority/basic

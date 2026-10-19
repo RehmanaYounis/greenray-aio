@@ -1,0 +1,46 @@
+id: tsh-nccl-ib-hca
+title: Multi-node NCCL is crawling — find the bad NCCL setting
+domain: Troubleshooting and Optimization
+difficulty: hard
+time_limit_min: 20
+tags: [nccl, infiniband, bcm, softwareimage, performance]
+briefing: |
+  After last week's image refresh, a two-node all_reduce_perf between dgx-01
+  and dgx-02 dropped from about 370 GB/s bus bandwidth to about 2.5 GB/s.
+  Single-node runs are still fine, and ibstat looks healthy on both nodes.
+  The image refresh copied an NCCL defaults file from a RoCE reference design.
+  Find what is wrong, fix it so it stays fixed on every DGX (all nodes are
+  provisioned from the dgx-os-6.2-h100-image software image), and show a
+  multi-node run at full speed.
+  Reference test (run from bcm-head):
+    mpirun --allow-run-as-root -np 16 -H dgx-01:8,dgx-02:8 all_reduce_perf -b 8 -e 8G -f 2 -g 1
+objectives:
+  - NCCL selects the InfiniBand HCAs again on every DGX
+  - The fix is in the software image, so reprovisioning won't bring the problem back
+  - A multi-node all_reduce_perf over IB reaches at least 350 GB/s busbw
+setup:
+  - python: |
+      conf = ("# NCCL defaults (from RoCE reference template)\n"
+              "NCCL_IB_HCA=mlx5_bond_0\n"
+              "NCCL_IB_GID_INDEX=3\n")
+      state.nodes['bcm-head'].files['/cm/images/dgx-os-6.2-h100-image/etc/nccl.conf'] = conf
+      for n in ['dgx-01', 'dgx-02', 'dgx-03', 'dgx-04']:
+          state.nodes[n].files['/etc/nccl.conf'] = conf
+checks:
+  - desc: no DGX node's /etc/nccl.conf points NCCL at the non-existent mlx5_bond_0
+    expr: all('mlx5_bond' not in nd.files.get('/etc/nccl.conf', '') for h, nd in nodes.items() if h.startswith('dgx-'))
+  - desc: the software image is fixed too (survives reprovisioning / imageupdate)
+    expr: "'mlx5_bond' not in file('bcm-head', '/cm/images/dgx-os-6.2-h100-image/etc/nccl.conf')"
+  - desc: last multi-node NCCL run used IB and reached >= 350 GB/s
+    expr: (lambda r:r.get('ok') and len(r.get('hosts', [])) > 1 and r.get('transport') == 'IB' and r.get('busbw', 0) >= 350)(flags.get('nccl_last', {}))
+  - desc: you collected NCCL debug output (NCCL_DEBUG=INFO)
+    expr: ran(r'NCCL_DEBUG=INFO')
+hints:
+  - "Rerun the test with -x NCCL_DEBUG=INFO. Which network does NCCL say it is using: IB or Socket?"
+  - "\"NET/IB : No device found\" while ibstat shows eight Active HCAs means NCCL was told to look for the wrong devices. Check NCCL_IB_HCA in the environment and in /etc/nccl.conf on the nodes."
+  - "mlx5_bond_0 is the device name of a RoCE LAG bond. The DGX compute fabric uses individual HCAs mlx5_0..mlx5_7 (on InfiniBand, NCCL_IB_GID_INDEX is not used)."
+  - "Editing /etc/nccl.conf on a node is lost at the next imageupdate/reprovision. Fix /cm/images/dgx-os-6.2-h100-image/etc/nccl.conf on the head node, then imageupdate (dry run first, then -w)."
+references:
+  - NCCL User Guide, Environment Variables (NCCL_IB_HCA, NCCL_SOCKET_IFNAME, NCCL_DEBUG, nccl.conf)
+  - nccl-tests PERFORMANCE.md (algbw vs busbw)
+  - NVIDIA Base Command Manager 10 Administrator Manual (software images, imageupdate)

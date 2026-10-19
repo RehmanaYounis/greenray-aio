@@ -1,0 +1,74 @@
+id: wkl-slurm-pending-reasons
+title: Three teams, three stuck jobs - read the pending reasons
+domain: Workload Management
+difficulty: medium
+time_limit_min: 15
+tags: [slurm, squeue, scheduling, gres, partitions]
+briefing: |
+  The cluster is mostly idle, but three teams say their work won't start:
+
+    * alice: job 2001 "llm-pretrain" has been pending since last night's maintenance window.
+    * bob: job 2002 "bert-finetune" in the `short` partition never starts.
+    * carol: she can't even submit /root/ddp.sbatch, a 16-GPU data-parallel job.
+      "I asked for 16 GPUs on one node, isn't a DGX 8+8?"
+
+  Get all three workloads running without touching anyone's GPU count
+  (carol still needs 16 GPUs in total). Find each job's reason before you change anything.
+objectives:
+  - Job 2001 is running (or finished)
+  - Job 2002 is running (or finished) within its partition's limits
+  - carol's ddp-train job runs with 16 GPUs as 2 nodes x 8 GPUs
+setup:
+  - python: |
+      head = state.nodes['bcm-head']
+      head.files['/etc/slurm/slurm.conf'] += (
+          "PartitionName=batch Nodes=dgx-[01-04] MaxTime=7-00:00:00 State=UP\n"
+          "PartitionName=short Nodes=dgx-[01-04] MaxTime=04:00:00 PriorityTier=2 State=UP\n")
+      st = state.slurm
+      st.partitions['batch'] = {'name': 'batch', 'nodes': 'dgx-[01-04]', 'default': False, 'state': 'DOWN',
+                                'max_time': '7-00:00:00', 'allow_qos': 'ALL', 'allow_accounts': 'ALL',
+                                'priority_tier': 1}
+      st.partitions['short'] = {'name': 'short', 'nodes': 'dgx-[01-04]', 'default': False, 'state': 'UP',
+                                'max_time': '04:00:00', 'allow_qos': 'ALL', 'allow_accounts': 'ALL',
+                                'priority_tier': 2}
+      for u in ('alice', 'bob', 'carol'):
+          st.users[u] = {'name': u, 'default_account': 'root'}
+      st.jobs.append({'id': 2001, 'name': 'llm-pretrain', 'user': 'alice', 'partition': 'batch',
+                      'state': 'PENDING', 'reason': 'PartitionDown', 'num_nodes': 1, 'gpus_per_node': 8,
+                      'gpu_type': None, 'ntasks_per_node': 8, 'time_limit': 2880, 'submit_time': -36000,
+                      'command': '/home/alice/pretrain.sbatch', 'script': ''})
+      st.jobs.append({'id': 2002, 'name': 'bert-finetune', 'user': 'bob', 'partition': 'short',
+                      'state': 'PENDING', 'reason': 'PartitionTimeLimit', 'num_nodes': 1, 'gpus_per_node': 4,
+                      'ntasks_per_node': 4, 'time_limit': 2880, 'submit_time': -7200,
+                      'command': '/home/bob/finetune.sbatch', 'script': ''})
+      st.next_job_id = 2003
+  - file: /root/ddp.sbatch
+    host: bcm-head
+    content: |
+      #!/bin/bash
+      #SBATCH -J ddp-train
+      #SBATCH -p defq
+      #SBATCH -N 1
+      #SBATCH --gres=gpu:16
+      #SBATCH --ntasks-per-node=8
+      #SBATCH -t 08:00:00
+      srun python -c "print('rank ready')"
+checks:
+  - desc: job 2001 has started
+    expr: jobs(id=2001)[0].state in ('RUNNING', 'COMPLETED')
+  - desc: partition batch is UP again
+    expr: slurm.partitions['batch'].state == 'UP'
+  - desc: job 2002 has started, with a time limit inside short's 4-hour MaxTime
+    expr: jobs(id=2002)[0].state in ('RUNNING', 'COMPLETED') and jobs(id=2002)[0].time_limit is not None and jobs(id=2002)[0].time_limit <= 240
+  - desc: carol's ddp-train runs as 2 nodes x 8 GPUs (16 GPUs total)
+    expr: any(j.name == 'ddp-train' and j.num_nodes == 2 and j.gpus_per_node == 8 and j.state in ('RUNNING', 'COMPLETED') for j in slurm.jobs)
+  - desc: you read the pending reasons first (squeue / scontrol show job)
+    expr: ran(r'^squeue') and ran(r'^(scontrol show (job|partition)|sinfo|squeue .*(%r|%R|-l))')
+hints:
+  - "The last column of squeue, NODELIST(REASON), is the scheduler telling you why. scontrol show job <id> and scontrol show partition give the details."
+  - "PartitionDown means the partition's State is DOWN: jobs queue but never start. PartitionTimeLimit means the job's TimeLimit is longer than the partition's MaxTime."
+  - "--gres=gpu:N is per node. No DGX H100 node has 16 GPUs, so slurmctld rejects the job with 'Requested node configuration is not available'."
+  - "scontrol update partitionname=batch state=up; scontrol update jobid=2002 timelimit=04:00:00; edit ddp.sbatch to -N 2 and --gres=gpu:8, then sbatch it again."
+references:
+  - Slurm squeue man page - JOB REASON CODES
+  - Slurm scontrol man page (update PartitionName / JobId)

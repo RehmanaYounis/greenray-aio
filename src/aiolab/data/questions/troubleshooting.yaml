@@ -1,0 +1,502 @@
+# Troubleshooting and Optimization (blueprint weight 23%)
+# Original practice questions. Not taken from any real exam.
+
+- id: tsh-001
+  domain: Troubleshooting and Optimization
+  difficulty: medium
+  lab: tsh-xid79-drained-node
+  question: |
+    A Slurm job on dgx-06 failed, and the kernel log shows:
+      NVRM: Xid (PCI:0000:9a:00): 79, pid=...., GPU has fallen off the bus.
+    nvidia-smi on the node now hangs or reports an error for that GPU. Which TWO
+    actions should the administrator take FIRST? (Choose two.)
+  choices:
+    - Resume the node right away, since the job already ended
+    - Drain dgx-06 in Slurm so no new jobs land on it
+    - Lower the GPU power limit with nvidia-smi -pl
+    - Delete the user's job output files
+    - Collect diagnostics (for example, nvidia-bug-report.sh) before rebooting, so the evidence isn't lost
+- id: tsh-002
+  domain: Troubleshooting and Optimization
+  difficulty: easy
+  question: |
+    A node logs XID 48 for one GPU. What does this XID mean?
+  choices:
+    - A double-bit (uncorrectable) ECC memory error
+    - An NVLink training error
+    - The GPU fell off the PCIe bus
+    - A user application illegal memory access
+- id: tsh-003
+  domain: Troubleshooting and Optimization
+  difficulty: medium
+  question: |
+    One user's jobs keep producing XID 31 (GPU memory page fault) on different
+    GPUs and different nodes. Other users' jobs on the same GPUs run fine. What
+    is the MOST likely cause?
+  choices:
+    - Failing GPU memory on every node
+    - A bug in the user's application or its libraries, such as an out-of-bounds or invalid memory access
+    - Fabric Manager is down on all nodes
+    - The InfiniBand fabric is degraded
+- id: tsh-004
+  domain: Troubleshooting and Optimization
+  difficulty: hard
+  lab: tsh-ecc-row-remap
+  question: |
+    On an A100 node, the kernel log shows XID 63 and later XID 64 for the same
+    GPU. What do these two events mean together?
+  choices:
+    - 'XID 63: NVLink error; XID 64: NVLink recovered'
+    - 'XID 63: application timeout; XID 64: application restarted'
+    - 'XID 63: a row remapping (or page retirement) event was recorded; XID 64: recording a remapping failed'
+    - XID 63 and 64 are informational clock changes
+- id: tsh-005
+  domain: Troubleshooting and Optimization
+  difficulty: medium
+  lab: tsh-ecc-row-remap
+  question: |
+    nvidia-smi -q -d ROW_REMAPPER on an H100 shows:
+      Remapped Rows
+          Correctable Error                 : 0
+          Uncorrectable Error               : 1
+          Pending                           : Yes
+          Remapping Failure Occurred        : No
+    What should the administrator do?
+  choices:
+    - Nothing; the remap is already active
+    - Request an immediate RMA because any remapped row means the GPU is faulty
+    - Drain the node, then reset the GPU (or reboot) so the pending remap takes effect, and verify it with diagnostics
+    - Disable ECC to stop more remaps
+- id: tsh-006
+  domain: Troubleshooting and Optimization
+  difficulty: hard
+  lab: tsh-ecc-row-remap
+  question: |
+    Which nvidia-smi row remapper status most clearly means a GPU should be
+    replaced?
+  choices:
+    - Correctable Error count of 2
+    - 'Pending: Yes after an uncorrectable error'
+    - 'Pending: No with zero errors'
+    - 'Remapping Failure Occurred: Yes'
+- id: tsh-007
+  domain: Troubleshooting and Optimization
+  difficulty: medium
+  question: |
+    A multi-GPU training job on an HGX H100 system is slow, and the kernel log
+    shows repeated XID 74 messages for GPU 3. What subsystem should be looked at
+    first?
+  choices:
+    - The NVLink connections of GPU 3
+    - The node's InfiniBand HCAs
+    - The local NVMe storage
+    - The Slurm accounting database
+- id: tsh-008
+  domain: Troubleshooting and Optimization
+  difficulty: hard
+  question: |
+    On an H100, two different ECC-related XIDs can follow an uncorrectable
+    memory error: 94 and 95. What is the key difference?
+  choices:
+    - 94 is a correctable error; 95 is uncorrectable
+    - 94 is an NVLink error; 95 is a PCIe error
+    - 94 means the error was contained to the affected application, so other work on the GPU can continue; 95 means it was not contained and the GPU needs a reset
+    - 94 needs a node reboot; 95 needs nothing
+- id: tsh-009
+  domain: Troubleshooting and Optimization
+  difficulty: medium
+  question: |
+    An administrator sees XID 45 messages in the kernel log after a job failure.
+    How should XID 45 be interpreted?
+  choices:
+    - It is always a hardware failure that needs RMA
+    - It means MIG mode was changed
+    - It means the GPU fell off the bus
+    - It reports cleanup of channels or processes after an earlier error, so look for the XID that came before it to find the root cause
+- id: tsh-010
+  domain: Troubleshooting and Optimization
+  difficulty: medium
+  question: |
+    A GPU keeps reporting XID 92. What does this indicate?
+  choices:
+    - A high rate of single-bit (correctable) ECC errors
+    - A clock throttling event
+    - A failed MIG configuration
+    - A container runtime error
+- id: tsh-011
+  domain: Troubleshooting and Optimization
+  difficulty: medium
+  question: |
+    A user reports XID 43 ("GPU stopped processing") in the log when their job
+    crashed. Other jobs on the same GPU before and after ran fine, and DCGM
+    health is clean. What is the most reasonable conclusion?
+  choices:
+    - The user's application hit a fault that stopped its work on the GPU; the GPU itself is usually still healthy
+    - The NVSwitch fabric is down
+    - The GPU has fallen off the bus and must be replaced
+    - The node needs a firmware update immediately
+- id: tsh-012
+  domain: Troubleshooting and Optimization
+  difficulty: easy
+  lab: tsh-dcgm-diag-failure
+  question: |
+    An administrator wants a quick DCGM check (seconds) that the GPU software
+    stack is deployed correctly on a node, before running longer stress tests.
+    Which command fits?
+  choices:
+    - dcgmi diag -r 1
+    - dcgmi diag -r 4
+    - dcgmi diag -r 3
+    - dcgmi stats -j 1
+- id: tsh-013
+  domain: Troubleshooting and Optimization
+  difficulty: medium
+  lab: tsh-dcgm-diag-failure
+  question: |
+    After a hardware repair, dcgmi diag -r 3 on dgx-02 shows:
+      | Memory                   | Fail - GPU: 5                                   |
+      |   Warning                | GPU 5: ... DBE ... detected ...                  |
+    All other tests pass. What should the administrator do?
+  choices:
+    - Return the node to service, since only one GPU failed
+    - Run dcgmi diag -r 1 instead, because it passes
+    - Disable ECC on GPU 5 and run the test again
+    - Keep the node drained, collect the diag results and nvidia-bug-report.sh output, check GPU 5's ECC/row-remap state, and escalate for hardware service if the failure is confirmed
+- id: tsh-014
+  domain: Troubleshooting and Optimization
+  difficulty: hard
+  question: |
+    Health watches are enabled for group 1. The administrator runs
+    dcgmi health -g 1 -c and sees:
+      Overall Health: Warning
+      | GPU ID: 2   | Warning                                              |
+      |   PCIe      | Detected more than 8 PCIe replays per minute ...      |
+    What does this suggest?
+  choices:
+    - A PCIe link problem on GPU 2 (signal integrity, riser or slot), worth correlating with performance and XIDs
+    - GPU 2 is in MIG mode
+    - The DCGM exporter is not running
+    - Slurm has drained GPU 2
+- id: tsh-015
+  domain: Troubleshooting and Optimization
+  difficulty: medium
+  lab: tsh-power-cap-persistence
+  question: |
+    Training on one node is 25% slower than on its identical neighbors.
+    nvidia-smi -q -d PERFORMANCE shows on all GPUs:
+      Clocks Event Reasons
+          Idle                              : Not Active
+          Applications Clocks Setting       : Not Active
+          SW Power Cap                      : Active
+          HW Slowdown                       : Not Active
+          HW Thermal Slowdown               : Not Active
+    nvidia-smi -q -d POWER shows a current power limit far below the default.
+    What is the MOST likely cause?
+  choices:
+    - The GPUs are overheating
+    - A lower power limit was configured on this node (e.g., with nvidia-smi -pl), so the driver caps clocks to stay under it
+    - The node's InfiniBand link is degraded
+    - ECC is disabled
+- id: tsh-016
+  domain: Troubleshooting and Optimization
+  difficulty: easy
+  lab: tsh-thermal-throttle
+  question: |
+    GPU 4 on a node runs at much lower clocks than the others under the same
+    load. nvidia-smi shows it at 88 C while the others are about 65 C, and
+    "HW Thermal Slowdown: Active" for GPU 4 only. What should be investigated?
+  choices:
+    - The power limit setting of the node
+    - 'Cooling for that GPU: airflow blockage, fan or chassis cooling faults, or heatsink or thermal interface problems'
+    - The NCCL environment variables
+    - The Slurm partition configuration
+- id: tsh-017
+  domain: Troubleshooting and Optimization
+  difficulty: easy
+  lab: tsh-thermal-throttle
+  question: |
+    Which command shows why a GPU's clocks are currently being reduced (power
+    cap, thermal, idle and so on)?
+  choices:
+    - nvidia-smi topo -m
+    - nvidia-smi -L
+    - nvidia-smi -q -d PERFORMANCE
+    - nvidia-smi mig -lgi
+- id: tsh-018
+  domain: Troubleshooting and Optimization
+  difficulty: medium
+  lab: tsh-fabricmanager-down
+  question: |
+    After a reboot, every CUDA program on a DGX H100 fails with:
+      cudaErrorSystemNotReady (802): system not yet initialized
+    nvidia-smi lists all 8 GPUs. What should the administrator check FIRST?
+  choices:
+    - The InfiniBand subnet manager
+    - Whether the GPUs are in MIG mode
+    - The Slurm gres.conf file
+    - The status of the nvidia-fabricmanager service (systemctl status nvidia-fabricmanager) and its logs
+- id: tsh-019
+  domain: Troubleshooting and Optimization
+  difficulty: hard
+  lab: tsh-fabricmanager-down
+  question: |
+    A driver upgrade was applied with the package manager on an HGX node. Now
+    nvidia-fabricmanager fails to start, and its log mentions a version mismatch
+    with the driver. What is the correct fix?
+  choices:
+    - Enable MIG mode on all GPUs to bypass NVSwitch
+    - Downgrade the CUDA toolkit
+    - Disable Fabric Manager; CUDA will fall back to PCIe
+    - Install the Fabric Manager package whose version exactly matches the new driver, then start the service
+- id: tsh-020
+  domain: Troubleshooting and Optimization
+  difficulty: medium
+  lab: tsh-ib-port-down
+  question: |
+    A multi-node job fails on dgx-11. ibstat on the node shows:
+      CA 'mlx5_4'
+          Port 1:
+              State: Down
+              Physical state: Polling
+              Rate: 10
+              Link layer: InfiniBand
+    The other HCAs are Active / LinkUp at rate 400. What is the MOST likely
+    problem?
+  choices:
+    - The subnet manager isn't running
+    - NCCL_IB_HCA is set incorrectly
+    - The GPU driver isn't loaded
+    - 'No physical link to a partner port: a bad or unplugged cable or transceiver, or the switch port is down or disabled'
+- id: tsh-021
+  domain: Troubleshooting and Optimization
+  difficulty: hard
+  question: |
+    After a fabric maintenance window, all HCAs on all nodes show:
+      State: Initializing
+      Physical state: LinkUp
+      Rate: 400
+    What is the MOST likely cause?
+  choices:
+    - No subnet manager (OpenSM or UFM) is running or reachable, so ports never get LIDs or move to Active
+    - Every cable in the cluster is damaged
+    - The nodes' GPU drivers are mismatched
+    - Fabric Manager is stopped on all nodes
+- id: tsh-022
+  domain: Troubleshooting and Optimization
+  difficulty: medium
+  lab: tsh-ib-port-down
+  question: |
+    On an NDR (400 Gb/s) fabric, ibstat on one node shows a port Active but
+    reports "Rate: 200", while all other ports show 400. All-reduce performance
+    involving this node is lower. What should the administrator do?
+  choices:
+    - Ignore it; rate is negotiated per job
+    - Restart the subnet manager to force 400
+    - 'Treat it as a degraded link: inspect and reseat or replace the cable or transceiver and check the port with link diagnostics (for example, mlxlink or ibdiagnet)'
+    - Set NCCL_IB_HCA to exclude all other HCAs
+- id: tsh-023
+  domain: Troubleshooting and Optimization
+  difficulty: medium
+  question: |
+    An administrator suspects a bad InfiniBand cable because jobs using one
+    switch port are slow. Which TWO tools help confirm it by looking at port
+    error counters such as SymbolErrorCounter and LinkDownedCounter? (Choose
+    two.)
+  choices:
+    - perfquery
+    - nvidia-smi nvlink -s
+    - ibdiagnet
+    - dcgmi diag -r 1
+    - sinfo -R
+- id: tsh-024
+  domain: Troubleshooting and Optimization
+  difficulty: hard
+  lab: tsh-nccl-ib-hca
+  question: |
+    A 2-node all_reduce_perf run on DGX H100 nodes shows a busbw of about
+    9 GB/s at large message sizes. With NCCL_DEBUG=INFO the log contains:
+      NCCL INFO NET/Socket : Using [0]eno1:10.0.0.11<0>
+      NCCL INFO Using network Socket
+    What is the MOST likely explanation?
+  choices:
+    - NVLink inside each node is broken
+    - NCCL isn't using InfiniBand and has fallen back to TCP sockets over Ethernet, e.g. because NCCL_IB_HCA names devices that don't exist, IB is disabled, or the RDMA devices aren't visible to the container
+    - The GPUs are thermally throttling
+    - The message sizes are too small
+- id: tsh-025
+  domain: Troubleshooting and Optimization
+  difficulty: medium
+  question: |
+    In nccl-tests output, what is the difference between algbw and busbw?
+  choices:
+    - busbw is always half of algbw
+    - algbw is measured on NVLink and busbw on PCIe
+    - algbw is data size divided by time; busbw scales it by the collective's communication pattern (e.g. 2(n-1)/n for all-reduce) so it can be compared with the hardware's link bandwidth
+    - They are the same value shown in different units
+- id: tsh-026
+  domain: Troubleshooting and Optimization
+  difficulty: medium
+  lab: tsh-nccl-ib-hca
+  question: |
+    After a hardware change, ibstat lists HCAs mlx5_0 to mlx5_3 and mlx5_6 to
+    mlx5_9 for compute traffic, and mlx5_4/mlx5_5 for storage. Jobs still set
+    NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7.
+    Multi-node bandwidth dropped. What should be done?
+  choices:
+    - Unset NCCL_DEBUG
+    - Update NCCL_IB_HCA to list the compute HCAs (mlx5_0-3 and mlx5_6-9), checked against the current ibstat/ibdev2netdev output
+    - Set NCCL_IB_DISABLE=1
+    - Add more GPUs per node
+- id: tsh-027
+  domain: Troubleshooting and Optimization
+  difficulty: hard
+  question: |
+    Multi-node NCCL performance is below expectations, and NCCL_DEBUG=INFO shows
+    the IB transport but no GPUDirect RDMA (GDRDMA) on the channels. Which TWO
+    checks are most relevant? (Choose two.)
+  choices:
+    - Check that MIG mode is enabled
+    - Check that Slurm's slurmdbd is running
+    - Check that the DCGM exporter is scraped by Prometheus
+    - Check that the nvidia-peermem kernel module is loaded (lsmod | grep nvidia_peermem)
+    - Check the PCIe topology (nvidia-smi topo -m) to see whether GPUs and their HCAs share a PCIe switch
+- id: tsh-028
+  domain: Troubleshooting and Optimization
+  difficulty: hard
+  question: |
+    An application uses cuFile for GPUDirect Storage, but throughput is no
+    better than regular reads. gdscheck -p shows that the nvidia-fs driver is
+    not loaded. What is happening?
+  choices:
+    - GDS refuses to run without nvidia-fs and the application should be failing
+    - Without nvidia-fs, cuFile runs in compatibility mode, sending I/O through CPU bounce buffers instead of a direct storage-to-GPU path
+    - nvidia-fs is only needed for NVLink
+    - GDS only works with MIG enabled
+- id: tsh-029
+  domain: Troubleshooting and Optimization
+  difficulty: easy
+  question: |
+    A user runs:
+      $ docker run --rm nvcr.io/nvidia/pytorch:24.05-py3 nvidia-smi
+    and gets "nvidia-smi: command not found" (or CUDA finds no devices). The
+    host's nvidia-smi works, and the toolkit is configured. What is the MOST
+    likely cause?
+  choices:
+    - The host driver is too new
+    - The container was started without requesting GPUs (no --gpus all, or no NVIDIA runtime)
+    - The image is corrupt
+    - The GPUs are in MIG mode
+- id: tsh-030
+  domain: Troubleshooting and Optimization
+  difficulty: medium
+  lab: tsh-device-plugin-crashloop
+  question: |
+    On a new GPU node, the nvidia-device-plugin pod is in CrashLoopBackOff and
+    logs show it can't load the NVML library. nvidia-smi works on the host, and
+    the GPU Operator was installed with driver.enabled=false and
+    toolkit.enabled=false. What is the MOST likely cause?
+  choices:
+    - The node has too many GPUs
+    - The node is missing the nvidia.com/mig.config label
+    - Prometheus isn't scraping the node
+    - The NVIDIA Container Toolkit on the host isn't installed or isn't configured as the runtime containerd uses for these pods, so the driver libraries aren't injected into the plugin container
+- id: tsh-031
+  domain: Troubleshooting and Optimization
+  difficulty: easy
+  question: |
+    A pod is stuck with:
+      Failed to pull image "nvcr.io/nvidia/tritonserver:24.05-py3":
+      ... 401 Unauthorized
+    Other pods in a different namespace pull the same image fine. What is the
+    MOST likely cause?
+  choices:
+    - The pod's namespace has no nvcr.io pull secret, or the pod doesn't reference it in imagePullSecrets
+    - The node has no GPUs
+    - The image tag was deleted
+    - The device plugin is crashing
+- id: tsh-032
+  domain: Troubleshooting and Optimization
+  difficulty: medium
+  lab: ins-slurm-gres-config
+  question: |
+    After a config change, sinfo shows dgx-09 as "inval", and scontrol show node
+    dgx-09 includes:
+      Reason=gres/gpu count reported lower than configured (4 < 8)
+    nvidia-smi on dgx-09 lists 8 healthy GPUs. What is the MOST likely cause?
+  choices:
+    - munge is not running
+    - Four GPUs are in MIG mode
+    - slurm.conf says Gres=gpu:8, but gres.conf on dgx-09 only describes 4 GPUs (e.g. File=/dev/nvidia[0-3])
+    - The node's time limit is wrong
+- id: tsh-033
+  domain: Troubleshooting and Optimization
+  difficulty: easy
+  question: |
+    NVIDIA Enterprise Support asks for a full diagnostic log from a GPU server
+    showing driver errors. Which tool generates the standard archive?
+  choices:
+    - nvidia-bug-report.sh (creates nvidia-bug-report.log.gz)
+    - dmesg | tail
+    - nvidia-smi -L > log.txt
+    - dcgmi discovery -l
+- id: tsh-034
+  domain: Troubleshooting and Optimization
+  difficulty: easy
+  question: |
+    Several users report that "training is slow today". What should the
+    administrator do FIRST?
+  choices:
+    - Reboot all GPU nodes
+    - Collect specifics (which jobs, nodes and times, compared with a known baseline) to find out whether the problem is limited to certain nodes, the network, storage or the jobs themselves
+    - Upgrade the GPU driver cluster-wide
+    - Raise all users' fair-share
+- id: tsh-035
+  domain: Troubleshooting and Optimization
+  difficulty: medium
+  question: |
+    A single-node image training job shows GPU utilization going between 0% and
+    100%. CPU iowait is high, and profiling shows the GPUs waiting for the next
+    batch. The dataset is read from a busy shared NFS filer. Which TWO changes
+    are most likely to help? (Choose two.)
+  choices:
+    - Lower the GPU power limit
+    - Stage or cache the dataset on local NVMe (or use a faster parallel filesystem)
+    - Increase DataLoader worker processes and prefetching (and use pinned memory) so input loading overlaps with compute
+    - Enable MIG to split each GPU
+    - Set NCCL_IB_DISABLE=1
+- id: tsh-036
+  domain: Troubleshooting and Optimization
+  difficulty: medium
+  question: |
+    Which TWO technologies are part of NVIDIA Magnum IO, the I/O stack for
+    data center GPU systems? (Choose two.)
+  choices:
+    - Slurm
+    - Prometheus
+    - GPUDirect Storage
+    - Helm
+    - NCCL
+- id: tsh-037
+  domain: Troubleshooting and Optimization
+  difficulty: easy
+  question: |
+    Intra-node all_reduce_perf on an 8-GPU NVSwitch system gives much lower
+    busbw than on identical nodes. The administrator suspects an NVLink
+    problem on one GPU. Which command shows per-GPU NVLink link state and
+    speed?
+  choices:
+    - ibstat
+    - nvidia-smi -q -d ECC
+    - nvidia-smi nvlink -s
+    - sinfo -N -l
+- id: tsh-038
+  domain: Troubleshooting and Optimization
+  difficulty: hard
+  question: |
+    An administrator who used to run V100 systems looks for "Retired Pages"
+    information on a new A100 to track memory errors. What should they know?
+  choices:
+    - They must disable ECC on A100 to see retired pages
+    - A100 doesn't track memory errors
+    - Page retirement on A100 is only reported through Slurm
+    - A100 and later GPUs handle memory errors with row remapping instead of page retirement, so they should check the row remapper status (nvidia-smi -q -d ROW_REMAPPER)

@@ -1,0 +1,96 @@
+id: tsh-storage-io-bottleneck
+title: GPUs starve during training - utilisation jumps between 0 and 100%
+domain: Troubleshooting and Optimization
+difficulty: hard
+time_limit_min: 25
+tags: [storage, gds, magnum-io, performance, nfs, lustre, dataloader]
+briefing: |
+  Alice's ResNet-50 training on dgx-02 (all 8 GPUs) runs at about 2,000
+  images/s. The same container and model reached about 24,000 images/s on the
+  vendor's reference system. She says GPU utilisation "jumps between nothing and
+  100%". dcgmi diag and the NVLink checks on dgx-02 are clean.
+
+  The job is launched with /home/alice/resnet50/train.sbatch, which sources
+  /home/alice/resnet50/job.env (on dgx-02). The pipeline uses DALI and is meant
+  to read the pre-processed .npy shards through GPUDirect Storage (cuFile).
+
+  Find out why the GPUs are starving. Fix the job configuration and the node so
+  the input pipeline can keep all 8 GPUs busy. Prove it with the lab helper
+  `dataloader-bench` on dgx-02: it runs the job's input pipeline alone, using the
+  current job.env, and reports samples/s against what the GPUs can consume.
+  Alice will restart the job once your benchmark is clean.
+objectives:
+  - Show the GPU starvation pattern and find where the input pipeline is limited
+  - The job reads its data from the fast filesystem instead of the head node's NFS share
+  - GPUDirect Storage is really active (not silently in compatibility mode)
+  - Enough dataloader workers per GPU that the CPUs are not the next bottleneck
+  - dataloader-bench with the job's own job.env shows the pipeline is no longer input-bound
+setup:
+  - python: |
+      n = state.nodes['dgx-02']
+      nfs_opts = ('rw,relatime,vers=3,rsize=8192,wsize=8192,namlen=255,hard,proto=tcp,timeo=600,retrans=2,'
+                  'sec=sys,mountaddr=10.141.255.254,mountvers=3,mountport=20048,mountproto=udp,'
+                  'local_lock=none,addr=10.141.255.254')
+      n.mounts = [
+          {'source': '/dev/nvme0n1p2', 'target': '/', 'fstype': 'ext4', 'options': 'rw,relatime,errors=remount-ro'},
+          {'source': '/dev/nvme0n1p1', 'target': '/boot/efi', 'fstype': 'vfat', 'options': 'rw,relatime'},
+          {'source': '/dev/md1', 'target': '/raid', 'fstype': 'ext4', 'options': 'rw,relatime,stripe=256'},
+          {'source': 'tmpfs', 'target': '/dev/shm', 'fstype': 'tmpfs', 'options': 'rw,nosuid,nodev'},
+          {'source': 'master:/cm/shared', 'target': '/cm/shared', 'fstype': 'nfs4',
+           'options': 'rw,rsize=32768,wsize=32768,hard,async'},
+          {'source': 'master:/home', 'target': '/home', 'fstype': 'nfs', 'options': nfs_opts},
+          {'source': '10.150.0.10@o2ib,10.150.0.11@o2ib:/exafs', 'target': '/lustre', 'fstype': 'lustre',
+           'options': 'rw,flock,lazystatfs,encrypt'},
+      ]
+      n.files['/proc/mounts'] = ''.join(f"{m['source']} {m['target']} {m['fstype']} {m['options']} 0 0\n" for m in n.mounts)
+      conf = ("# ResNet-50 (DALI) training - sourced by train.sbatch\n"
+              "DATA_DIR=/home/datasets/imagenet-npy\n"
+              "NUM_WORKERS=2          # dataloader worker processes per GPU\n"
+              "USE_GDS=1              # DALI numpy reader on the GPU via cuFile\n"
+              "BATCH_SIZE=256\n"
+              "EPOCHS=90\n")
+      n.files['/home/alice/resnet50/job.env'] = conf
+      n.files['/home/alice/resnet50/train.sbatch'] = (
+          "#!/bin/bash\n#SBATCH -N 1 --gres=gpu:8 --exclusive -J resnet50-dali\n"
+          "source /home/alice/resnet50/job.env\n"
+          "srun --container-image=nvcr.io#nvidia/pytorch:24.05-py3 --container-mounts=/home,/lustre \\\n"
+          "     torchrun --nproc_per_node=8 train.py --data $DATA_DIR --workers $NUM_WORKERS --gds $USE_GDS\n")
+      for root in ('/home/datasets/imagenet-npy', '/lustre/datasets/imagenet-npy'):
+          n.files[root + '/MANIFEST'] = "imagenet-1k preprocessed 224x224 uint8 .npy shards, 1281167 train samples\n"
+          n.files[root + '/train/shard-00000.npy'] = "(binary)\n"
+          n.files[root + '/val/shard-00000.npy'] = "(binary)\n"
+      n.files['/etc/cufile.json'] = ('{\n    "logging": { "level": "ERROR" },\n'
+                                     '    "properties": {\n        "max_direct_io_size_kb": 16384,\n'
+                                     '        "allow_compat_mode": true\n    },\n'
+                                     '    "fs": { "lustre": { "posix_gds_min_kb": 0 } }\n}\n')
+      n.volatile_modules = ['nvidia_fs']
+      n.training = {'name': 'resnet50-dali', 'user': 'alice', 'config': '/home/alice/resnet50/job.env',
+                    'gpus': 8, 'gpu_rate': 3000, 'sample_kb': 150,
+                    'launched': {'DATA_DIR': '/home/datasets/imagenet-npy', 'NUM_WORKERS': '2', 'USE_GDS': '1'}}
+      for g in n.gpus:
+          g.processes = [{'pid': 60210 + g.index, 'name': 'python train.py', 'used_mib': 41210, 'user': 'alice'}]
+          g.memory_used_mib = 41210
+          g.utilization = 3
+checks:
+  - desc: job.env reads the dataset from the Lustre copy (/lustre/datasets/imagenet-npy)
+    expr: "re.search(r'(?m)^\\s*(?:export\\s+)?DATA_DIR=[\"\\']?/lustre/datasets/imagenet-npy/?[\"\\']?\\s*(#.*)?$', file('dgx-02', '/home/alice/resnet50/job.env')) is not None"
+  - desc: job.env asks for at least 8 dataloader workers per GPU and keeps GDS on
+    expr: "(lambda t: (lambda m: m is not None and int(m.group(1)) >= 8)(re.search(r'(?m)^\\s*(?:export\\s+)?NUM_WORKERS=[\"\\']?(\\d+)', t)) and re.search(r'(?m)^\\s*(?:export\\s+)?USE_GDS=[\"\\']?1\\b', t) is not None)(file('dgx-02', '/home/alice/resnet50/job.env'))"
+  - desc: the nvidia_fs (GPUDirect Storage) kernel module is loaded on dgx-02
+    expr: any(m.replace('-', '_') == 'nvidia_fs' for m in nodes['dgx-02'].modules)
+  - desc: the last dataloader-bench on dgx-02 used job.env as-is and showed the GPUs, not the input, as the limit, with GDS active
+    expr: "(lambda b: b.get('ok') and b.get('from_config') and b.get('config') == '/home/alice/resnet50/job.env' and b.get('bound') == 'gpu' and b.get('gds'))(flags.get('dataloader_bench', {}).get('dgx-02', {}))"
+  - desc: you captured the GPU starvation pattern (nvidia-smi dmon or dcgmi dmon on dgx-02)
+    expr: ran(r'nvidia-smi dmon|dcgmi dmon', 'dgx-02')
+  - desc: you ran the GDS platform check on dgx-02
+    expr: ran(r'gdscheck(\.py)? .*-p', 'dgx-02')
+hints:
+  - "Start with what the GPUs see: nvidia-smi dmon -c 10 on dgx-02. Short bursts of ~97% SM between near-idle samples is the classic sign of an input-bound job. Then run dataloader-bench once to see which limit it hits."
+  - "Where does DATA_DIR live? Look at /proc/mounts and nfsiostat. iostat -x only shows local block devices. How large are the NFS read ops (kB/op, rsize), and which server is behind /home? Is there a faster filesystem on this node with the same dataset?"
+  - "The job asks for GDS (USE_GDS=1), but cuFile silently falls back to compatibility mode when it can't do GPUDirect Storage. Run /usr/local/cuda/gds/tools/gdscheck -p and lsmod | grep nvidia_fs. NFS over TCP can never use GDS."
+  - "Fix: point DATA_DIR at /lustre/datasets/imagenet-npy, modprobe nvidia-fs, and raise NUM_WORKERS (2 per GPU can't keep up; try 8 or more out of 28 cores per GPU). Then run dataloader-bench with no overrides."
+references:
+  - NVIDIA Magnum IO GPUDirect Storage - Installation and Troubleshooting Guide (gdscheck, cufile.json, compatibility mode)
+  - NVIDIA DGX BasePOD / SuperPOD reference architecture - storage
+  - NVIDIA DALI documentation - GPUDirect Storage with the numpy reader
+  - nfs(5) mount options (rsize, wsize, nconnect, proto=rdma)

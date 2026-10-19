@@ -1,0 +1,66 @@
+id: tsh-thermal-throttle
+title: One slow GPU — thermal slowdown on dgx-02
+domain: Troubleshooting and Optimization
+difficulty: medium
+time_limit_min: 15
+tags: [nvidia-smi, thermal, ipmi, sel, hardware, rma]
+briefing: |
+  A 16-GPU training run on dgx-01 + dgx-02 took 35% longer than usual. NCCL
+  traces show every rank waiting on one GPU of dgx-02. The run was cancelled,
+  and an engineer is now running a GPU burn-in on dgx-02 (outside Slurm) to
+  reproduce the problem.
+  A colleague suggests "just raise the power limit on the slow GPU". Before
+  anyone touches anything, find out what is really limiting that GPU.
+  Then handle it the way an operations team should: keep jobs off the node,
+  collect what NVIDIA support will need, and open a hardware case
+  (lab helper: `hwticket create --node ... --component ... --summary "..."`).
+objectives:
+  - Identify the throttled GPU and the reason, with evidence from the GPU and from the BMC
+  - Keep new jobs off dgx-02 without killing anything
+  - Collect an NVIDIA support bundle and open a hardware ticket for the real failed part
+  - Do NOT mask the problem by changing power or clock limits
+setup:
+  - python: |
+      n = state.nodes['dgx-02']
+      for g in n.gpus:
+          g.temp_c = 66 + g.index % 4
+          g.sm_clock_mhz = 1980
+          g.power_draw_w = 688.0 + g.index
+          g.utilization = 100
+          g.memory_used_mib = 70144
+          g.processes = [{"pid": 52310 + g.index, "name": "./gpu_burn 3600", "used_mib": 70144, "user": "eng"}]
+      g = n.gpus[5]
+      g.temp_c = 88
+      g.mem_temp_c = 84
+      g.sm_clock_mhz = 1110
+      g.power_draw_w = 512.0
+      g.throttle_reasons = ['HW Thermal Slowdown', 'HW Slowdown']
+      n.sel = [
+          "   1 | 10/18/2026 | 21:52:40 | Fan FAN6_R | Lower Critical going low  | Asserted | Reading 600 < Threshold 1800 RPM",
+          "   2 | 10/18/2026 | 21:52:44 | Fan FAN6_R | Lower Non-recoverable going low  | Asserted | Reading 0 < Threshold 900 RPM",
+          "   3 | 10/18/2026 | 22:10:03 | Temperature GPU5_TEMP | Upper Non-critical going high | Asserted | Reading 85 > Threshold 84 degrees C",
+          "   4 | 10/18/2026 | 22:11:19 | Temperature GPU5_TEMP | Upper Critical going high | Asserted | Reading 88 > Threshold 87 degrees C",
+      ]
+      n.dmesg.append("[812044.551201] NVRM: GPU at PCI:0000:ab:00: GPU-7f3a0205-1c2e-4b5a-9d0e-0205a1b2c3d4 thermal slowdown engaged")
+checks:
+  - desc: dgx-02 is drained (no new jobs) with a reason
+    expr: str(slurm.nodes['dgx-02'].state).startswith('DRAIN') and bool(slurm.nodes['dgx-02'].reason)
+  - desc: a hardware ticket for the failed fan on dgx-02 exists
+    expr: any(t.node == 'dgx-02' and t.component == 'fan' for t in flags.get('hwtickets', []))
+  - desc: an nvidia-bug-report was collected on dgx-02
+    expr: "'dgx-02' in flags.get('bug_reports', [])"
+  - desc: power limits and clocks were not tampered with
+    expr: all(g.power_limit_w == g.power_default_w and g.app_sm_clock_mhz == 1980 for g in nodes['dgx-02'].gpus)
+  - desc: you read the clock event reasons / temperatures on dgx-02
+    expr: ran(r'nvidia-smi .*(-q|--query-gpu).*(PERFORMANCE|TEMPERATURE|clocks_event_reasons|clocks_throttle_reasons|temperature)', 'dgx-02')
+  - desc: you checked the BMC System Event Log on dgx-02
+    expr: ran(r'ipmitool .*sel', 'dgx-02')
+hints:
+  - "On dgx-02, nvidia-smi gives a first look. Is one GPU hotter or slower than the others?"
+  - "nvidia-smi -q -d PERFORMANCE,TEMPERATURE shows the clock event (throttle) reasons. 'HW Thermal Slowdown' means the hardware is protecting itself, and software limits play no part."
+  - "Why is the GPU hot when its neighbours are not? The BMC knows about fans: ipmitool sel list."
+  - "A failed fan is a hardware problem. Drain the node (Slurm, or BCM: cmsh -c \"device; drain -n dgx-02 --reason '...'\"), run nvidia-bug-report.sh on the node, then open a ticket with hwticket."
+references:
+  - nvidia-smi documentation (clocks_event_reasons)
+  - NVIDIA DGX H100 User Guide (component replacement, nvidia-bug-report.sh)
+  - IPMI v2.0 System Event Log

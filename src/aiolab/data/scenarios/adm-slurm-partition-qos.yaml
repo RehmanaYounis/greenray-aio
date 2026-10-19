@@ -1,0 +1,56 @@
+id: adm-slurm-partition-qos
+title: Create an interactive GPU partition with a per-user GPU cap
+domain: Administration
+difficulty: medium
+time_limit_min: 20
+tags: [slurm, qos, partition, sacctmgr, accounting]
+briefing: |
+  Researchers want a place for short interactive and debug work that a single
+  person can't monopolise. Management has signed off on this policy:
+
+    * a new partition `interactive` made of dgx-03 and dgx-04, with a 4-hour
+      maximum wall time
+    * no user may hold more than 8 GPUs at once in that partition, enforced by a
+      QOS named `interactive` attached to the partition
+    * defq must keep working exactly as it does today
+
+  The change has to survive a slurmctld restart. Last quarter someone created a
+  QOS with limits and later found out the limits were never enforced. Don't
+  repeat that. Prove the cap works with a job that asks for 16 GPUs in the new
+  partition.
+objectives:
+  - QOS `interactive` exists with MaxTRESPerUser=gres/gpu=8
+  - Partition `interactive` (dgx-03, dgx-04, MaxTime 4h) has QOS=interactive and is defined in slurm.conf
+  - Slurm actually enforces QOS limits (AccountingStorageEnforce includes limits)
+  - A 16-GPU test job in `interactive` is held back by the QOS limit
+  - defq is unchanged and still the default partition
+setup:
+  - python: |
+      st = state.slurm
+      st.accounts['research'] = {'name': 'research', 'fairshare': 1, 'users': ['alice', 'bob'],
+                                 'description': 'research', 'organization': 'ai-lab'}
+      st.users['alice'] = {'name': 'alice', 'default_account': 'research'}
+      st.users['bob'] = {'name': 'bob', 'default_account': 'research'}
+checks:
+  - desc: QOS interactive caps each user at 8 GPUs
+    expr: "'interactive' in slurm.qos and 'gres/gpu=8' in str(slurm.qos['interactive'].get('max_tres_per_user', ''))"
+  - desc: partition interactive covers dgx-03 and dgx-04 and uses QOS interactive
+    expr: "'interactive' in slurm.partitions and slurm.partitions['interactive'].get('qos') == 'interactive' and slurm.partitions['interactive'].nodes in ('dgx-[03-04]', 'dgx-03,dgx-04', 'dgx-[03,04]')"
+  - desc: partition interactive has a 4-hour MaxTime
+    expr: str(slurm.partitions['interactive'].max_time) in ('04:00:00', '4:00:00', '240', '0-04:00:00')
+  - desc: the partition is persistent (PartitionName=interactive ... QOS=interactive in slurm.conf)
+    expr: re.search(r'(?im)^PartitionName=interactive\b.*\bQOS=interactive\b', file('bcm-head', '/etc/slurm/slurm.conf')) is not None
+  - desc: the running slurmctld enforces limits (AccountingStorageEnforce contains limits)
+    expr: "'limits' in slurm.config.params.get('accountingstorageenforce', '').lower() or 'safe' in slurm.config.params.get('accountingstorageenforce', '').lower()"
+  - desc: a job in interactive was held back with reason QOSMaxGRESPerUser
+    expr: any(j.partition == 'interactive' and j.reason == 'QOSMaxGRESPerUser' for j in slurm.jobs)
+  - desc: defq is still UP, the default, and contains all four DGX nodes
+    expr: slurm.partitions['defq'].default and slurm.partitions['defq'].state == 'UP' and slurm.partitions['defq'].nodes == 'dgx-[01-04]'
+hints:
+  - "QOS objects live in the accounting database: sacctmgr show qos, sacctmgr add qos <name>, sacctmgr modify qos <name> set MaxTRESPerUser=gres/gpu=8 (add -i to skip the confirmation prompt)."
+  - "A partition attaches a QOS with QOS=<name> on its PartitionName= line. scontrol create/update only changes the running controller; slurm.conf is what survives a restart."
+  - "Check scontrol show config | grep AccountingStorageEnforce. Without 'limits' (or 'safe'), QOS limits are stored but never applied."
+  - "Append AccountingStorageEnforce=associations,limits,qos and the PartitionName=interactive line to /etc/slurm/slurm.conf, restart slurmctld, then submit: sbatch -p interactive -N 2 --gres=gpu:8 --wrap='sleep 600' and look at squeue."
+references:
+  - Slurm Resource Limits and QOS documentation
+  - Slurm sacctmgr and slurm.conf man pages (AccountingStorageEnforce, PartitionName QOS=)

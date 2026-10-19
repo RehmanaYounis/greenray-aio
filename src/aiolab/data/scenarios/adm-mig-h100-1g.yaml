@@ -1,0 +1,39 @@
+id: adm-mig-h100-1g
+title: Partition an H100 into seven 1g.10gb MIG slices
+domain: Administration
+difficulty: medium
+time_limit_min: 12
+tags: [mig, nvidia-smi]
+briefing: |
+  The inference team needs seven isolated GPU slices for small models on dgx-02.
+  Partition GPU 0 on dgx-02 into the maximum number of 1g.10gb MIG devices, each
+  with a compute instance so that CUDA applications can use it.
+  Leave GPUs 1-7 in full-GPU (non-MIG) mode for the training team.
+  A user's notebook kernel was left running on GPU 0.
+objectives:
+  - MIG mode is enabled on dgx-02 GPU 0 (and only GPU 0)
+  - GPU 0 has seven 1g.10gb GPU instances
+  - Every GPU instance has a compute instance
+setup:
+  - set: nodes.dgx-02.gpus.0.processes
+    value: [{pid: 48211, name: "python -m ipykernel_launcher", used_mib: 6144, user: bob}]
+  - set: nodes.dgx-02.gpus.0.memory_used_mib
+    value: 6144
+  - set: nodes.dgx-02.gpus.0.utilization
+    value: 3
+checks:
+  - desc: MIG enabled on dgx-02 GPU 0
+    expr: nodes['dgx-02'].gpus[0].mig_mode and nodes['dgx-02'].gpus[0].mig_pending is None
+  - desc: GPUs 1-7 on dgx-02 are not in MIG mode
+    expr: not any(g.mig_mode or g.mig_pending for g in nodes['dgx-02'].gpus[1:])
+  - desc: seven 1g.10gb GPU instances on GPU 0
+    expr: sorted(i.profile for i in nodes['dgx-02'].gpus[0].gpu_instances) == ['1g.10gb'] * 7
+  - desc: every GPU instance has a compute instance
+    expr: len({c.gi for c in nodes['dgx-02'].gpus[0].compute_instances}) == 7
+hints:
+  - MIG mode can't switch while a process holds the GPU. Find out who is using GPU 0 (nvidia-smi on dgx-02).
+  - Use -i 0 so that you only touch GPU 0. Without -i, nvidia-smi applies the change to every GPU.
+  - "nvidia-smi mig -lgip lists the profiles and their IDs. 1g.10gb is profile ID 19 on H100 80GB."
+  - "-cgi accepts a comma-separated list, and -C creates the default compute instance in the same step."
+references:
+  - NVIDIA MIG User Guide

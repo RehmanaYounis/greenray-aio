@@ -1,0 +1,42 @@
+id: adm-bcm-power-and-status
+title: A DGX is DOWN in BCM — bring it back with out-of-band power control
+domain: Administration
+difficulty: medium
+time_limit_min: 12
+tags: [bcm, cmsh, ipmi, bmc, power]
+briefing: |
+  The monitoring dashboard shows dgx-02 as DOWN and Slurm marks it "Not responding".
+  Facilities says there was planned PDU maintenance on that rack last night.
+  Use Base Command Manager to find out what state the node is in and power it
+  back on through its BMC. Confirm it is UP and reachable.
+  The BMC credentials are managed centrally in BCM. Do not change the
+  cluster-wide BMC settings.
+objectives:
+  - dgx-02 is powered on through BCM (IPMI) and BCM shows it UP
+  - dgx-02 answers on the network
+  - The cluster-wide (partition) BMC settings are unchanged
+setup:
+  - set: nodes.dgx-02.power
+    value: "off"
+  - set: nodes.dgx-02.up
+    value: false
+  - merge: bcm.devices.dgx-02
+    value: {status: DOWN, power: "off", bmcsettings: {password: "Dgx2023!old"}}
+  - merge: slurm.nodes.dgx-02
+    value: {state: DOWN, reason: "Not responding"}
+checks:
+  - desc: dgx-02 is powered on and BCM reports it UP
+    expr: nodes['dgx-02'].power == 'on' and nodes['dgx-02'].up and bcm.devices['dgx-02'].status == 'UP'
+  - desc: the stale node-level BMC password override is gone
+    expr: bcm.devices['dgx-02'].get('bmcsettings', {}).get('password') in (None, '', bcm.get('bmc_actual_password'))
+  - desc: cluster-wide BMC settings were not changed
+    expr: bcm.get('partitions', {}).get('base', {}).get('bmcsettings', {}).get('password', 'Bmc!Superpod24') == 'Bmc!Superpod24'
+  - desc: you checked node status and power state in cmsh first
+    expr: ran(r'cmsh .*device.*(status|power status)')
+hints:
+  - "cmsh -c \"device; status\" shows BCM's view. `power status -n dgx-02` asks the BMC directly over IPMI."
+  - "If IPMI cannot open a session, BCM is using the wrong BMC credentials for this node. Where do BMC settings come from, and can a single node override them?"
+  - "Compare cmsh -c \"device; use dgx-02; bmcsettings; show\" with the partition's: cmsh -c \"partition; use base; bmcsettings; show\"."
+  - "In the bmcsettings submode, `clear password` removes the node-level override so the node inherits the partition value again. Don't forget commit."
+references:
+  - NVIDIA Base Command Manager 10 Administrator Manual (power management, BMC configuration)

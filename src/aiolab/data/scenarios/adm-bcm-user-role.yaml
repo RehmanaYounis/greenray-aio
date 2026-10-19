@@ -1,0 +1,68 @@
+id: adm-bcm-user-role
+title: Onboard a new ML engineer (cluster user, group, read-only BCM role, Slurm account)
+domain: Administration
+difficulty: medium
+time_limit_min: 20
+tags: [bcm, cmsh, users, ldap, slurm, sacctmgr]
+briefing: |
+  Maria Lopez joins the vision team on Monday. IT ticket ONB-3318:
+
+    * login name `maria`, UID 2010 (her files on the shared datasets volume are
+      already owned by 2010, so the UID must match), initial password
+      `Welcome-2026!` (she changes it at first login)
+    * member of the existing `mlteam` group, like the rest of the ML engineers
+    * she may look at the cluster in Base Command Manager (devices, status,
+      monitoring), but must not be able to change anything there
+    * she must be able to run GPU jobs, charged to the `vision` Slurm account
+
+  Create the user in BCM, so that she exists on every node through BCM's LDAP,
+  not with useradd on one machine. Then prove the Slurm part works by submitting
+  a job as maria. Slurm on this cluster enforces associations.
+objectives:
+  - BCM user maria with UID 2010 and a password, committed
+  - maria is a member of mlteam
+  - maria's BCM profile is read-only (not admin)
+  - Slurm user maria associated with account vision (default account vision)
+  - A job submitted as maria runs under vision
+setup:
+  - python: |
+      head = state.nodes['bcm-head']
+      head.files['/etc/slurm/slurm.conf'] += "AccountingStorageEnforce=associations,limits,qos\n"
+      b = state.bcm
+      for name, uid in (('alice', 2001), ('carol', 2003)):
+          b.users[name] = {'name': name, 'uid': uid, 'groups': [name], 'password': 'x', 'home': f'/home/{name}',
+                           'shell': '/bin/bash', 'email': f'{name}@example.com', 'profile': ''}
+      b.groups = {
+          'root': {'name': 'root', 'gid': 0, 'members': []},
+          'alice': {'name': 'alice', 'gid': 2001, 'members': []},
+          'carol': {'name': 'carol', 'gid': 2003, 'members': []},
+          'mlteam': {'name': 'mlteam', 'gid': 3000, 'members': ['alice', 'carol']},
+      }
+      st = state.slurm
+      st.accounts['vision'] = {'name': 'vision', 'fairshare': 40, 'users': ['carol'], 'parent': 'root',
+                               'description': 'vision team', 'organization': 'ai-lab'}
+      st.accounts['nlp'] = {'name': 'nlp', 'fairshare': 60, 'users': ['alice'], 'parent': 'root',
+                            'description': 'nlp team', 'organization': 'ai-lab'}
+      st.users['alice'] = {'name': 'alice', 'default_account': 'nlp', 'accounts': ['nlp']}
+      st.users['carol'] = {'name': 'carol', 'default_account': 'vision', 'accounts': ['vision']}
+checks:
+  - desc: BCM user maria exists with UID 2010 and a password
+    expr: "'maria' in bcm.users and int(bcm.users['maria'].get('uid', 0)) == 2010 and bool(bcm.users['maria'].get('password'))"
+  - desc: maria is a member of mlteam
+    expr: "'maria' in bcm.groups['mlteam'].get('members', [])"
+  - desc: maria has the read-only BCM profile
+    expr: bcm.users['maria'].get('profile') == 'readonly'
+  - desc: nothing is left uncommitted in cmsh
+    expr: not bcm.uncommitted
+  - desc: Slurm user maria is associated with vision, which is her default account
+    expr: "'maria' in slurm.users and 'vision' in slurm.users['maria'].get('accounts', []) and slurm.users['maria'].default_account == 'vision'"
+  - desc: a job submitted as maria was accepted and charged to vision
+    expr: any(j.user == 'maria' and j.account == 'vision' for j in slurm.jobs)
+hints:
+  - "cmsh -c \"user; list\", \"group; list\" and \"profile; list\" show what exists. BCM users live in the cluster's LDAP directory, so id maria works on every node once the user is committed."
+  - "In user mode: add <name>, then set id / set password / set profile, then commit. Nothing reaches LDAP until commit."
+  - "Group membership is a list property of the group: group; use mlteam; append members maria; commit. The readonly profile allows viewing but no changes. admin would be far too much."
+  - "BCM users are not Slurm users. Slurm needs its own association: sacctmgr -i add user maria account=vision. Then test with su - maria -c \"sbatch --wrap=hostname\"."
+references:
+  - NVIDIA Base Command Manager 10 Administrator Manual (user management, profiles and certificates)
+  - Slurm Accounting documentation (sacctmgr add user, AccountingStorageEnforce)

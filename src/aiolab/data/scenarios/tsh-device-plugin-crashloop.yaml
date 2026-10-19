@@ -1,0 +1,77 @@
+id: tsh-device-plugin-crashloop
+title: NVIDIA device plugin in CrashLoopBackOff on re-imaged nodes
+domain: Troubleshooting and Optimization
+difficulty: hard
+time_limit_min: 20
+tags: [kubernetes, device-plugin, containerd, nvidia-container-toolkit]
+briefing: |
+  This cluster does not use the GPU Operator. The drivers and the NVIDIA Container
+  Toolkit come from the DGX OS image, and GPUs are exposed by the standalone NVIDIA
+  device plugin DaemonSet in kube-system (applied from the upstream static manifest).
+
+  Yesterday dgx-03 and dgx-04 were re-imaged after a disk replacement. Since then the
+  NCCL test pod "nccl-test", pinned to dgx-03, has been Pending. The platform team says
+  "the GPUs are fine, nvidia-smi works on the node".
+
+  Find the root cause and fix it on the affected nodes so that the device plugin runs
+  everywhere and nccl-test starts. Don't replace the device plugin with the GPU Operator.
+objectives:
+  - The nvidia-device-plugin-daemonset pods are Running on all four DGX nodes
+  - dgx-03 and dgx-04 advertise 8 allocatable nvidia.com/gpu
+  - containerd on dgx-03 and dgx-04 uses the nvidia runtime by default
+  - nccl-test is Running on dgx-03
+setup:
+  - python: |
+      from aiolab.commands import container as ct, kubectl as kc
+      for n in ("dgx-01", "dgx-02"):
+          state.nodes[n].files[ct.CONTAINERD_CONF] = ct.containerd_config(nvidia=True, default="nvidia")
+      for n in ("dgx-03", "dgx-04"):
+          state.nodes[n].files[ct.CONTAINERD_CONF] = ct.containerd_config()
+      kc.k8s_init(state)
+      kc.add_daemonset(state, "kube-system", "nvidia-device-plugin-daemonset", "nvcr.io/nvidia/k8s-device-plugin:v0.15.0",
+                       "standalone-device-plugin", owner="user", container="nvidia-device-plugin-ctr",
+                       tolerations=[{"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}],
+                       created=-30 * 86400, extra={"mig_strategy": "none"})
+      kc.reconcile(state)
+      kc.advance(state, 3 * 3600)
+      kc.apply_yaml(state, """
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: nccl-test
+        labels: {app: nccl-test}
+      spec:
+        restartPolicy: Never
+        nodeSelector:
+          kubernetes.io/hostname: dgx-03
+        containers:
+        - name: nccl
+          image: nvcr.io/nvidia/pytorch:24.05-py3
+          command: ["all_reduce_perf", "-b", "8", "-e", "8G", "-f", "2", "-g", "8"]
+          resources:
+            limits:
+              nvidia.com/gpu: 8
+      """)
+      kc.advance(state, 3 * 3600)
+      kc.reconcile(state)
+checks:
+  - desc: device plugin pods Running on dgx-01..dgx-04
+    expr: "sorted(p.node for p in pods('kube-system', 'nvidia-device-plugin-daemonset') if p.status == 'Running') == ['dgx-01', 'dgx-02', 'dgx-03', 'dgx-04']"
+  - desc: dgx-03 and dgx-04 advertise 8 allocatable GPUs
+    expr: "all(k8s.nodes[n].allocatable.get('nvidia.com/gpu') == '8' for n in ('dgx-03', 'dgx-04'))"
+  - desc: containerd config on dgx-03/dgx-04 has the nvidia runtime as default
+    expr: "all('default_runtime_name = \"nvidia\"' in file(n, '/etc/containerd/config.toml') and 'runtimes.nvidia]' in file(n, '/etc/containerd/config.toml') for n in ('dgx-03', 'dgx-04'))"
+  - desc: the running containerd on dgx-03/dgx-04 actually loaded that config
+    expr: "all(nodes[n].runtime_loaded.containerd.default == 'nvidia' for n in ('dgx-03', 'dgx-04'))"
+  - desc: nccl-test is Running on dgx-03
+    expr: "any(p.name == 'nccl-test' and p.status == 'Running' and p.node == 'dgx-03' for p in pods('default'))"
+  - desc: you read the crashing device plugin's logs
+    expr: "ran(r'kubectl logs.*nvidia-device-plugin')"
+hints:
+  - "`kubectl get pods -n kube-system -o wide | grep nvidia`: which nodes have the crashing pods, and what do they have in common?"
+  - "Read the device plugin log (`kubectl logs -n kube-system <pod>`). 'could not load NVML library' inside the container, while nvidia-smi works on the host, means the container was started without the NVIDIA runtime hook."
+  - "Compare /etc/containerd/config.toml (or `crictl info`) on dgx-01 and dgx-03. The static device plugin manifest sets no runtimeClassName, so it uses containerd's *default* runtime."
+  - "On each re-imaged node: `nvidia-ctk runtime configure --runtime=containerd --set-as-default`, then `systemctl restart containerd`. The crashing pods recover on their next restart."
+references:
+  - NVIDIA k8s-device-plugin README - Prerequisites / Configure containerd
+  - NVIDIA Container Toolkit - Installing the toolkit, Configuring containerd

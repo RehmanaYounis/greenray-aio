@@ -1,0 +1,44 @@
+id: wkl-pyxis-container-job
+title: Run an NGC PyTorch container through Slurm with Pyxis
+domain: Workload Management
+difficulty: medium
+time_limit_min: 15
+tags: [slurm, pyxis, enroot, ngc, containers]
+briefing: |
+  A researcher copied this command from the internal wiki and ran it on the
+  login/head node:
+
+      srun -p defq --gres=gpu:2 --container-image=nvcr.io/nvidia/pytorch:24.05-py3 \
+           python -c "import torch; print(torch.__version__, torch.cuda.device_count())"
+
+  It fails before anything reaches a compute node. Pyxis and enroot are installed
+  on every node, including bcm-head (the package was reinstalled during
+  last week's upgrade). Make containerised jobs work from bcm-head and run the
+  smoke test above with the NGC PyTorch 24.05 image on 2 GPUs.
+objectives:
+  - The Pyxis SPANK plugin is loaded by Slurm on bcm-head
+  - The smoke test runs in nvcr.io's nvidia/pytorch:24.05-py3 image and completes successfully on 2 GPUs
+setup:
+  - file: /etc/slurm/plugstack.conf
+    host: bcm-head
+    content: |
+      # SPANK plugin stack - plugins are configured in plugstack.conf.d
+      include /etc/slurm/plugstack.conf.d/*.conf
+  - set: nodes.bcm-head.pyxis_installed
+    value: true
+checks:
+  - desc: bcm-head's Slurm plugin stack loads spank_pyxis.so
+    expr: re.search(r'(?m)^\s*(required|optional)\s+\S*spank_pyxis\.so', file('bcm-head', '/etc/slurm/plugstack.conf') + '\n' + '\n'.join(v for k, v in nodes['bcm-head'].files.items() if k.startswith('/etc/slurm/plugstack.conf.d/'))) is not None
+  - desc: a 2-GPU job ran in nvcr.io#nvidia/pytorch:24.05-py3 and completed with exit code 0
+    expr: any(j.container_image == 'nvcr.io#nvidia/pytorch:24.05-py3' and j.state == 'COMPLETED' and j.exit_code == '0:0' and j.gpus_per_node * j.num_nodes >= 2 for j in slurm.jobs)
+  - desc: you inspected the SPANK plugin configuration
+    expr: ran(r'plugstack')
+hints:
+  - "'srun: unrecognized option --container-image' means srun itself doesn't know the option. Pyxis adds it through a SPANK plugin that srun loads from /etc/slurm/plugstack.conf on the host where you run srun."
+  - "Read plugstack.conf on bcm-head and follow its include line. Compare with /etc/slurm/plugstack.conf on a DGX node, where containers work."
+  - "Add 'required /usr/lib/x86_64-linux-gnu/slurm/spank_pyxis.so' to a file matched by the include (for example /etc/slurm/plugstack.conf.d/pyxis.conf)."
+  - "Pyxis/enroot image names use '#' between registry and image: nvcr.io#nvidia/pytorch:24.05-py3. With a '/', enroot looks for an image called nvcr.io/nvidia/pytorch on Docker Hub."
+references:
+  - NVIDIA Pyxis README (github.com/NVIDIA/pyxis)
+  - NVIDIA enroot documentation (image reference format, credentials)
+  - Slurm SPANK (plugstack.conf) man page

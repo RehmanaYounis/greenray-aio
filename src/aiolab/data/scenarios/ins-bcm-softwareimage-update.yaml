@@ -1,0 +1,48 @@
+id: ins-bcm-softwareimage-update
+title: Patch the DGX software image and push it to running nodes
+domain: Installation and Deployment
+difficulty: hard
+time_limit_min: 20
+tags: [bcm, cmsh, softwareimage, imageupdate, provisioning]
+briefing: |
+  Security has flagged the NVIDIA Container Toolkit on the DGX nodes (1.14.6).
+  It must be upgraded to 1.16.2-1, the release that fixes CVE-2024-0132.
+  All DGX nodes run long training jobs right now, so a reboot is NOT allowed.
+  Change control requires:
+    * the current image `dgx-os-6.2-h100-image` stays untouched as the
+      rollback target;
+    * the fix goes into a new image named `dgx-os-6.2-h100-ctk1162`;
+    * the dgx-h100 category uses the new image;
+    * every DGX node is running the new toolkit before you sign off;
+    * you review a dry run before changing live nodes.
+objectives:
+  - New software image dgx-os-6.2-h100-ctk1162 with nvidia-container-toolkit 1.16.2-1
+  - Original image unchanged (rollback)
+  - Category dgx-h100 points to the new image
+  - All four DGX nodes run 1.16.2-1, with no reboot
+setup:
+  - python: |
+      # someone pinned dgx-02 to the image explicitly while debugging months ago
+      state.bcm.devices['dgx-02'].softwareimage = 'dgx-os-6.2-h100-image'
+checks:
+  - desc: new image exists and contains nvidia-container-toolkit 1.16.2-1
+    expr: "'dgx-os-6.2-h100-ctk1162' in bcm.softwareimages and bcm.softwareimages['dgx-os-6.2-h100-ctk1162'].get('packages', {}).get('nvidia-container-toolkit') == '1.16.2-1'"
+  - desc: original image still has 1.14.6-1 (rollback target untouched)
+    expr: bcm.softwareimages['dgx-os-6.2-h100-image'].get('packages', {}).get('nvidia-container-toolkit', '1.14.6-1') == '1.14.6-1'
+  - desc: category dgx-h100 uses the new image and nothing is left uncommitted
+    expr: bcm.categories['dgx-h100'].softwareimage == 'dgx-os-6.2-h100-ctk1162' and not bcm.uncommitted
+  - desc: every DGX node runs nvidia-container-toolkit 1.16.2-1
+    expr: all(nd.get('packages', {}).get('nvidia-container-toolkit') == '1.16.2-1' for h, nd in nodes.items() if h.startswith('dgx-'))
+  - desc: no DGX node was rebooted or power-cycled
+    expr: all(d.get('reboots', 0) == 0 for k, d in bcm.devices.items() if k.startswith('dgx-')) and all(nd.up for h, nd in nodes.items() if h.startswith('dgx-'))
+  - desc: you ran an imageupdate dry run before the real update
+    expr: len(bcm.get('dryruns', [])) > 0
+hints:
+  - "List the images and the categories that use them: cmsh -c \"softwareimage; list\" and \"category; list\"."
+  - "Clone first, then commit. The image directory /cm/images/<new> only exists after the commit. Then run apt-get inside it with chroot /cm/images/<new> ... (cm-chroot-sw-img works too)."
+  - "Changing the category's image does nothing to running nodes. In device mode, `imageupdate` without -w is a dry run, and `synclog <node>` shows what would be sent."
+  - "Look carefully at which image the dry run sends to each node. Why would dgx-02 still get the old one? Compare `show` on dgx-02 with dgx-01, or run `softwareimage; usedby dgx-os-6.2-h100-image`."
+  - "Remove a node-level override with `clear softwareimage` so the node inherits from its category again. Then run imageupdate -w."
+references:
+  - NVIDIA Base Command Manager 10 Administrator Manual (software images, imageupdate, install modes)
+  - NVIDIA Container Toolkit security bulletin for CVE-2024-0132 (fixed in 1.16.2)

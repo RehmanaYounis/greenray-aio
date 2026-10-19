@@ -1,0 +1,90 @@
+id: tsh-numa-affinity
+title: The same training job is 35% slower whenever it lands on dgx-03
+domain: Troubleshooting and Optimization
+difficulty: hard
+time_limit_min: 25
+tags: [slurm, numa, affinity, gres, performance, topology]
+briefing: |
+  alice benchmarks a DALI-heavy ResNet-50 job (/root/resnet-dali.sbatch, 4 GPUs,
+  16 CPU cores per GPU for the data loaders). On dgx-01 it reaches ~3,400 img/s.
+  On dgx-03 it only reaches ~2,200 img/s, and the data-loader wait time is
+  high. The GPUs on dgx-03 pass DCGM diagnostics, and dgx-03's motherboard was
+  replaced last month (change CHG-2291). Compare /root/resnet-dali-5000.out
+  (dgx-03) with /root/resnet-dali-4990.out (dgx-01).
+
+  Find out why the CPUs the job gets on dgx-03 are a poor match for its GPUs and
+  fix the cause for every future job on that node. The team also wants Slurm to
+  never hand out CPU cores that are remote from the job's GPUs: a job should
+  wait rather than start with the wrong cores. bob's job 5001 is running on
+  dgx-03 GPUs 0-3. Don't kill it.
+objectives:
+  - Diagnose with the topology tools (nvidia-smi topo -m, numactl -H or lscpu) and the job's binding
+  - slurmd on dgx-03 reports GPU-to-core affinity that matches the hardware
+  - resnet-dali.sbatch enforces GPU/CPU binding, and a new run on dgx-03 gets cores local to its GPUs
+  - bob's job 5001 keeps running
+setup:
+  - python: |
+      d3 = state.nodes['dgx-03']
+      d3.files['/etc/slurm/gres.conf'] = (
+          "# dgx-03 - hand-written after the motherboard swap (CHG-2291)\n"
+          "# AutoDetect=nvml disabled while debugging the new board\n"
+          "Name=gpu Type=h100 File=/dev/nvidia[0-3] Cores=56-111\n"
+          "Name=gpu Type=h100 File=/dev/nvidia[4-7] Cores=0-55\n")
+      state.nodes['bcm-head'].files['/root/resnet-dali.sbatch'] = (
+          "#!/bin/bash\n"
+          "#SBATCH -J resnet-dali\n"
+          "#SBATCH -w dgx-03\n"
+          "#SBATCH --gres=gpu:4\n"
+          "#SBATCH --ntasks-per-node=4\n"
+          "#SBATCH --cpus-per-task=16\n"
+          "#SBATCH -t 01:00:00\n"
+          "#SBATCH -o /root/resnet-dali-%j.out\n"
+          "srun numactl --show\n")
+      cpus3 = ' '.join(str(c) for c in list(range(0, 8)) + list(range(112, 120)))
+      cpus1 = ' '.join(str(c) for c in list(range(56, 64)) + list(range(168, 176)))
+      state.nodes['bcm-head'].files['/root/resnet-dali-5000.out'] = (
+          "[rank0] SLURMD_NODENAME=dgx-03 SLURM_JOB_GPUS=4,5,6,7\n"
+          f"policy: default\npreferred node: current\nphyscpubind: {cpus3} \ncpubind: 0 \nnodebind: 0 \nmembind: 0 1 \n"
+          "[rank0] epoch 1: 2187 img/s, data loader wait 41.3%\n"
+          "[rank0] epoch 2: 2203 img/s, data loader wait 40.8%\n")
+      state.nodes['bcm-head'].files['/root/resnet-dali-4990.out'] = (
+          "[rank0] SLURMD_NODENAME=dgx-01 SLURM_JOB_GPUS=4,5,6,7\n"
+          f"policy: default\npreferred node: current\nphyscpubind: {cpus1} \ncpubind: 1 \nnodebind: 1 \nmembind: 0 1 \n"
+          "[rank0] epoch 1: 3391 img/s, data loader wait 6.2%\n"
+          "[rank0] epoch 2: 3412 img/s, data loader wait 5.9%\n")
+      st = state.slurm
+      st.users['alice'] = {'name': 'alice', 'default_account': 'root'}
+      st.users['bob'] = {'name': 'bob', 'default_account': 'root'}
+      st.jobs.append({'id': 4990, 'name': 'resnet-dali', 'user': 'alice', 'state': 'COMPLETED', 'num_nodes': 1,
+                      'ntasks_per_node': 4, 'cpus_per_task': 16, 'gpus_per_node': 4, 'nodelist': ['dgx-01'],
+                      'submit_time': -9000, 'start_time': -8900, 'end_time': -5300, 'batch': True,
+                      'command': '/root/resnet-dali.sbatch', 'stdout': '/root/resnet-dali-4990.out'})
+      st.jobs.append({'id': 5000, 'name': 'resnet-dali', 'user': 'alice', 'state': 'COMPLETED', 'num_nodes': 1,
+                      'ntasks_per_node': 4, 'cpus_per_task': 16, 'gpus_per_node': 4, 'nodelist': ['dgx-03'],
+                      'submit_time': -5000, 'start_time': -4900, 'end_time': -1300, 'batch': True,
+                      'command': '/root/resnet-dali.sbatch', 'stdout': '/root/resnet-dali-5000.out'})
+      st.jobs.append({'id': 5001, 'name': 'eval-vit', 'user': 'bob', 'state': 'RUNNING', 'num_nodes': 1,
+                      'ntasks_per_node': 4, 'cpus_per_task': 8, 'gpus_per_node': 4, 'nodelist': ['dgx-03'],
+                      'alloc_gpus': {'dgx-03': [0, 1, 2, 3]}, 'submit_time': -1200, 'start_time': -1100,
+                      'batch': True, 'duration': None, 'command': '/home/bob/eval.sbatch'})
+      st.next_job_id = 5002
+checks:
+  - desc: you looked at the GPU/CPU topology (nvidia-smi topo -m and numactl -H / lscpu)
+    expr: ran(r'^nvidia-smi topo') and ran(r'^(numactl (-H|--hardware)|lscpu)')
+  - desc: slurmd on dgx-03 now reports GPU 0-3 -> socket 0 cores and GPU 4-7 -> socket 1 cores
+    expr: slurm.nodes['dgx-03'].get('gpu_affinity_ok') is True
+  - desc: resnet-dali.sbatch asks Slurm to enforce GPU/CPU binding
+    expr: re.search(r'(?m)^#SBATCH\s+--gres-flags[= ]enforce-binding\s*$', file('bcm-head', '/root/resnet-dali.sbatch')) is not None
+  - desc: a new resnet-dali run on dgx-03 got CPU cores on the same NUMA node as its GPUs
+    expr: any(j.id > 5001 and j.name == 'resnet-dali' and 'dgx-03' in j.nodelist and j.get('numa_local') is True and 'enforce-binding' in str(j.get('gres_flags', '')) and j.state in ('RUNNING', 'COMPLETED') for j in slurm.jobs)
+  - desc: bob's job 5001 is still running
+    expr: jobs(id=5001)[0].state == 'RUNNING'
+hints:
+  - "Compare the two output files: which NUMA node did the job's CPUs come from (cpubind), and which GPUs did it get? Then look at nvidia-smi topo -m on dgx-03: the CPU Affinity and NUMA Affinity columns per GPU."
+  - "numactl -H (or lscpu) shows which CPU numbers belong to which NUMA node. Slurm picks cores for a GPU job from the GPU-to-core map that slurmd reports, which comes from gres.conf Cores= or from NVML when AutoDetect=nvml is set. Check slurmd -G on dgx-03."
+  - "gres.conf Cores= takes Slurm core IDs (0-111 on this box: 0-55 is socket 0, 56-111 is socket 1), not Linux CPU numbers like 112-167. On dgx-03 the two ranges are swapped. Fix them, or go back to AutoDetect=nvml, then restart slurmd on dgx-03."
+  - "Add #SBATCH --gres-flags=enforce-binding to the script so that Slurm only allocates cores local to the allocated GPUs. Resubmit, then check scontrol -d show job <id> and the numactl --show output (cpubind should be 1 for GPUs 4-7)."
+references:
+  - Slurm gres.conf man page (Cores=, AutoDetect=nvml)
+  - Slurm sbatch/srun man pages (--gres-flags=enforce-binding, --cpu-bind)
+  - NVIDIA DGX H100 User Guide (system topology), nvidia-smi topo -m

@@ -1,0 +1,71 @@
+id: adm-slurm-fairshare-accounts
+title: Split the cluster 60/40 between the NLP and vision teams
+domain: Administration
+difficulty: hard
+time_limit_min: 25
+tags: [slurm, sacctmgr, fairshare, accounting, associations]
+briefing: |
+  Until now everybody ran under the `root` account and the busiest user got the
+  most GPU time. Management has approved a fair-share policy:
+
+    * one parent account `research`, with two team accounts below it:
+      `nlp` (60 shares) for alice and bob, and `vision` (40 shares) for carol and dave
+    * each researcher's jobs are charged to their team by default, and nobody
+      except root keeps an association with the `root` account
+    * eve's contract ended. She must not be able to run jobs any more (her
+      Linux login stays for now; HR deletes it next month)
+    * Slurm must reject jobs from users without a valid association, and that
+      setting must survive a slurmctld restart
+
+  The multifactor priority plugin is already configured. Show that the tree is
+  right with sshare, and submit a test job as bob without -A to prove the
+  default account.
+objectives:
+  - Accounts research (parent root), nlp (parent research, 60 shares) and vision (parent research, 40 shares)
+  - alice/bob only in nlp, carol/dave only in vision, each with that account as default
+  - eve has no Slurm association left
+  - AccountingStorageEnforce includes associations, in slurm.conf and in the running slurmctld
+  - A job submitted by bob without -A is charged to nlp
+setup:
+  - python: |
+      st = state.slurm
+      for u in ('alice', 'bob', 'carol', 'dave', 'eve'):
+          st.users[u] = {'name': u, 'default_account': 'root', 'accounts': ['root']}
+          st.accounts['root'].users.append(u)
+          state.bcm.users[u] = {'name': u, 'uid': 2000 + len(state.bcm.users), 'groups': [u],
+                                'password': 'x', 'home': f'/home/{u}', 'shell': '/bin/bash'}
+      # some history so sshare has numbers in it
+      prev = [(4001, 'alice', 2, 8, 14400), (4002, 'eve', 1, 8, 36000), (4003, 'carol', 1, 4, 7200)]
+      for jid, u, nn, g, secs in prev:
+          st.jobs.append({'id': jid, 'name': 'train', 'user': u, 'account': 'root', 'partition': 'defq',
+                          'state': 'COMPLETED', 'exit_code': '0:0', 'num_nodes': nn, 'ntasks_per_node': g,
+                          'gpus_per_node': g, 'nodelist': ['dgx-0%d' % (i + 1) for i in range(nn)],
+                          'submit_time': -90000, 'start_time': -86400, 'end_time': -86400 + secs,
+                          'batch': True, 'command': f'/home/{u}/train.sbatch'})
+      st.next_job_id = 4004
+checks:
+  - desc: research exists under root, nlp (60) and vision (40) under research
+    expr: "'research' in slurm.accounts and slurm.accounts['research'].get('parent', 'root') == 'root' and 'nlp' in slurm.accounts and slurm.accounts['nlp'].parent == 'research' and int(slurm.accounts['nlp'].fairshare) == 60 and 'vision' in slurm.accounts and slurm.accounts['vision'].parent == 'research' and int(slurm.accounts['vision'].fairshare) == 40"
+  - desc: alice and bob are associated only with nlp, which is their default account
+    expr: all(u in slurm.users and set(slurm.users[u].accounts) == {'nlp'} and slurm.users[u].default_account == 'nlp' for u in ('alice', 'bob'))
+  - desc: carol and dave are associated only with vision, which is their default account
+    expr: all(u in slurm.users and set(slurm.users[u].accounts) == {'vision'} and slurm.users[u].default_account == 'vision' for u in ('carol', 'dave'))
+  - desc: eve has no association left
+    expr: "'eve' not in slurm.users and not any('eve' in a.get('users', []) for a in slurm.accounts.values())"
+  - desc: the running slurmctld enforces associations
+    expr: re.search(r'associations|limits|safe|qos', slurm.config.params.get('accountingstorageenforce', '').lower()) is not None
+  - desc: the enforcement is in slurm.conf, so it survives a restart
+    expr: re.search(r'(?im)^AccountingStorageEnforce=\S*(associations|limits|safe|qos)', file('bcm-head', '/etc/slurm/slurm.conf')) is not None
+  - desc: a job bob submitted without -A was charged to nlp
+    expr: any(j.user == 'bob' and j.account == 'nlp' and j.id > 4003 for j in slurm.jobs)
+  - desc: you looked at the fair-share tree with sshare
+    expr: ran(r'^sshare')
+hints:
+  - "Look at what exists first: sacctmgr show assoc format=account,user,share tree, and sshare -a. Accounts form a tree. Every account has a parent, and root is the top."
+  - "sacctmgr add account <name> parent=<parent> fairshare=<shares>. Shares are relative to the siblings under the same parent, so 60/40 means nlp gets 60% of whatever research is entitled to."
+  - "sacctmgr add user alice account=nlp adds an association. It does not change an existing user's default account (set defaultaccount=nlp separately). Removing a user from one account: sacctmgr delete user alice where account=root."
+  - "Associations are only enforced when AccountingStorageEnforce contains associations (limits or safe imply it). Add it to /etc/slurm/slurm.conf and restart slurmctld (or scontrol reconfigure), then test with su - bob -c \"sbatch --wrap='sleep 60'\"."
+references:
+  - Slurm Accounting documentation (associations, sacctmgr)
+  - Slurm Multifactor Priority Plugin and Fair Tree Fairshare Algorithm
+  - Slurm sshare and sprio man pages

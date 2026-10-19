@@ -1,0 +1,58 @@
+id: adm-dcgm-health-policy
+title: Put dgx-04 under proactive DCGM health and policy monitoring
+domain: Administration
+difficulty: medium
+time_limit_min: 15
+tags: [dcgm, dcgmi, monitoring, health, policy]
+briefing: |
+  dgx-04 has just been returned to production after a re-image. The runbook says
+  every DGX must have proactive GPU monitoring through DCGM on the node:
+
+    * the DCGM host engine (systemd unit nvidia-dcgm) runs now and starts at boot
+    * a DCGM GPU group named prod-gpus contains all 8 GPUs
+    * health watches are enabled for every subsystem on that group
+    * a policy on that group fires on double-bit ECC errors, on any XID error,
+      when GPU temperature reaches 85 C, and when power draw reaches 650 W
+    * the policy only notifies. No automatic GPU reset and no automatic validation
+      run: draining is left to the Slurm health check
+    * a listener is registered for that group's policy violations
+
+  Then prove the monitoring works end to end. Inject a synthetic double-bit ECC
+  error for GPU 3 into the host engine's cache:
+    dcgmi test --inject --gpuid 3 -f 311 -v 1
+  (field 311 = DCGM_FI_DEV_ECC_DBE_VOL_TOTAL; the GPU itself is not touched).
+  Show that both the health check and the policy listener caught it.
+objectives:
+  - nvidia-dcgm is running and enabled on dgx-04
+  - Group prod-gpus holds GPUs 0-7, with health watches on all subsystems
+  - A notify-only policy on prod-gpus covers DBE, XID, 85 C and 650 W, with a registered listener
+  - The injected DBE on GPU 3 shows up in a health check and as a recorded policy violation
+setup:
+  - python: |
+      n = state.nodes['dgx-04']
+      n.services['nvidia-dcgm'] = 'inactive'
+      n.services_enabled['nvidia-dcgm'] = False  # the re-image left the unit disabled
+checks:
+  - desc: nvidia-dcgm is active and enabled on dgx-04
+    expr: nodes['dgx-04'].services['nvidia-dcgm'] == 'active' and nodes['dgx-04'].services_enabled.get('nvidia-dcgm') is True
+  - desc: a DCGM group named prod-gpus on dgx-04 contains exactly GPUs 0-7
+    expr: any(g['name'] == 'prod-gpus' and sorted(g['gpus']) == [0, 1, 2, 3, 4, 5, 6, 7] for g in dcgm.groups.get('dgx-04', {}).values())
+  - desc: prod-gpus has health watches on all subsystems (at least PCIe, memory, InfoROM, thermal/power, NVLink)
+    expr: any(g['name'] == 'prod-gpus' and set('pmitn') <= set(dcgm.health_watches.get('dgx-04', {}).get(k, '')) for k, g in dcgm.groups.get('dgx-04', {}).items())
+  - desc: prod-gpus has a notify-only policy for DBE, XID, 85 C and 650 W
+    expr: "any(g['name'] == 'prod-gpus' and (lambda p: bool(p) and {'DBE', 'XID'} <= set(p['conditions']) and 'Thermal 85' in p['conditions'] and any(c.startswith('Power ') and float(c.split()[1]) == 650 for c in p['conditions']) and p['action'] == 'None' and p['validation'] == 'None')(dcgm.policies.get('dgx-04', {}).get(k)) for k, g in dcgm.groups.get('dgx-04', {}).items())"
+  - desc: a listener is registered for prod-gpus policy violations
+    expr: any(g['name'] == 'prod-gpus' and (dcgm.policies.get('dgx-04', {}).get(k) or {}).get('registered') for k, g in dcgm.groups.get('dgx-04', {}).items())
+  - desc: the policy listener recorded the DBE violation on GPU 3
+    expr: any(v['condition'] == 'DBE' and v['gpu'] == 3 for v in dcgm.get('policy_violations', {}).get('dgx-04', []))
+  - desc: the latest health check on dgx-04 reports the memory failure on GPU 3
+    expr: (lambda h:h.get('overall') == 'Failure' and 3 in h.get('gpus', []) and 'Memory' in h.get('systems', []))(dcgm.get('last_health', {}).get('dgx-04', {}))
+hints:
+  - "Every dcgmi command talks to the host engine. If it can't connect, check the nvidia-dcgm unit on dgx-04, and remember the runbook wants it to start at boot as well."
+  - "Order of work: dcgmi group -c prod-gpus --default (note the group ID it prints), then dcgmi health -g <id> -s a, then dcgmi policy -g <id> --set <action>,<validation> with the condition flags."
+  - "Policy flags: -e double-bit ECC, -x XID, -T <max temp C>, -P <max power W>. --set 0,0 means action None, validation None. 1,x would reset the GPU. Check what you set with dcgmi policy -g <id> --get, then register with --reg."
+  - "After the injection, run dcgmi health -g <id> -c. Compare with nvidia-smi -q -d ECC: the injection lives only in DCGM's cache. Don't restart nvidia-dcgm now, because groups, watches, policies and listeners are not persistent."
+references:
+  - NVIDIA DCGM User Guide - Groups, Health Monitoring, Policy
+  - dcgmi policy --help (actions, validation levels, condition flags)
+  - NVIDIA DCGM field identifiers (dcgm_fields.h)

@@ -1,0 +1,72 @@
+id: tsh-dcgm-diag-failure
+title: NCCL hangs and crashes that follow dgx-03
+domain: Troubleshooting and Optimization
+difficulty: hard
+time_limit_min: 20
+tags: [dcgm, dcgmi, ecc, nvlink, slurm, rma]
+briefing: |
+  Multi-node training jobs keep failing with NCCL timeouts and the odd
+  "CUDA error: uncorrectable ECC error encountered". The failing runs always
+  include dgx-03, and all-reduce benchmarks on that node are well below the others.
+  nvidia-smi on dgx-03 looks "mostly fine" to the user who reported it.
+
+  Use DCGM to find out what is wrong with dgx-03. Take the node out of
+  scheduling the right way: the job running there now belongs to a VIP and must
+  not be killed. Hand the problem over to NVIDIA support with the evidence they
+  will ask for.
+objectives:
+  - DCGM health watches (at least memory and NVLink) are set on dgx-03 and checked
+  - A DCGM diagnostic of level 2 or higher on dgx-03 identifies the failing GPUs
+  - dgx-03 is drained (not downed) with a reason that names the fault
+  - A support case for dgx-03 is opened with an nvidia-bug-report attached
+setup:
+  - python: |
+      n = state.nodes['dgx-03']
+      g5 = n.gpus[5]
+      g5.ecc_volatile_dbe = 2
+      g5.ecc_aggregate_dbe = 11
+      g5.xid = 48
+      g2 = n.gpus[2]
+      g2.nvlink_down = [4, 5]
+      n.dmesg.extend([
+          "[402211.334012] NVRM: Xid (PCI:0000:3a:00): 74, pid=88123, name=python, NVLink: fatal error detected on link 4(0x10000, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0)",
+          "[402211.334107] NVRM: Xid (PCI:0000:3a:00): 74, pid=88123, name=python, NVLink: fatal error detected on link 5(0x10000, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0)",
+          "[402987.901445] NVRM: Xid (PCI:0000:ab:00): 48, pid=91002, name=python, An uncorrectable double bit error (DBE) has been detected on GPU in the framebuffer at partition 6, subpartition 0.",
+          "[402987.901512] NVRM: Xid (PCI:0000:ab:00): 63, pid='<unknown>', name=<unknown>, Row Remapper: New row (0x00000000003c2a10) was marked for remapping, reset gpu to activate.",
+      ])
+      st = state.slurm
+      st.users['vip'] = {'name': 'vip', 'default_account': 'root'}
+      st.jobs.append({'id': 4410, 'name': 'eval-405b', 'user': 'vip', 'partition': 'defq', 'state': 'RUNNING',
+                      'num_nodes': 1, 'gpus_per_node': 2, 'ntasks_per_node': 2, 'nodelist': ['dgx-03'],
+                      'alloc_gpus': {'dgx-03': [0, 1]}, 'start_time': 0, 'submit_time': 0, 'duration': None,
+                      'command': '/home/vip/eval.sbatch'})
+      for i in (0, 1):
+          n.gpus[i].processes.append({'pid': 77100 + i, 'name': 'python eval.py', 'used_mib': 70100,
+                                      'user': 'vip', 'slurm_job': 4410})
+          n.gpus[i].memory_used_mib = 70100
+          n.gpus[i].utilization = 88
+      st.next_job_id = 4411
+checks:
+  - desc: memory and NVLink health watches are set on dgx-03
+    expr: any('m' in w and 'n' in w for w in dcgm.health_watches.get('dgx-03', {}).values())
+  - desc: you ran a DCGM health check on dgx-03
+    expr: ran(r'^dcgmi health .*(-c|--check)', 'dgx-03')
+  - desc: a level 2+ DCGM diagnostic on dgx-03 flagged GPUs 2 and 5
+    expr: dcgm.diag_results.get('dgx-03', {}).get('level', 0) >= 2 and {2, 5} <= set(dcgm.diag_results['dgx-03'].get('failed_gpus', []))
+  - desc: dgx-03 is drained (DRAIN/DRAINING), not DOWN
+    expr: slurm.nodes['dgx-03'].get('drain') and not slurm.nodes['dgx-03'].get('down') and slurm.nodes['dgx-03'].state in ('DRAIN', 'DRAINING')
+  - desc: the drain reason names the fault
+    expr: re.search(r'(?i)(ecc|dbe|nvlink|xid|dcgm|gpu ?[25])', slurm.nodes['dgx-03'].reason or '') is not None
+  - desc: the VIP job 4410 was not killed
+    expr: jobs(id=4410)[0].state in ('RUNNING', 'COMPLETED')
+  - desc: a GPU hardware ticket for dgx-03 exists with an nvidia-bug-report attached
+    expr: any(t.node == 'dgx-03' and t.component in ('gpu', 'nvswitch') and t.bug_report_attached for t in flags.get('hwtickets', []))
+hints:
+  - "DCGM works on groups. On dgx-03: dcgmi group -c allgpus --default, then dcgmi health -g <id> -s mn (or -s a for everything), then dcgmi health -g <id> -c."
+  - "Health watches only report on the systems you watch. A check with no watches set says Healthy whatever the hardware is doing."
+  - "dcgmi diag -r 3 runs the integration, hardware and stress tests and prints which GPUs failed which test. Read the error lines."
+  - "scontrol update nodename=dgx-03 state=drain reason=\"...\" lets the running job finish (DRAINING). state=down would kill it. Then run nvidia-bug-report.sh on dgx-03 and hwticket create --node dgx-03 --component gpu --summary \"...\"."
+references:
+  - NVIDIA DCGM User Guide - Health Monitoring and Active Diagnostics
+  - NVIDIA GPU Xid Errors documentation (Xid 48, 63, 74)
+  - NVIDIA Enterprise Support - RMA process for DGX systems

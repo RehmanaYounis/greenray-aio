@@ -1,0 +1,43 @@
+id: tsh-ib-port-down
+title: One compute-fabric port on dgx-03 is down
+domain: Troubleshooting and Optimization
+difficulty: medium
+time_limit_min: 15
+tags: [infiniband, ibstat, mlxlink, ibdiagnet, nccl]
+briefing: |
+  Multi-node jobs that include dgx-03 are about 12% slower than jobs on any
+  other pair of nodes. UFM raised a "port down" event on rail 3 overnight, but
+  nobody followed up.
+  Find the faulty link, identify the cause from the evidence (port state,
+  physical state, module/optical data), fix it, and prove that dgx-03 runs
+  at full fabric bandwidth again.
+  Physical actions (reseating a cable or transceiver) are done with the lab
+  helper `reseat-cable <node> <hca>`, which stands in for the data-center
+  technician.
+objectives:
+  - All eight ConnectX-7 ports on dgx-03 are Active / LinkUp at 400 Gb/s (NDR)
+  - A two-node NCCL all_reduce including dgx-03 reaches at least 350 GB/s busbw
+setup:
+  - merge: nodes.dgx-03.ib.3
+    value: {state: Down, phys_state: Polling, cable_ok: false, link_downed: 1}
+checks:
+  - desc: dgx-03 mlx5_3 is Active/LinkUp at 400 Gb/s
+    expr: (lambda p:p.state == 'Active' and p.phys_state == 'LinkUp' and p.rate_gbps == 400)(nodes['dgx-03'].ib[3])
+  - desc: all 8 compute-fabric ports on dgx-03 are Active
+    expr: all(p.state == 'Active' and p.phys_state == 'LinkUp' for p in nodes['dgx-03'].ib)
+  - desc: you checked port state on dgx-03 (ibstat / ibstatus / ibv_devinfo)
+    expr: ran(r'^(ibstat|ibstatus|ibv_devinfo)', 'dgx-03')
+  - desc: you looked at link/module diagnostics with mlxlink
+    expr: ran(r'^mlxlink .*-d', 'dgx-03')
+  - desc: a multi-node NCCL test including dgx-03 reached >= 350 GB/s over IB
+    expr: (lambda r:r.get('ok') and 'dgx-03' in r.get('hosts', []) and len(r.get('hosts', [])) > 1 and r.get('transport') == 'IB' and r.get('busbw', 0) >= 350)(flags.get('nccl_last', {}))
+hints:
+  - "On dgx-03, `ibstat` (or `ibstatus`) lists all eight HCAs. Compare State, Physical state and Rate across them."
+  - "State Down with Physical state Polling means the HCA is sending training signals but no link partner answers. That points to cable, transceiver or switch port, not to the Subnet Manager. (SM problems look like Initializing or Armed.)"
+  - "mlxlink -d mlx5_3 -m shows the module data. What is the RX optical power on each lane?"
+  - "Toggling the port in software (mlxlink --port_state TG) won't bring a link up when no light is received. The physical action here is reseat-cable dgx-03 mlx5_3."
+  - "Prove it with traffic: mpirun --allow-run-as-root -np 16 -H dgx-01:8,dgx-03:8 all_reduce_perf -b 1G -e 8G -f 2 -g 1"
+references:
+  - NVIDIA MLNX_OFED / DOCA infiniband-diags (ibstat, ibstatus, perfquery, ibdiagnet)
+  - NVIDIA Firmware Tools (MFT) mlxlink user guide
+  - NVIDIA DGX SuperPOD H100 reference architecture (rail-optimized compute fabric)

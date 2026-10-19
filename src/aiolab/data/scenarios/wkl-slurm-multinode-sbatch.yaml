@@ -1,0 +1,83 @@
+id: wkl-slurm-multinode-sbatch
+title: The "16-GPU" training job only ever sees 8 GPUs
+domain: Workload Management
+difficulty: medium
+time_limit_min: 15
+tags: [slurm, sbatch, srun, multi-node, gres, pyxis]
+briefing: |
+  The LLM team wants to start a long 2-node run on the DGX H100 nodes. Their
+  launcher starts one process (rank) per GPU through srun, and each rank uses
+  the GPUs that Slurm gives its node. Yesterday's smoke test, job 3001 from
+  /root/llama-2node.sbatch, "worked", but the training log shows only 2 ranks,
+  each with 4 GPUs. The team expected 16 ranks with 8 GPUs per node.
+
+  Fix the batch script so that the job:
+    * runs on 2 nodes with all 8 GPUs of each node,
+    * starts 8 tasks per node (one rank per GPU, 16 in total) with srun,
+    * gets whole nodes, because NCCL traffic and data loading must not share a
+      node with anyone else's job.
+  Then submit it and prove the allocation. bob's evaluation job is running on
+  dgx-01. Leave it alone.
+objectives:
+  - /root/llama-2node.sbatch asks for 2 nodes x 8 GPUs, 8 tasks per node and exclusive nodes
+  - A new llama-2node job runs with that allocation, and all 16 ranks report 8 local GPUs
+  - bob's job 3002 keeps running
+setup:
+  - file: /root/llama-2node.sbatch
+    host: bcm-head
+    content: |
+      #!/bin/bash
+      #SBATCH -J llama-2node
+      #SBATCH -p defq
+      #SBATCH -N 2
+      #SBATCH --ntasks-per-node=1
+      #SBATCH --gpus=8
+      #SBATCH -t 02:00:00
+      #SBATCH -o /root/llama-2node-%j.out
+      srun --container-image=nvcr.io#nvidia/pytorch:24.05-py3 python -c "import torch; print('local_gpus=', torch.cuda.device_count())"
+  - file: /root/llama-2node-3001.out
+    host: bcm-head
+    content: |
+      pyxis: importing docker image: nvcr.io#nvidia/pytorch:24.05-py3
+      pyxis: imported docker image: nvcr.io#nvidia/pytorch:24.05-py3
+      pyxis: importing docker image: nvcr.io#nvidia/pytorch:24.05-py3
+      pyxis: imported docker image: nvcr.io#nvidia/pytorch:24.05-py3
+      local_gpus= 4
+      local_gpus= 4
+  - python: |
+      st = state.slurm
+      st.users['bob'] = {'name': 'bob', 'default_account': 'root'}
+      st.jobs.append({
+          'id': 3001, 'name': 'llama-2node', 'user': 'root', 'partition': 'defq', 'state': 'COMPLETED',
+          'exit_code': '0:0', 'num_nodes': 2, 'ntasks_per_node': 1, 'gpus_per_node': 4,
+          'nodelist': ['dgx-02', 'dgx-03'], 'submit_time': -7200, 'start_time': -7100, 'end_time': -6900,
+          'batch': True, 'command': '/root/llama-2node.sbatch', 'stdout': '/root/llama-2node-3001.out',
+          'time_limit': 120,
+          'steps': [{'id': '0', 'name': 'python', 'state': 'COMPLETED', 'exit_code': '0:0',
+                     'nodes': 'dgx-[02-03]', 'container_image': 'nvcr.io#nvidia/pytorch:24.05-py3'}]})
+      st.jobs.append({
+          'id': 3002, 'name': 'eval-mmlu', 'user': 'bob', 'partition': 'defq', 'state': 'RUNNING',
+          'num_nodes': 1, 'ntasks_per_node': 4, 'gpus_per_node': 4, 'nodelist': ['dgx-01'],
+          'submit_time': -1800, 'start_time': -1700, 'batch': True, 'duration': None,
+          'command': '/home/bob/eval.sbatch'})
+      st.next_job_id = 3003
+checks:
+  - desc: the script asks for 8 GPUs per node (--gres=gpu:8, --gpus-per-node=8, or --gpus=16 with 2 nodes)
+    expr: re.search(r'(?m)^#SBATCH\s+(--gres[= ]gpu:(h100:)?8|--gpus-per-node[= ](h100:)?8|--gpus[= ](h100:)?16|-G\s*16)\s*$', file('bcm-head', '/root/llama-2node.sbatch')) is not None
+  - desc: the script asks for 8 tasks per node and exclusive nodes
+    expr: re.search(r'(?m)^#SBATCH\s+(--ntasks-per-node[= ]8|--ntasks[= ]16|-n\s*16)\s*$', file('bcm-head', '/root/llama-2node.sbatch')) is not None and re.search(r'(?m)^#SBATCH\s+--exclusive\b', file('bcm-head', '/root/llama-2node.sbatch')) is not None
+  - desc: a new llama-2node job got 2 whole nodes x 8 GPUs with 8 tasks per node and did not fail
+    expr: any(j.id != 3001 and j.name == 'llama-2node' and j.num_nodes == 2 and j.gpus_per_node == 8 and j.ntasks_per_node == 8 and j.exclusive and j.state in ('RUNNING', 'COMPLETED') and j.get('final_state') != 'FAILED' for j in slurm.jobs)
+  - desc: all 16 ranks reported 8 local GPUs in the job's output
+    expr: any(j.id != 3001 and j.name == 'llama-2node' and file('bcm-head', j.stdout).count('local_gpus= 8') == 16 for j in slurm.jobs)
+  - desc: bob's job 3002 is still running on dgx-01
+    expr: jobs(id=3002)[0].state == 'RUNNING'
+hints:
+  - "Start with what the last run really got: sacct -j 3001 --format=JobID,JobName,NNodes,NTasks,AllocTRES,NodeList and the job's output file."
+  - "--gpus is the total for the whole job, so --gpus=8 over 2 nodes gives 4 GPUs per node. --gres=gpu:8 and --gpus-per-node=8 are per node. --ntasks-per-node is how many processes srun starts on each node."
+  - "--exclusive gives the job whole nodes (all CPUs, memory, GPUs and NICs) even if it asked for less. Without it, another job could be placed next to yours."
+  - "Edit the #SBATCH lines to: -N 2, --ntasks-per-node=8, --gpus-per-node=8 (or --gres=gpu:8), --exclusive. Submit it, then check squeue, scontrol show job <id> and the output file."
+references:
+  - Slurm sbatch man page (--gpus, --gpus-per-node, --gres, --ntasks-per-node, --exclusive)
+  - NVIDIA pyxis README (srun --container-image)
+  - Slurm Generic Resource (GRES) Scheduling guide

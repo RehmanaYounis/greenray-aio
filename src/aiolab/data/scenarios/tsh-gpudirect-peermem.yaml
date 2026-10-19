@@ -1,0 +1,60 @@
+id: tsh-gpudirect-peermem
+title: Inter-node NCCL lost half its bandwidth after the driver update
+domain: Troubleshooting and Optimization
+difficulty: medium
+time_limit_min: 15
+tags: [nccl, infiniband, gpudirect, rdma, magnum-io, performance]
+briefing: |
+  During last night's maintenance window, the GPU driver on dgx-01 and dgx-02 was
+  upgraded to 550.127.08 and both nodes were rebooted. Since then the two-node
+  all_reduce_perf benchmark between them gives about 190 GB/s bus bandwidth.
+  Before the update it gave about 370 GB/s. Single-node runs are unchanged, all
+  eight IB ports on both nodes are Active at 400 Gb/s, and NCCL still reports
+  "Using network IB".
+
+  Find out why inter-node traffic is slower, fix it on both nodes so that it
+  survives the next reboot, and show a run at full speed.
+  Reference test (run from bcm-head):
+    mpirun --allow-run-as-root -np 16 -H dgx-01:8,dgx-02:8 all_reduce_perf -b 1G -e 8G -f 2 -g 1
+objectives:
+  - Find the cause in NCCL's own debug output
+  - GPUDirect RDMA works again on dgx-01 and dgx-02
+  - The fix persists across a reboot of either node
+  - A two-node all_reduce_perf over IB with GPUDirect RDMA reaches at least 350 GB/s busbw
+setup:
+  - python: |
+      for h in ('dgx-01', 'dgx-02'):
+          n = state.nodes[h]
+          n.driver_version = '550.127.08'
+          n.modules = [m for m in n.modules if m != 'nvidia_peermem']
+          # nothing loads it at boot: no udev rule, no modules-load.d entry
+          n.volatile_modules = ['nvidia_peermem']
+          n.files['/etc/modules'] = ("# /etc/modules: kernel modules to load at boot time.\n"
+                                     "#\n# This file contains the names of kernel modules that should be loaded\n"
+                                     "# at boot time, one per line. Lines beginning with \"#\" are ignored.\n")
+          n.dmesg = [l for l in n.dmesg if 'NVRM: loading' not in l] + [
+              "[    4.532110] NVRM: loading NVIDIA UNIX x86_64 Kernel Module  550.127.08  Tue Oct  1 18:21:14 UTC 2024",
+              "[    4.611730] nvidia-modeset: Loading NVIDIA Kernel Mode Setting Driver for UNIX platforms  550.127.08",
+              "[    4.702219] nvidia_uvm: module uses symbols from proprietary module nvidia, inheriting taint.",
+              "[   11.408112] mlx5_ib: Mellanox ConnectX InfiniBand driver v24.07-0.6.1",
+          ]
+checks:
+  - desc: nvidia_peermem is loaded on dgx-01 and dgx-02
+    expr: all(any(m.replace('-', '_') == 'nvidia_peermem' for m in nodes[h].modules) for h in ('dgx-01', 'dgx-02'))
+  - desc: the module is configured to load at boot on both nodes (modules-load.d / /etc/modules, or the BCM software image)
+    expr: "all(any(((p.startswith('/etc/modules-load.d/') and p.endswith('.conf')) or p == '/etc/modules') and re.search(r'(?m)^\\s*nvidia[-_]peermem\\b', str(t)) for p, t in nodes[h].files.items()) or any(p.startswith('/cm/images/dgx-os-6.2-h100-image/etc/modules-load.d/') and p.endswith('.conf') and re.search(r'(?m)^\\s*nvidia[-_]peermem\\b', str(t)) for p, t in nodes['bcm-head'].files.items()) for h in ('dgx-01', 'dgx-02'))"
+  - desc: the last two-node NCCL run used IB with GPUDirect RDMA on both nodes and reached >= 350 GB/s
+    expr: "(lambda r: r.get('ok') and {'dgx-01', 'dgx-02'} <= set(r.get('hosts', [])) and r.get('transport') == 'IB' and all((r.get('gdr') or {}).get(h) for h in ('dgx-01', 'dgx-02')) and r.get('busbw', 0) >= 350)(flags.get('nccl_last', {}))"
+  - desc: you looked at NCCL's debug output (NCCL_DEBUG=INFO)
+    expr: ran(r'NCCL_DEBUG=INFO')
+  - desc: you checked which kernel modules are loaded
+    expr: ran(r'\blsmod\b|/proc/modules')
+hints:
+  - "Rerun the reference test with -x NCCL_DEBUG=INFO. The NET/IB lines tell you more than \"Using network IB\": check whether GPU Direct RDMA is used, and the Channel ... via NET/IB/0 lines."
+  - "\"GPU Direct RDMA Disabled for HCA ... (no module)\", and channels that say via NET/IB/0 without /GDRDMA, mean NCCL has to copy every message through host memory. Which kernel module lets the IB HCA read and write GPU memory directly?"
+  - "On dgx-01 and dgx-02, run lsmod | grep -i peer. The nvidia-peermem module comes with the GPU driver, but nothing loads it automatically after a reinstall and reboot."
+  - "modprobe nvidia-peermem fixes the running node. echo nvidia-peermem > /etc/modules-load.d/nvidia-peermem.conf makes it load at every boot. Do both on both nodes, then rerun the test."
+references:
+  - NVIDIA GPUDirect RDMA documentation (nvidia-peermem)
+  - NCCL User Guide - Troubleshooting (GPU Direct RDMA, NCCL_NET_GDR_LEVEL)
+  - NVIDIA DGX OS 6 User Guide - Installing the GPU driver / Magnum IO

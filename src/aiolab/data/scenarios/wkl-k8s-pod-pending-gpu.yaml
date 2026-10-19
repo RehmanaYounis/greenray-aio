@@ -1,0 +1,99 @@
+id: wkl-k8s-pod-pending-gpu
+title: A training pod is stuck in Pending
+domain: Workload Management
+difficulty: medium
+time_limit_min: 15
+tags: [kubernetes, scheduling, gpu-operator, cordon]
+briefing: |
+  A researcher submitted a single-node BERT pre-training pod from /root/bert-pretrain.yaml
+  on bcm-head an hour ago. It is still Pending and they want it running on one full DGX
+  (torchrun starts 8 processes, one per GPU).
+
+  Background from the ops channel:
+    - dgx-01 and dgx-02 were cordoned for a firmware update. The update finished
+      yesterday and both nodes passed their health checks.
+    - The inference team runs a 2-replica Deployment called "inference" on the cluster.
+      Do not delete or move it.
+
+  Find out why the scheduler rejects the pod, fix it properly, and get it running.
+  Keep /root/bert-pretrain.yaml as the corrected source of truth.
+objectives:
+  - bert-pretrain is Running on a DGX node and requests exactly 8 GPUs
+  - /root/bert-pretrain.yaml contains the corrected GPU request
+  - dgx-01 and dgx-02 accept new pods again
+  - Both inference replicas are still Running
+setup:
+  - python: |
+      from aiolab.commands import helm, kubectl as kc
+      helm.preinstall(state, "nvidia/gpu-operator", values={"driver": {"enabled": False}}, settle=7200)
+      for n in ("dgx-01", "dgx-02"):
+          state.k8s.nodes[n].schedulable = False
+      kc.apply_yaml(state, """
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: inference
+        labels: {app: inference}
+      spec:
+        replicas: 2
+        selector:
+          matchLabels: {app: inference}
+        template:
+          metadata:
+            labels: {app: inference}
+          spec:
+            containers:
+            - name: triton
+              image: nvcr.io/nvidia/tritonserver:24.05-py3
+              args: ["tritonserver", "--model-repository=/models"]
+              resources:
+                limits:
+                  nvidia.com/gpu: 4
+      """)
+      kc.advance(state, 1800)
+      kc.reconcile(state)
+  - file: /root/bert-pretrain.yaml
+    host: bcm-head
+    content: |
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: bert-pretrain
+        labels:
+          app: bert-pretrain
+          team: nlp
+      spec:
+        restartPolicy: Never
+        containers:
+        - name: trainer
+          image: nvcr.io/nvidia/pytorch:24.05-py3
+          command: ["torchrun", "--nproc_per_node=8", "/workspace/pretrain_bert.py"]
+          resources:
+            limits:
+              nvidia.com/gpu: 10
+  - python: |
+      from aiolab.commands import kubectl as kc
+      kc.apply_yaml(state, state.nodes["bcm-head"].files["/root/bert-pretrain.yaml"])
+      kc.advance(state, 3600)
+      kc.reconcile(state)
+checks:
+  - desc: bert-pretrain is Running on a DGX node
+    expr: "any(p.name == 'bert-pretrain' and p.status == 'Running' and (p.node or '').startswith('dgx-') for p in pods('default'))"
+  - desc: bert-pretrain requests exactly 8 nvidia.com/gpu
+    expr: "any(p.name == 'bert-pretrain' and p.requests.get('nvidia.com/gpu') == 8 for p in pods('default'))"
+  - desc: /root/bert-pretrain.yaml asks for 8 GPUs
+    expr: "re.search(r'nvidia\\.com/gpu:\\s*[\"\\']?8[\"\\']?\\s*$', file('bcm-head', '/root/bert-pretrain.yaml'), re.M) is not None"
+  - desc: dgx-01 and dgx-02 are schedulable again
+    expr: "k8s.nodes['dgx-01'].schedulable and k8s.nodes['dgx-02'].schedulable"
+  - desc: both inference replicas are still Running
+    expr: "len([p for p in pods('default', 'inference-') if p.status == 'Running']) == 2"
+  - desc: you read the scheduler's reason before fixing
+    expr: "ran(r'kubectl (describe (pod|pods|po)|get (events|ev))')"
+hints:
+  - "`kubectl describe pod bert-pretrain` and read the FailedScheduling event. Count which reason applies to how many of the 5 nodes."
+  - "A DGX H100 has 8 GPUs, so 'Insufficient nvidia.com/gpu' on every node can't be fixed by waiting. Compare the request with what one node can ever offer (Capacity/Allocatable in `kubectl describe node`)."
+  - "Even a correct 8-GPU request needs a node with 8 *free* GPUs. Check `kubectl get nodes` (SchedulingDisabled) and the 'Allocated resources' section on dgx-03/dgx-04."
+  - "Pod resources are immutable, so `kubectl apply` of the edited file is rejected. Delete the pod and create it again (or `kubectl replace --force -f`), after you uncordon dgx-01 and dgx-02."
+references:
+  - Kubernetes docs - Schedule GPUs, Taints and Tolerations, kubectl cordon/drain
+  - NVIDIA GPU Operator - Running sample GPU applications

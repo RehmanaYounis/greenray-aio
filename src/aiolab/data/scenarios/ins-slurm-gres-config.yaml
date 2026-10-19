@@ -1,0 +1,58 @@
+id: ins-slurm-gres-config
+title: New DGX nodes are in Slurm, but GPU jobs are rejected
+domain: Installation and Deployment
+difficulty: medium
+time_limit_min: 20
+tags: [slurm, gres, gres.conf, slurm.conf, deployment]
+briefing: |
+  The four DGX H100 nodes (dgx-01..04) were just added to the cluster with Base
+  Command Manager. sinfo shows them all idle in defq, and CPU-only jobs run fine.
+  Every GPU job fails right away, though:
+
+      $ srun --gres=gpu:1 nvidia-smi -L
+      srun: error: Unable to allocate resources: Requested node configuration is not available
+
+  The engineer who built the nodes copied one gres.conf from a 4-GPU test server
+  "to save time", but nobody remembers which node got it.
+  Make all 32 GPUs schedulable through Slurm. Prove it by running an 8-GPU job on
+  the node that had the bad gres.conf.
+objectives:
+  - slurmctld's running configuration advertises gpu:h100:8 on every DGX node
+  - The slurmd on each DGX node reports all 8 GPUs (gres.conf matches the hardware)
+  - Every DGX node is back in service (no DRAIN / INVAL)
+  - An 8-GPU srun job completes on the node that had the wrong gres.conf
+setup:
+  - python: |
+      head = state.nodes['bcm-head']
+      conf = head.files['/etc/slurm/slurm.conf']
+      head.files['/etc/slurm/slurm.conf'] = conf.replace(' Gres=gpu:h100:8', '')
+      for n in ('dgx-01', 'dgx-02', 'dgx-03', 'dgx-04'):
+          state.slurm.nodes[n].gres = '(null)'
+          state.slurm.nodes[n].gres_used = 'gpu:0'
+  - file: /etc/slurm/gres.conf
+    host: dgx-03
+    content: |
+      # copied from lab-test01 (4x H100 PCIe)
+      AutoDetect=nvml
+      Name=gpu Type=h100 File=/dev/nvidia[0-3]
+checks:
+  - desc: every DGX node is configured with Gres=gpu:h100:8 in the running slurmctld config
+    expr: all(slurm.nodes[n].gres in ('gpu:h100:8', 'gpu:8') for n in ['dgx-01', 'dgx-02', 'dgx-03', 'dgx-04'])
+  - desc: slurm.conf on the head node persists the Gres definition
+    expr: re.search(r'(?m)^NodeName=dgx-\S+.*\bGres=gpu(:h100)?:8\b', file('bcm-head', '/etc/slurm/slurm.conf')) is not None
+  - desc: slurmd on dgx-03 reports 8 GPUs (gres.conf fixed and slurmd restarted/reconfigured)
+    expr: slurm.nodes['dgx-03'].get('gres_reported') == 8
+  - desc: all DGX nodes are in service (no DRAIN/INVAL/DOWN)
+    expr: all(slurm.nodes[n].state in ('IDLE', 'MIXED', 'ALLOCATED') for n in ['dgx-01', 'dgx-02', 'dgx-03', 'dgx-04'])
+  - desc: an 8-GPU job completed on dgx-03
+    expr: any(j.state == 'COMPLETED' and 'dgx-03' in j.nodelist and j.gpus_per_node == 8 for j in slurm.jobs)
+  - desc: you inspected node GRES/state before changing configs
+    expr: ran(r'^(sinfo|scontrol show node)')
+hints:
+  - "Ask Slurm what it thinks each node has: sinfo -o '%N %G %t' or scontrol show node dgx-01 (look at Gres=)."
+  - "Gres=(null) means slurmctld has no GPUs configured for the node. Check the NodeName= line in /etc/slurm/slurm.conf on the head node. GresTypes=gpu alone is not enough."
+  - "After you edit slurm.conf, run scontrol reconfigure. Then sinfo -R: if one node's slurmd reports fewer GPUs than slurm.conf promises, the node goes INVAL/DRAIN with 'gres/gpu count reported lower than configured'."
+  - "On that node, fix File=/dev/nvidia[0-7] in /etc/slurm/gres.conf, then systemctl restart slurmd. The node stays drained until you run scontrol update nodename=<node> state=resume."
+references:
+  - Slurm gres.conf and slurm.conf man pages (GresTypes, Gres=, AutoDetect)
+  - NVIDIA Base Command Manager Administrator Manual - Workload Management (Slurm GPU configuration)

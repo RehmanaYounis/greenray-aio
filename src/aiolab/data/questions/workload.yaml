@@ -1,0 +1,458 @@
+# Workload Management (blueprint weight 23%)
+# Original practice questions. Not taken from any real exam.
+
+- id: wkl-001
+  domain: Workload Management
+  difficulty: medium
+  question: |
+    A user wants a batch job on 2 DGX nodes, using all 8 GPUs on each, with one
+    task (rank) per GPU. Which set of #SBATCH options fits best?
+  choices:
+    - --nodes=2 --ntasks=2 --gres=gpu:16
+    - --ntasks=8 --gpus=8
+    - --nodes=16 --ntasks-per-node=1 --gpus-per-node=1
+    - --nodes=2 --ntasks-per-node=8 --gpus-per-node=8
+- id: wkl-002
+  domain: Workload Management
+  difficulty: easy
+  question: |
+    A job script contains:
+      #SBATCH --nodes=2
+      #SBATCH --gres=gpu:4
+    How many GPUs does the job get in total?
+  choices:
+    - '4'
+    - '8'
+    - '2'
+    - '16'
+- id: wkl-003
+  domain: Workload Management
+  difficulty: easy
+  question: |
+    A benchmarking job needs whole nodes so that no other job can share their
+    CPUs, memory bandwidth or network. Which sbatch option should it use?
+  choices:
+    - --hold
+    - --oversubscribe
+    - --exclusive
+    - --requeue
+- id: wkl-004
+  domain: Workload Management
+  difficulty: medium
+  question: |
+    A user must run the same single-GPU preprocessing script on 200 input
+    shards but must not use more than 10 GPUs at once. What is the best way to
+    submit it?
+  choices:
+    - sbatch --array=0-199%10 --gres=gpu:1 job.sh, using SLURM_ARRAY_TASK_ID to pick the shard
+    - Submit 200 separate jobs with a for loop
+    - sbatch --ntasks=200 --gres=gpu:10 job.sh
+    - sbatch --nodes=200 job.sh
+- id: wkl-005
+  domain: Workload Management
+  difficulty: easy
+  question: |
+    Inside a Slurm job array task, which environment variable tells the script
+    which element of the array it is?
+  choices:
+    - SLURM_JOB_ID
+    - SLURM_ARRAY_TASK_ID
+    - SLURM_LOCALID
+    - SLURM_PROCID
+- id: wkl-006
+  domain: Workload Management
+  difficulty: medium
+  lab: wkl-slurm-pending-reasons
+  question: |
+    A user asks why their job hasn't started:
+      $ squeue -u bob
+        JOBID PARTITION   NAME  USER ST  TIME NODES NODELIST(REASON)
+        41822       gpu  train   bob PD  0:00     4 (Resources)
+        41823       gpu  eval    bob PD  0:00     1 (Priority)
+    Which statement is correct?
+  choices:
+    - Both jobs have invalid resource requests and will never run
+    - Job 41822 waits because the resources it needs are not free now; job 41823 waits because higher-priority jobs are ahead of it
+    - Job 41822 is blocked by a QOS limit
+    - Job 41823 depends on job 41822
+- id: wkl-007
+  domain: Workload Management
+  difficulty: medium
+  lab: wkl-slurm-pending-reasons
+  question: |
+    A job was submitted with --nodelist=dgx-03. It stays pending with reason
+    ReqNodeNotAvail. sinfo shows dgx-03 as "drain". What should the user do?
+  choices:
+    - Wait for the fair-share factor to rise
+    - Increase --time
+    - Add --exclusive
+    - Ask the admin to undrain the node, or resubmit without pinning the job to dgx-03
+- id: wkl-008
+  domain: Workload Management
+  difficulty: medium
+  question: |
+    A pipeline needs an evaluation job to start only after training job 51200
+    completes successfully. Which submission does this?
+  choices:
+    - sbatch --begin=51200 eval.sh
+    - sbatch --after=51200 eval.sh
+    - sbatch --dependency=afterok:51200 eval.sh
+    - sbatch --array=51200 eval.sh
+- id: wkl-009
+  domain: Workload Management
+  difficulty: hard
+  lab: wkl-slurm-pending-reasons
+  question: |
+    Idle GPUs exist in the partition, yet a user's new 4-GPU job is pending:
+      JOBID PARTITION NAME USER ST TIME NODES NODELIST(REASON)
+      62011       gpu  ft4 carol PD 0:00     1 (QOSMaxGRESPerUser)
+    carol already has two 4-GPU jobs running. What is the cause?
+  choices:
+    - The partition has no free GPUs
+    - Starting the job would put carol over the per-user GPU limit of her QOS
+    - carol's fair-share is too low
+    - The node carol requested is drained
+- id: wkl-010
+  domain: Workload Management
+  difficulty: medium
+  question: |
+    A job requested --time=72:00:00 in partition "gpu", whose MaxTime is 48 hours.
+    The job stays pending with reason PartitionTimeLimit. What will fix it?
+  choices:
+    - Wait; Slurm will start it when the cluster is idle
+    - Resubmit (or scontrol update the job) with a time limit within 48 hours, or use a partition that allows longer jobs
+    - Add --exclusive
+    - Request more GPUs so it finishes faster
+- id: wkl-011
+  domain: Workload Management
+  difficulty: easy
+  lab: wkl-pyxis-container-job
+  question: |
+    A cluster uses pyxis and enroot. Which srun option correctly runs a job in
+    the NGC PyTorch container 24.05-py3?
+  choices:
+    - --container-image=nvcr.io#nvidia/pytorch:24.05-py3
+    - --image=nvcr.io/nvidia/pytorch:24.05-py3
+    - --container-image=docker://pytorch:24.05
+    - --docker nvcr.io/nvidia/pytorch:24.05-py3
+- id: wkl-012
+  domain: Workload Management
+  difficulty: medium
+  lab: wkl-pyxis-container-job
+  question: |
+    A pyxis job runs, but the training script can't find the dataset at
+    /lustre/datasets/imagenet inside the container. What should the user add?
+  choices:
+    - --container-mounts=/lustre/datasets:/lustre/datasets
+    - --gres=lustre:1
+    - --export=ALL
+    - --container-workdir=/lustre
+- id: wkl-013
+  domain: Workload Management
+  difficulty: hard
+  question: |
+    A multi-node MPI training job runs inside a pyxis container. The container's
+    MPI library was built with PMIx support. Which launch is the usual one?
+  choices:
+    - mpirun -np 16 inside sbatch, without srun
+    - ssh to each node and start docker run
+    - srun --mpi=none --container-image=... python train.py
+    - srun --mpi=pmix --container-image=... python train.py
+- id: wkl-014
+  domain: Workload Management
+  difficulty: easy
+  question: |
+    How should a Kubernetes container request two full GPUs?
+  choices:
+    - Set the environment variable NVIDIA_VISIBLE_DEVICES=0,1
+    - 'Add the annotation gpu-count: "2"'
+    - Set resources.limits nvidia.com/gpu to 2
+    - Use nodeSelector nvidia.com/gpu.count=2
+- id: wkl-015
+  domain: Workload Management
+  difficulty: hard
+  question: |
+    A developer writes this container spec and the API server rejects it:
+      resources:
+        requests:
+          nvidia.com/gpu: 1
+        limits:
+          nvidia.com/gpu: 2
+    Why?
+  choices:
+    - For extended resources such as nvidia.com/gpu, requests and limits must be equal if both are set; GPUs can't be overcommitted
+    - nvidia.com/gpu can only be in requests
+    - The pod must use the mixed MIG strategy
+    - The value must be a string such as "1"
+- id: wkl-016
+  domain: Workload Management
+  difficulty: medium
+  lab: adm-k8s-mig-mixed-strategy
+  question: |
+    The GPU Operator uses the mixed MIG strategy, and nodes expose
+    nvidia.com/mig-1g.10gb and nvidia.com/mig-3g.40gb. An inference pod needs
+    one 3g.40gb slice. What should its container spec contain?
+  choices:
+    - limits nvidia.com/gpu set to 1, with nodeSelector mig=3g
+    - limits nvidia.com/mig set to "3g.40gb"
+    - limits nvidia.com/mig-3g.40gb set to 1
+    - limits nvidia.com/gpu set to 0.43
+- id: wkl-017
+  domain: Workload Management
+  difficulty: medium
+  lab: wkl-k8s-taint-toleration
+  question: |
+    GPU nodes carry the taint nvidia.com/gpu=present:NoSchedule. A GPU pod stays
+    Pending with:
+      0/6 nodes are available: 3 node(s) had untolerated taint {nvidia.com/gpu: present},
+      3 Insufficient nvidia.com/gpu.
+    What should be added to the pod spec?
+  choices:
+    - A toleration with key nvidia.com/gpu, operator Exists (or Equal with value present), effect NoSchedule
+    - nodeName set to one of the GPU nodes
+    - The label nvidia.com/gpu=present on the pod
+    - priorityClassName system-node-critical
+- id: wkl-018
+  domain: Workload Management
+  difficulty: medium
+  question: |
+    A cluster has A100 and H100 nodes, labelled by GPU Feature Discovery. A job
+    must run only on H100 nodes. What is the simplest correct approach?
+  choices:
+    - Request nvidia.com/h100 as a resource
+    - Set the environment variable CUDA_ARCH=90
+    - Use a nodeSelector (or node affinity) on the nvidia.com/gpu.product label with the H100 product value
+    - Taint the A100 nodes with NoExecute
+- id: wkl-019
+  domain: Workload Management
+  difficulty: easy
+  question: |
+    Which Kubernetes objects best fit (1) a fine-tuning run that should finish
+    and stop, and (2) an inference server that should always be running with
+    several replicas?
+  choices:
+    - (1) Job, (2) Deployment
+    - (1) Deployment, (2) Job
+    - (1) DaemonSet, (2) Job
+    - (1) Pod, (2) DaemonSet
+- id: wkl-020
+  domain: Workload Management
+  difficulty: medium
+  question: |
+    Which TWO values are valid for restartPolicy in the pod template of a
+    Kubernetes Job? (Choose two.)
+  choices:
+    - Never
+    - Always
+    - IfNotPresent
+    - OnFailure
+    - Retry
+- id: wkl-021
+  domain: Workload Management
+  difficulty: medium
+  lab: wkl-k8s-pod-pending-gpu
+  question: |
+    A pod requesting 4 GPUs is Pending:
+      Warning FailedScheduling  0/3 nodes are available: 3 Insufficient nvidia.com/gpu.
+    kubectl describe node for each of the 3 GPU nodes shows
+      Allocatable: nvidia.com/gpu: 8
+      Allocated resources: nvidia.com/gpu 6
+    What is the cause?
+  choices:
+    - The device plugin is not running
+    - The image can't be pulled
+    - The pod needs a toleration
+    - No single node has 4 free GPUs (each has only 2 left), and a pod must fit on one node
+- id: wkl-022
+  domain: Workload Management
+  difficulty: hard
+  question: |
+    A Triton Inference Server pod starts but logs that no models are loaded. The
+    model repository volume is mounted at /models and contains:
+      /models/resnet50/config.pbtxt
+      /models/resnet50/model.plan
+    What is wrong?
+  choices:
+    - Triton needs the model in a numeric version subdirectory, e.g. /models/resnet50/1/model.plan
+    - config.pbtxt must be called config.yaml
+    - TensorRT plans can't be served by Triton
+    - The repository must be on an NFS share
+- id: wkl-023
+  domain: Workload Management
+  difficulty: medium
+  question: |
+    A Kubernetes readiness probe needs to tell when a Triton Inference Server is
+    ready to accept inference requests over HTTP on its default port. Which
+    endpoint is right?
+  choices:
+    - GET :8002/metrics
+    - GET :8000/v2/health/ready
+    - GET :8001/v2/health/ready
+    - GET :9400/metrics
+- id: wkl-024
+  domain: Workload Management
+  difficulty: medium
+  question: |
+    An engineer starts an NVIDIA NIM LLM container with Docker on a GPU server,
+    but it fails at startup. Which TWO items does a typical NIM launch need?
+    (Choose two.)
+  choices:
+    - --privileged and --network=host on every run
+    - Passing the NGC API key into the container (for example, -e NGC_API_KEY) so it can download model assets
+    - A Slurm allocation
+    - GPU access for the container (for example, --gpus all)
+    - MIG mode enabled on all GPUs
+- id: wkl-025
+  domain: Workload Management
+  difficulty: hard
+  question: |
+    A multi-node NCCL job on nodes with 8 InfiniBand HCAs (mlx5_0-mlx5_7) and a
+    management Ethernet interface eno1 picks the wrong interfaces. Which TWO
+    environment variables address this? (Choose two.)
+  choices:
+    - NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7 to choose which HCAs NCCL uses for data
+    - CUDA_LAUNCH_BLOCKING=1
+    - NCCL_IB_DISABLE=1
+    - NCCL_P2P_DISABLE=1
+    - NCCL_SOCKET_IFNAME=eno1 to choose the interface for NCCL's socket bootstrap traffic
+- id: wkl-026
+  domain: Workload Management
+  difficulty: easy
+  question: |
+    A user wants to confirm which network transport NCCL chose (InfiniBand or
+    sockets) and whether GPUDirect RDMA is used. What should they set before
+    running the job?
+  choices:
+    - CUDA_VISIBLE_DEVICES=0
+    - NCCL_ALGO=Ring
+    - NCCL_DEBUG=INFO
+    - OMP_NUM_THREADS=1
+- id: wkl-027
+  domain: Workload Management
+  difficulty: medium
+  question: |
+    A user's MPI job fails at startup under srun. The admin wants to know which
+    MPI plugin types this Slurm installation supports. Which command shows them?
+  choices:
+    - sinfo --mpi
+    - srun --mpi=list
+    - scontrol show mpi
+    - mpirun --version
+- id: wkl-028
+  domain: Workload Management
+  difficulty: hard
+  question: |
+    A PyTorch script launched with "srun --ntasks-per-node=8 --gpus-per-node=8"
+    must choose a different GPU in each of the 8 processes on a node. Which
+    Slurm-provided variable gives each process its node-local rank (0-7)?
+  choices:
+    - SLURM_NODEID
+    - SLURM_NTASKS
+    - SLURM_JOB_NUM_NODES
+    - SLURM_LOCALID
+- id: wkl-029
+  domain: Workload Management
+  difficulty: medium
+  question: |
+    A researcher submits a training workload in Run:ai. What decides which
+    quota it is charged against and whether it can be preempted?
+  choices:
+    - The Docker image name
+    - The Kubernetes node it lands on
+    - The Slurm account
+    - The Run:ai project it's submitted to, and whether the workload runs within that project's quota or over quota
+- id: wkl-030
+  domain: Workload Management
+  difficulty: medium
+  question: |
+    A Run:ai training workload was running on 4 GPUs. The researcher's project
+    has a quota of 2 GPUs. The workload was stopped and returned to pending when
+    another project submitted work. What most likely happened?
+  choices:
+    - The GPUs had an ECC error
+    - The workload hit a Slurm time limit
+    - Run:ai doesn't support more than 2 GPUs per workload
+    - The workload used GPUs over its project's quota and was preempted so the other project could use its guaranteed quota
+- id: wkl-031
+  domain: Workload Management
+  difficulty: hard
+  question: |
+    A team wants to move from an older NGC PyTorch container to a newer monthly
+    release (format YY.MM-py3) on a DGX cluster. Which TWO checks should come
+    first? (Choose two.)
+  choices:
+    - Make sure Docker Hub has a mirror of the image
+    - Rebuild the image from source to remove NVIDIA libraries
+    - Use the framework support matrix to check that the host driver supports the container's CUDA version (or that forward compatibility applies on these data center GPUs)
+    - Check that the container release supports the GPU architecture in the cluster
+    - Disable ECC to free memory for the larger container
+- id: wkl-032
+  domain: Workload Management
+  difficulty: medium
+  question: |
+    On a standalone DGX with Docker and the NVIDIA Container Toolkit, a user
+    should only get GPUs 2 and 3 in a container. Which docker run option does
+    this?
+  choices:
+    - --gpus 2
+    - --gpus '"device=2,3"'
+    - -e CUDA_VISIBLE_DEVICES=2,3 without --gpus
+    - --device /dev/nvidia2-3
+- id: wkl-033
+  domain: Workload Management
+  difficulty: hard
+  question: |
+    A job is allocated two GPUs with --gres=gpu:2 on a node with ConstrainDevices
+    enabled. Slurm happened to give it physical GPUs 5 and 6. Inside the job,
+    what does a CUDA application usually see?
+  choices:
+    - Eight GPUs, with only 5 and 6 usable
+    - No GPUs until the user sets CUDA_VISIBLE_DEVICES by hand
+    - Two GPUs, numbered 5 and 6, and CUDA fails because 0 is missing
+    - Two GPUs, numbered 0 and 1 from the application's point of view
+- id: wkl-034
+  domain: Workload Management
+  difficulty: easy
+  question: |
+    A user wants an interactive shell on a compute node with one GPU for
+    debugging. Which command fits?
+  choices:
+    - ssh dgx-01 nvidia-smi
+    - sbatch --gres=gpu:1 bash
+    - srun --gres=gpu:1 --pty bash
+    - scontrol run --gpu bash
+- id: wkl-035
+  domain: Workload Management
+  difficulty: medium
+  question: |
+    A PyTorch DataLoader with num_workers=8 crashes in a Docker container with
+    "bus error" / "unable to write to file </torch_...>: No space left on
+    device" under /dev/shm. Which TWO docker run options fix this? (Choose two.)
+  choices:
+    - --cpus=1
+    - --ipc=host
+    - --gpus 0
+    - --read-only
+    - --shm-size=16g (or another large enough value)
+- id: wkl-036
+  domain: Workload Management
+  difficulty: hard
+  question: |
+    The same DataLoader shared-memory problem happens in a Kubernetes pod. What
+    is the usual fix in the pod spec?
+  choices:
+    - Mount an emptyDir volume with medium Memory (optionally with a sizeLimit) at /dev/shm
+    - Increase resources.limits nvidia.com/gpu
+    - Add the annotation shm-size 16Gi
+    - Set hostPID true
+- id: wkl-037
+  domain: Workload Management
+  difficulty: easy
+  question: |
+    A Slurm job finished overnight and is no longer in squeue. The user wants its
+    final state, exit code and elapsed time. Which command should they use?
+  choices:
+    - sinfo -j <jobid>
+    - squeue -j <jobid> --states=all
+    - sacct -j <jobid> --format=JobID,State,ExitCode,Elapsed
+    - scontrol show node <jobid>
