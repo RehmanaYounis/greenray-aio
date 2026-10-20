@@ -14,6 +14,7 @@ from pathlib import Path
 
 import yaml
 
+from ..core.shell import INCONSISTENT_FLAG
 from ..core.state import AttrDict, append_path, get_path, make_cluster, set_path, wrap
 from . import solutions
 from .domains import DOMAINS
@@ -92,6 +93,9 @@ class Scenario:
         """Return [(description, passed, error)] for every check."""
         env = check_env(shell)
         results = []
+        broken = shell.ctx.state.get("flags", {}).get(INCONSISTENT_FLAG)
+        if broken:  # a crashed command could not be rolled back: never grade a possibly half-applied state
+            results.append(("cluster state is consistent (type `reset`)", False, f"internal error in {broken}"))
         for chk in self.checks:
             desc = chk.get("desc", chk["expr"])
             try:
@@ -212,6 +216,21 @@ def find(scenario_id: str) -> Scenario:
         if s.id == scenario_id:
             return s
     raise KeyError(scenario_id)
+
+
+def similar(scenario: Scenario, exclude: set[str] = frozenset()) -> Scenario | None:
+    """The scenario sharing the most tags with ``scenario`` (ties: same domain first, then id)."""
+    best, best_key = None, None
+    for other in load_all():
+        if other.id in exclude or other.id == scenario.id:
+            continue
+        overlap = len(set(other.tags) & set(scenario.tags))
+        if not overlap:
+            continue
+        key = (overlap, other.domain == scenario.domain, other.id)
+        if best_key is None or key[:2] > best_key[:2] or (key[:2] == best_key[:2] and other.id < best.id):
+            best, best_key = other, key
+    return best
 
 
 def replay_solution(scenario: Scenario, shell) -> list[str]:

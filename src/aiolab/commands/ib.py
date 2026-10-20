@@ -421,7 +421,10 @@ def perfquery(ctx, args):
         elif not a.startswith("-"):
             pos.append(a)
     if pos:
-        lid = int(pos[0], 0)
+        try:
+            lid = int(pos[0], 0)
+        except ValueError:
+            raise CommandError(f"perfquery: iberror: failed: can't resolve destination port {pos[0]}")
         match = [(h, p) for h, n, i, p in _all_ports(ctx.state) if p.lid == lid and n.up and _active(p)]
         if not match:
             raise CommandError(
@@ -1188,6 +1191,8 @@ def mpirun(ctx, args):
         elif a in MPI_VAL_OPTS:
             val = args[i + 1] if i + 1 < len(args) else ""
             if a in ("-np", "-n", "-c"):
+                if not val.isdigit():
+                    raise CommandError(f'mpirun: Error: option "{a}" did not have enough parameters (1)')
                 np_ = int(val)
             elif a in ("-H", "--host", "-host"):
                 for h in val.split(","):

@@ -23,6 +23,9 @@ setup:
           g.power_draw_w = 349.0
           g.sm_clock_mhz = 1260
           g.throttle_reasons = ["SW Power Cap"]
+      # the "energy-saving test" also stopped and disabled the persistence daemon
+      state.nodes['dgx-03'].services['nvidia-persistenced'] = 'inactive'
+      state.nodes['dgx-03'].services_enabled['nvidia-persistenced'] = False
 checks:
   - desc: power limit is 700 W on every dgx-03 GPU
     expr: all(g.power_limit_w == g.power_default_w for g in nodes['dgx-03'].gpus)
@@ -30,7 +33,7 @@ checks:
     expr: not any('SW Power Cap' in g.throttle_reasons for g in nodes['dgx-03'].gpus)
   - desc: persistence mode enabled on every dgx-03 GPU
     expr: all(g.persistence_mode for g in nodes['dgx-03'].gpus)
-  - desc: you looked at the clock event reasons before changing anything
+  - desc: you looked at the clock event reasons
     expr: ran(r'nvidia-smi.*(-q.*PERFORMANCE|-d PERFORMANCE|clocks_(event|throttle)_reasons|-q$)', 'dgx-03') or ran(r'nvidia-smi -q', 'dgx-03')
 hints:
   - "Compare power.draw with power.limit: nvidia-smi --query-gpu=index,power.draw,power.limit,clocks.sm --format=csv"

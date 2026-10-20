@@ -46,7 +46,7 @@ checks:
     expr: all(slurm.nodes[n].state in ('IDLE', 'MIXED', 'ALLOCATED') for n in ['dgx-01', 'dgx-02', 'dgx-03', 'dgx-04'])
   - desc: an 8-GPU job completed on dgx-03
     expr: any(j.state == 'COMPLETED' and 'dgx-03' in j.nodelist and j.gpus_per_node == 8 for j in slurm.jobs)
-  - desc: you inspected node GRES/state before changing configs
+  - desc: you inspected node GRES/state
     expr: ran(r'^(sinfo|scontrol show node)')
 hints:
   - "Ask Slurm what it thinks each node has: sinfo -o '%N %G %t' or scontrol show node dgx-01 (look at Gres=)."

@@ -62,11 +62,21 @@ edge_cases:
   - Exam traps, variations, and what changes on other hardware.
 ```
 
+## How scenarios are presented
+
+- `aiolab lab <id>` (guided) shows the title, briefing and objectives.
+- `aiolab incident` shows only the briefing, so write the **briefing as an incident report**: symptoms, impact, and every constraint the learner must respect (e.g. "don't kill bob's job"). It must never name the root cause.
+- Objectives and check descriptions may name the cause. In incident mode they stay hidden until solved, or until the learner chooses `objectives`.
+- Hints should go from a pointer to an area, to a diagnostic command, to (only in the last hint) something close to the fix. The last hint is shown only after confirmation.
+
 ## Writing checks
 
 These names are available in `checks` expressions: `state`, `nodes`, `slurm`, `k8s`, `bcm`, `ngc`, `dcgm`, `flags`. Helpers: `ran(regex, host=None)`, `file(host, path)`, `pods(namespace=None, prefix='')`, `release(name)`, `jobs(**fields)` and `re`.
 
-- Grade the **end state**, so that any valid solution passes. Use `ran()` only to require that the learner gathered evidence before acting.
+- Grade the **end state**, so that any valid solution passes, and accept every legitimate way to reach it.
+- Use `ran()` only to require evidence gathering. `ran()` does **not** know the order of commands, so don't write "first" or "before …" in its description. Real ordering needs state the commands record (e.g. `slurm.nodes[n].last_resume_diag`).
+- A check that raises an exception counts as failed. The error text is shown only by `aiolab validate` or with `AIOLAB_DEBUG=1`.
+- Scenario files are trusted code (`eval` for checks, `exec` for `python:` setup). Never load them from untrusted sources.
 - State objects are dicts with attribute access. A key that clashes with a dict method (`values`, `items`, `keys`, `get`, `update`, `pop`) must be read with `obj['values']`, not `obj.values`. For Helm releases, use `release('x').computed`, which holds the chart defaults merged with user values.
 - The state layout is documented in `src/aiolab/core/state.py`.
 

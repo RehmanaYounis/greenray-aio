@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ..core.errors import CommandError
-from . import HOOKS_REBOOT, command
+from . import HOOKS_REBOOT, HOOKS_SERVICE, command
 
 # H100 80GB MIG GPU-instance profiles: name -> (profile id, compute slices, memory slices, max count)
 MIG_PROFILES = {
@@ -386,6 +386,31 @@ def _on_reboot(ctx, node):
 
 HOOKS_REBOOT.append(_on_reboot)
 
+PERSISTENCED = "nvidia-persistenced"
+
+
+def _on_service(ctx, name, action):
+    """nvidia-persistenced keeps every GPU on the node in persistence mode while it runs."""
+    if name != PERSISTENCED:
+        return
+    running = ctx.node.services.get(PERSISTENCED) == "active"
+    for g in ctx.node.gpus:
+        g.persistence_mode = running
+
+
+def _persistenced_after_reboot(ctx, node):
+    """After a reboot the daemon runs only if it is enabled; `nvidia-smi -pm` settings are lost."""
+    if PERSISTENCED not in node.services:
+        return
+    enabled = node.services_enabled.get(PERSISTENCED, True)
+    node.services[PERSISTENCED] = "active" if enabled else "inactive"
+    for g in node.gpus:
+        g.persistence_mode = enabled
+
+
+HOOKS_SERVICE.append(_on_service)
+HOOKS_REBOOT.append(_persistenced_after_reboot)
+
 
 # ---------------------------------------------------------------- MIG
 
@@ -590,7 +615,10 @@ def nvidia_smi(ctx, args):
         return "\n".join(out + ["All done."]) + "\n"
     pl = _opt(args, "-pl", "--power-limit")
     if pl is not None:
-        watts = float(pl)
+        try:
+            watts = float(pl)
+        except ValueError:
+            raise CommandError("Invalid combination of input arguments. Please run 'nvidia-smi -h' for help.", 2)
         out = []
         for g in _visible(gpus):
             if not (g.power_min_w <= watts <= g.power_max_w):
@@ -599,10 +627,11 @@ def nvidia_smi(ctx, args):
                     f"between {g.power_min_w:.2f} W and {g.power_max_w:.2f} W for GPU {g.bus_id}",
                     2,
                 )
+            previous = g.power_limit_w
             g.power_limit_w = int(watts)
             if watts >= g.power_default_w and "SW Power Cap" in g.throttle_reasons:
                 g.throttle_reasons.remove("SW Power Cap")
-            out.append(f"Power limit for GPU {g.bus_id} was set to {watts:.2f} W from {g.power_default_w:.2f} W.")
+            out.append(f"Power limit for GPU {g.bus_id} was set to {watts:.2f} W from {previous:.2f} W.")
         return "\n".join(out + ["All done."]) + "\n"
     ecc = _opt(args, "-e", "--ecc-config")
     if ecc is not None:

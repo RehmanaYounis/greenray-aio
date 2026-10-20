@@ -67,7 +67,7 @@ checks:
     expr: "'memlock' in file('dgx-01', '/etc/security/limits.d/99-memlock.conf') and nodes['dgx-01'].get('packages', {}).get('iperf3') == '3.9-1'"
   - desc: dgx-02, dgx-03 and dgx-04 received the fix from the image
     expr: all('memlock' in file(n, '/etc/security/limits.d/99-memlock.conf') and nodes[n].get('packages', {}).get('iperf3') == '3.9-1' for n in ('dgx-02', 'dgx-03', 'dgx-04'))
-  - desc: you ran a grabimage dry run before the real grab
+  - desc: you ran a grabimage dry run as well as the real grab
     expr: len(bcm.get('grab_dryruns', [])) > 0 and len(bcm.get('grabs', [])) > 0
   - desc: no DGX node was rebooted and nothing is left uncommitted
     expr: all(d.get('reboots', 0) == 0 for k, d in bcm.devices.items() if k.startswith('dgx-')) and not bcm.uncommitted

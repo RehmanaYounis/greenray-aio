@@ -76,7 +76,7 @@ checks:
     expr: "any(c.name == 'infer-triton-a-1' and c.status.startswith('Up') and sorted(c.gpus) == [0, 1] for c in nodes['dgx-02'].containers)"
   - desc: infer-triton-b-1 is up with exactly GPUs 2 and 3
     expr: "any(c.name == 'infer-triton-b-1' and c.status.startswith('Up') and sorted(c.gpus) == [2, 3] for c in nodes['dgx-02'].containers)"
-  - desc: you read the Docker daemon's own error before changing things
+  - desc: you read the Docker daemon's own error
     expr: "ran(r'^(journalctl .*docker|systemctl status docker)', 'dgx-02')"
 hints:
   - "Start with the daemon itself: `systemctl status docker` and `journalctl -u docker` on dgx-02. Docker prints exactly what it doesn't like about daemon.json."

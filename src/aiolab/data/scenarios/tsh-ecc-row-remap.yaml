@@ -44,9 +44,9 @@ setup:
           x.utilization = 97
       st.next_job_id = 3102
 checks:
-  - desc: you checked the row remapper / ECC state on dgx-04 first
+  - desc: you checked the row remapper / ECC state on dgx-04
     expr: ran(r'nvidia-smi .*(ROW_REMAPPER|remapped_rows|-d ECC|-q)', 'dgx-04') or ran(r'dcgmi (diag|health)', 'dgx-04')
-  - desc: dgx-04 was drained before maintenance
+  - desc: dgx-04 was drained for the maintenance
     expr: len(slurm.nodes['dgx-04'].get('drain_log', [])) > 0
   - desc: GPU 6 has no pending row remap (remap activated by a GPU reset or reboot)
     expr: not nodes['dgx-04'].gpus[6].remap_pending and not nodes['dgx-04'].gpus[6].remap_failure

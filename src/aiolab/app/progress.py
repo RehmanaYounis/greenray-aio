@@ -38,17 +38,33 @@ def _now() -> str:
     return time.strftime("%Y-%m-%d %H:%M")
 
 
-def record_scenario(sid: str, passed: bool, seconds: float, hints_used: int, gave_up: bool) -> None:
+def record_scenario(
+    sid: str,
+    passed: bool,
+    seconds: float,
+    hints_used: int,
+    gave_up: bool,
+    objectives_revealed: bool = False,
+    mode: str = "guided",
+) -> None:
+    """Record one attempt.
+
+    ``clean_passes``: passed without hints (any mode, as before).
+    ``independent_passes``: passed in incident mode with no hints and no revealed objectives.
+    """
     data = load()
     rec = data["scenarios"].setdefault(
         sid, {"attempts": 0, "passed": False, "best_seconds": None, "clean_passes": 0, "last": None}
     )
+    rec.setdefault("independent_passes", 0)
     rec["attempts"] += 1
     rec["last"] = _now()
     if passed and not gave_up:
         rec["passed"] = True
-        if hints_used == 0:
+        if hints_used == 0 and not objectives_revealed:
             rec["clean_passes"] += 1
+            if mode == "incident":
+                rec["independent_passes"] += 1
         if rec["best_seconds"] is None or seconds < rec["best_seconds"]:
             rec["best_seconds"] = round(seconds)
     save(data)

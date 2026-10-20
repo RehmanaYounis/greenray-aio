@@ -43,7 +43,7 @@ checks:
     expr: nodes['dgx-04'].driver_loaded and nodes['dgx-04'].services.get('slurmd') == 'active' and 'dgx-04' in slurm.nodes
   - desc: default category and the other DGX nodes were left alone
     expr: bcm.categories['default'].softwareimage == 'default-image' and not bcm.categories['default'].get('roles') and all(d.category == 'dgx-h100' for k, d in bcm.devices.items() if k in ('dgx-01', 'dgx-02', 'dgx-03'))
-  - desc: you inspected the node / category in cmsh before changing it
+  - desc: you inspected the node / category in cmsh
     expr: ran(r'cmsh .*(list|show|get |status)')
 hints:
   - "Start with the BCM view of the cluster: cmsh -c \"device; list\". What category is dgx-04 in compared to its neighbours?"

@@ -1,5 +1,5 @@
 from aiolab.app import mock
-from conftest import requires_solutions
+from conftest import ScriptedUI, requires_solutions
 
 
 def test_pick_labs_one_per_platform():
@@ -15,26 +15,10 @@ def test_combined_score():
     assert mock.combined_score(100.0, []) == 50.0
 
 
-class ScriptedUI:
-    """Feeds canned input lines; records output."""
-
-    def __init__(self, lines):
-        self.lines = iter(lines)
-        self.output = []
-
-    def out(self, s=""):
-        self.output.append(s)
-
-    def ask(self, prompt):
-        return next(self.lines, "quit")
-
-    def __getattr__(self, name):  # colour helpers
-        return lambda s: s
-
-
 @requires_solutions
 def test_mock_runs_end_to_end():
     ui = ScriptedUI(["q"] + ["a"] * 30 + ["f", "y", "n", "n", "n", "n"])
     mock.run_mock(ui, seed=5)
     text = "\n".join(ui.output)
     assert "Result:" in text and "Questions:" in text
+    assert "assumptions, not NVIDIA's rules" in text

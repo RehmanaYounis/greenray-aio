@@ -1,0 +1,345 @@
+# Command guides for `explain <command>` in the lab.
+# Rules: generic and concise; teach the tool, never the answer to a scenario.
+# No hostnames from the simulated cluster, no scenario ids, no fixed values a lab expects.
+
+nvidia-smi:
+  summary: query and configure NVIDIA GPUs on the node you are logged in to
+  purpose: Shows each GPU's health, utilisation, memory, power, clocks, temperature, ECC and MIG state, and changes GPU settings.
+  when: First stop for any GPU symptom (slow, missing, erroring) on a specific node.
+  options:
+    - "(no options)            summary table of all GPUs and the processes using them"
+    - "-L                      list GPUs and MIG devices with UUIDs"
+    - "-q [-d SECTION] [-i N]  full report; SECTION = PERFORMANCE, POWER, TEMPERATURE, ECC, ROW_REMAPPER, MEMORY, CLOCK"
+    - "--query-gpu=F1,F2 --format=csv   chosen fields as a table (see `nvidia-smi --help-query-gpu`)"
+    - "-i N                    limit a query or change to one GPU (without -i, changes apply to all GPUs)"
+    - "-pm 0|1, -pl WATTS, -r, -mig 0|1, mig ...   settings: persistence, power limit, reset, MIG"
+    - "topo -m                 GPU / NIC / CPU affinity matrix"
+  read:
+    - "Clocks Event Reasons (-q -d PERFORMANCE): which limiter is active. SW = a setting; HW = hardware."
+    - "'Unable to determine the device handle' or ERR! means the GPU is lost or needs a reset."
+  errors:
+    - "'Insufficient Permissions' / 'Not Supported': the GPU or driver model does not allow that change."
+    - "'In use by another client': a process still holds the GPU."
+
+dcgmi:
+  summary: NVIDIA Data Center GPU Manager CLI (health, diagnostics, monitoring, policies)
+  purpose: Talks to the DCGM host engine (nvidia-dcgm service) to run GPU diagnostics, health watches and field monitoring.
+  when: To prove whether GPU hardware is healthy, before returning a node to service, or to watch GPUs over time.
+  options:
+    - "discovery -l            list GPUs DCGM can see"
+    - "group -c NAME --default create a group with all GPUs (most commands take -g GROUP)"
+    - "health -s a / -c        set health watches / check them"
+    - "diag -r 1|2|3|4         diagnostics: 1 quick, 2 medium, 3 long, 4 extended (higher = more intrusive)"
+    - "dmon -e FIELD_IDS       stream metrics; policy --get/--set/--reg   automatic violation handling"
+  read:
+    - "Diag table: any test marked Fail names the GPU and the reason."
+    - "Health check: Healthy / Warning / Failure per subsystem (memory, NVLink, PCIe, thermal, power)."
+  errors:
+    - "'Unable to connect to host engine': the nvidia-dcgm service is not running."
+
+dmesg:
+  summary: print the kernel ring buffer
+  purpose: "Shows kernel messages, including NVIDIA driver errors (NVRM: Xid ...) and NIC/PCIe events."
+  when: Something failed at the hardware or driver level; you want the kernel's own account.
+  options:
+    - "dmesg | grep -i xid     NVIDIA Xid errors (the number identifies the failure class)"
+    - "dmesg -T                human-readable timestamps"
+  read:
+    - "Xid number and the PCI address: they tell you what failed and on which GPU."
+
+journalctl:
+  summary: read systemd logs
+  purpose: Shows logs written by services (slurmd, kubelet, docker, munge, nvidia-fabricmanager ...).
+  when: A service fails to start, keeps restarting, or behaves oddly.
+  options:
+    - "-u UNIT                 one service's log"
+    - "-xeu UNIT               the end of a unit's log with explanations (after a failed start)"
+    - "-k                      kernel messages, like dmesg"
+  read:
+    - "The first error after the most recent start attempt is usually the real cause."
+
+systemctl:
+  summary: inspect and control systemd services
+  purpose: Start, stop, restart, enable or check services.
+  when: To see whether a daemon is running, why it stopped, or to (re)start it after a config change.
+  options:
+    - "status UNIT             running? enabled at boot? last log lines"
+    - "start|stop|restart UNIT"
+    - "enable --now UNIT       start now and at every boot"
+    - "is-active / is-enabled UNIT"
+  read:
+    - "Active: (running/failed/inactive) and Loaded: (...; enabled/disabled)."
+  errors:
+    - "'Job for X failed': read journalctl -xeu X."
+
+sinfo:
+  summary: Slurm partitions and node states
+  purpose: Shows which nodes are idle, allocated, drained or down, per partition.
+  when: First look at a Slurm cluster, or when jobs are not starting.
+  options:
+    - "-N -l                   one line per node, long format"
+    - "-R                      drained/down nodes with the reason"
+  read:
+    - "STATE: idle, alloc, mix, drain, drng, down, inval. A '*' after a state means the node is not responding."
+
+squeue:
+  summary: Slurm job queue
+  purpose: Lists pending and running jobs, with the reason a pending job is waiting.
+  when: Users say their job 'is stuck' or 'never starts'.
+  options:
+    - "-u USER / -p PARTITION / -j JOBID"
+    - "-l or -o '%i %P %j %u %T %r'   include the state and reason"
+  read:
+    - "NODELIST(REASON) for pending jobs: Resources, Priority, ReqNodeNotAvail, PartitionDown, QOS... limits."
+
+scontrol:
+  summary: inspect and change Slurm state
+  purpose: Shows detailed node/job/partition records and changes them (drain, resume, update).
+  when: You need the details behind sinfo/squeue, or to take nodes in or out of service.
+  options:
+    - "show node|job|partition|config [NAME]"
+    - "update NodeName=N State=DRAIN Reason=\"...\"   (State=RESUME to return it)"
+    - "reconfigure             make slurmctld re-read slurm.conf"
+  read:
+    - "Node: State=, Reason=, Gres=, CfgTRES/AllocTRES. Job: JobState=, Reason=, TRES requested."
+  errors:
+    - "'Invalid node state specified' / 'Reason required to drain'."
+
+sbatch:
+  summary: submit a Slurm batch script
+  purpose: Queues a script; #SBATCH lines at the top set resources (nodes, GPUs, tasks, time, partition).
+  when: Running or testing a batch workload.
+  options:
+    - "--gres=gpu:N (per node) / --gpus=N (per job total) / --gpus-per-node=N"
+    - "-N NODES, --ntasks-per-node=N, -p PARTITION, --exclusive, --wrap='cmd'"
+  read:
+    - "'Submitted batch job N', then follow it with squeue -j N and sacct -j N."
+  errors:
+    - "'Requested node configuration is not available': the request can never fit."
+
+srun:
+  summary: run a command as a Slurm job step
+  purpose: Launches tasks on allocated nodes (interactively or inside sbatch); with pyxis it can run containers.
+  when: Quick tests on compute nodes, or launching parallel tasks inside a batch job.
+  options:
+    - "-N, --ntasks-per-node, --gres / --gpus, -w NODE"
+    - "--container-image=REGISTRY#IMAGE:TAG   (pyxis; note the # after the registry)"
+
+sacctmgr:
+  summary: manage Slurm accounting (accounts, users, QOS, limits)
+  purpose: Creates accounts and users, sets fair-share and QOS limits in slurmdbd.
+  when: Onboarding users or teams, or enforcing limits.
+  options:
+    - "show assoc|account|user|qos [format=...] [tree]"
+    - "add account|user|qos NAME [property=value ...]"
+    - "modify qos|user NAME set property=value"
+  read:
+    - "Limits only apply when AccountingStorageEnforce in slurm.conf includes them."
+
+kubectl:
+  summary: Kubernetes command-line client
+  purpose: Lists and inspects cluster objects (nodes, pods, events), applies manifests and reads container logs.
+  when: Pods are Pending, crashing or not using GPUs; nodes are NotReady.
+  options:
+    - "get nodes|pods -A -o wide"
+    - "describe pod|node NAME [-n NS]   events at the bottom explain scheduling and pull problems"
+    - "logs POD [-n NS] [-p]   container output (-p: the previous, crashed container)"
+    - "apply -f FILE, delete, label, taint, cordon, drain"
+  read:
+    - "Pod STATUS (Pending, ContainerCreating, CrashLoopBackOff, ImagePullBackOff) and RESTARTS."
+    - "FailedScheduling events: '0/N nodes are available: <reason per node>'."
+    - "Node Allocatable nvidia.com/gpu: what the device plugin advertises."
+
+helm:
+  summary: Kubernetes package manager
+  purpose: Installs and upgrades charts (e.g. the NVIDIA GPU Operator and Network Operator) with configurable values.
+  when: Deploying or reconfiguring operator stacks.
+  options:
+    - "repo add NAME URL / repo update"
+    - "install|upgrade RELEASE CHART -n NS [--create-namespace] [--set key=value] [-f values.yaml]"
+    - "list -A, get values RELEASE -n NS [-a], uninstall"
+  read:
+    - "get values shows what you set; -a shows the computed values including chart defaults."
+
+docker:
+  summary: container engine CLI
+  purpose: Pulls images and runs containers; GPUs are passed in via the NVIDIA Container Toolkit.
+  when: Running or debugging containers on a single host.
+  options:
+    - "run --rm --gpus all|N|'\"device=0,1\"' IMAGE CMD"
+    - "ps -a, logs NAME, inspect NAME, exec NAME CMD, info"
+    - "login nvcr.io (user $oauthtoken, password = NGC API key)"
+  errors:
+    - "'could not select device driver \"\" with capabilities: [[gpu]]': the GPU runtime is not set up for Docker."
+    - "'unauthorized' on pull: not logged in to that registry."
+
+nvidia-ctk:
+  summary: NVIDIA Container Toolkit CLI
+  purpose: Configures container runtimes (Docker, containerd, CRI-O) to use the NVIDIA runtime, and generates CDI specs.
+  when: Setting up GPU containers on a new host or fixing a runtime config.
+  options:
+    - "runtime configure --runtime=docker|containerd [--set-as-default]"
+    - "cdi generate --output=FILE"
+    - "--version"
+  read:
+    - "It edits the runtime's config file; the runtime must be restarted to pick it up."
+
+crictl:
+  summary: inspect containers through the CRI (containerd) on a Kubernetes node
+  purpose: Lists pods, containers and images as the kubelet's runtime sees them.
+  when: Debugging at node level when kubectl alone does not explain a failure.
+  options:
+    - "ps -a, pods, images, logs CONTAINER_ID, info"
+
+cmsh:
+  summary: NVIDIA Base Command Manager shell
+  purpose: Manages the cluster's nodes, categories, software images, users and power through BCM.
+  when: Provisioning, changing node configuration cluster-wide, power control, image updates.
+  options:
+    - "cmsh -c \"MODE; use OBJECT; show|get|set ...; commit\"   (commands separated by ;)"
+    - "modes: device, category, softwareimage, partition, user"
+    - "device status / power status|on|off -n NODES / imageupdate [-w] -n NODES"
+  read:
+    - "Changes are staged until commit; an asterisk in the prompt means uncommitted changes."
+    - "Node settings override category settings, which override partition defaults."
+
+ibstat:
+  summary: InfiniBand adapter and port status
+  purpose: Shows each HCA port's state, physical state and rate.
+  when: Multi-node jobs are slow or fail and you suspect the fabric.
+  read:
+    - "State: Active and Physical state: LinkUp are healthy. Down / Polling means no working link."
+    - "Rate lower than the others on the node means the link trained at a degraded speed."
+
+mlxlink:
+  summary: NVIDIA (Mellanox) link diagnostics for one port
+  purpose: Shows link state, speed, cable/module information and signal levels, and can toggle a port.
+  when: A port is down or degraded and you need to know whether it is cable, module or configuration.
+  options:
+    - "-d DEVICE (e.g. a CA name or /dev/mst path)"
+    - "-m                      module (transceiver) and cable info, including RX power"
+    - "-c                      error counters"
+  read:
+    - "Very low RX power or 'No module' points at the physical layer (cable, transceiver, seating)."
+
+ibdiagnet:
+  summary: fabric-wide InfiniBand diagnostics
+  purpose: Scans the fabric for down links, speed/width mismatches and error counters.
+  when: Before and after fabric changes, or to locate a bad link from anywhere in the cluster.
+  read:
+    - "The summary lists links with errors or degraded speed; details go to the log file it names."
+
+all_reduce_perf:
+  summary: NCCL tests benchmark (collective bandwidth)
+  purpose: Measures collective communication bandwidth across GPUs and nodes.
+  when: To prove a fabric or GPU-communication fix actually restored performance.
+  options:
+    - "-b MIN -e MAX -f 2 -g GPUS   size range and GPUs per process"
+    - "launched across nodes with mpirun -np N -H host:slots,..."
+    - "NCCL_DEBUG=INFO (environment) prints which transport NCCL chose and why"
+  read:
+    - "busbw at the largest sizes is the number to compare. 'NET/Socket' instead of 'NET/IB' means no InfiniBand."
+
+mpirun:
+  summary: launch MPI processes (Open MPI)
+  purpose: Starts N copies of a program across hosts, used to run NCCL tests and MPI training jobs.
+  options:
+    - "-np N -H host1:slots,host2:slots PROGRAM"
+    - "-x VAR[=value]          pass environment variables to remote ranks"
+    - "--allow-run-as-root     required when running as root"
+
+lsmod:
+  summary: list loaded kernel modules
+  purpose: Shows which drivers are loaded (nvidia, nvidia_uvm, nvidia_peermem, mlx5_core, nvidia_fs ...).
+  when: A feature that depends on a kernel module is not working.
+  read:
+    - "Module names use underscores even if you loaded them with dashes."
+
+modprobe:
+  summary: load or unload kernel modules
+  purpose: Loads (or with -r removes) a kernel module and its dependencies.
+  read:
+    - "Loading by hand lasts until reboot; files in /etc/modules-load.d make it permanent."
+  errors:
+    - "'Module X is in use': something still uses it; stop that first."
+
+ipmitool:
+  summary: talk to the server's BMC (IPMI)
+  purpose: Reads hardware sensors and the System Event Log, and controls chassis power.
+  when: Suspected hardware faults (fans, PSUs, temperature) or a node that will not power on.
+  options:
+    - "sel list                hardware event log"
+    - "sdr                     sensor readings (fans, temperatures, PSUs)"
+    - "power status|on|off|cycle"
+
+numactl:
+  summary: NUMA topology and memory/CPU binding
+  purpose: Shows NUMA nodes and their CPUs, or runs a program bound to particular nodes.
+  when: Performance differs between identical nodes, or CPU threads may be far from their GPU.
+  options:
+    - "-H / --hardware         NUMA nodes, CPUs and distances"
+    - "--show                  the current process's binding"
+  read:
+    - "Compare with `nvidia-smi topo -m`: each GPU lists its CPU and NUMA affinity."
+
+df:
+  summary: mounted filesystems and free space
+  options:
+    - "-h                      human-readable sizes"
+    - "-T                      show the filesystem type (nfs, lustre, ext4 ...)"
+  read:
+    - "A path missing from the list is not mounted; check what is mounted at the path you expect."
+
+findmnt:
+  summary: show mounts as a tree, with options
+  options:
+    - "findmnt PATH            what is mounted there and with which options"
+    - "--fstab                 what /etc/fstab says should be mounted"
+
+mount:
+  summary: list or mount filesystems
+  options:
+    - "(no options)            list current mounts"
+    - "-a                      mount everything in /etc/fstab"
+    - "-t nfs SERVER:/export /path"
+
+enroot:
+  summary: unprivileged container runtime used by pyxis with Slurm
+  options:
+    - "import docker://REGISTRY#IMAGE:TAG   (note the # after the registry)"
+    - "create IMAGE.sqsh, list, start NAME"
+
+runai:
+  summary: NVIDIA Run:ai CLI (workloads, projects and quotas)
+  purpose: Submits and inspects workloads in Run:ai projects, which share GPU quota between teams.
+  when: Workloads are pending, preempted or need fractional GPUs.
+  options:
+    - "list jobs|projects / workload list   (older and newer CLI syntax both exist)"
+    - "describe job NAME -p PROJECT"
+    - "submit NAME -i IMAGE -g GPUS -p PROJECT   (-g 0.5 requests half a GPU)"
+  read:
+    - "Deserved quota vs over-quota: over-quota workloads may run on idle GPUs but can be preempted."
+
+gdscheck:
+  summary: GPUDirect Storage platform check
+  purpose: Reports whether GDS can be used on this node and for which filesystems.
+  options:
+    - "-p                      platform check"
+  read:
+    - "If the nvidia_fs driver is missing, GDS silently falls back to compatibility mode (slower)."
+
+mlxconfig:
+  summary: query or change NVIDIA NIC / BlueField firmware configuration
+  options:
+    - "-d DEVICE q             query current and next-boot settings"
+    - "-d DEVICE s KEY=VALUE   set (takes effect after a reset or reboot)"
+  read:
+    - "Next-boot values differ from current ones until the device is reset."
+
+ssh:
+  summary: log in to another node, or run one command there
+  options:
+    - "ssh NODE                open a shell on NODE (exit to come back)"
+    - "ssh NODE CMD            run CMD on NODE and print its output"
+  read:
+    - "The prompt shows which node you are on. Many tools only report the node they run on."

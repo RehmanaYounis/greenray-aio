@@ -66,7 +66,7 @@ setup:
           'command': '/home/carol/sd.sbatch'})
       state.slurm.next_job_id = 3102
 checks:
-  - desc: you gathered evidence first (slurmd/slurmctld/munge logs, or a munge -n | unmunge test)
+  - desc: you gathered evidence (slurmd/slurmctld/munge logs, or a munge -n | unmunge test)
     expr: ran(r'^journalctl') or ran(r'^unmunge')
   - desc: dgx-02 has the cluster's MUNGE key
     expr: file('dgx-02', '/etc/munge/munge.key') == file('bcm-head', '/etc/munge/munge.key')

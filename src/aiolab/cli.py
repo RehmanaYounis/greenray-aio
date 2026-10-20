@@ -17,7 +17,7 @@ import sys
 
 from . import __version__
 from .app.exam import run_exam
-from .app.lab import run_lab
+from .app.lab import pick_incident, run_lab
 from .app.mock import run_mock
 from .app.reports import list_scenarios, show_progress
 from .app.ui import UI
@@ -31,12 +31,19 @@ def menu(ui: UI) -> None:
     while True:
         ui.out(ui.bold("\nNCP-AIO Practice Lab"))
         ui.out(
+            "  0) Incident: investigate a random problem (root cause hidden)\n"
             "  1) Hands-on scenarios\n  2) Full mock exam (30 questions + 3 labs, 120 min)\n"
             "  3) Question drill (60 questions, blueprint-weighted)\n  4) Domain drill (20 questions)\n"
             "  5) Sandbox (healthy cluster)\n  6) Progress\n  q) Quit"
         )
         choice = ui.ask("> ").strip().lower()
-        if choice == "1":
+        if choice == "0":
+            for i, d in enumerate(DOMAINS, 1):
+                ui.out(f"  {i}) {d}")
+            k = ui.ask("Domain (blank = any): ").strip()
+            domain = DOMAINS[int(k) - 1] if k.isdigit() and 1 <= int(k) <= len(DOMAINS) else None
+            start_incident(ui, domain=domain)
+        elif choice == "1":
             list_scenarios(ui)
             sid = ui.ask("\nScenario id (blank to go back): ").strip()
             if sid:
@@ -60,6 +67,21 @@ def menu(ui: UI) -> None:
             show_progress(ui)
         elif choice in ("q", "quit"):
             return
+
+
+def start_incident(ui: UI, domain: str | None = None, tag: str | None = None, sid: str | None = None) -> int:
+    """Incident mode. A random pick hides the id and title; ``--id`` is for a deliberate retry."""
+    if sid:
+        run_lab(ui, sc.find(sid), incident=True, hide_identity=False)
+        return 0
+    s = pick_incident(domain=domain, tag=tag)
+    if s is None:
+        ui.out(
+            ui.red("No scenario matches that domain/topic. Topics are scenario tags, e.g. slurm, kubernetes, bcm, mig.")
+        )
+        return 1
+    run_lab(ui, s, incident=True, hide_identity=True)
+    return 0
 
 
 def validate(ui: UI) -> int:
@@ -86,6 +108,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("list", help="list scenarios by domain")
     lab = sub.add_parser("lab", help="start a hands-on scenario")
     lab.add_argument("id")
+    inc = sub.add_parser("incident", help="investigate a random incident; root cause, id and title stay hidden")
+    inc.add_argument("-d", "--domain", choices=DOMAINS)
+    inc.add_argument("-t", "--topic", help="scenario tag, e.g. slurm, kubernetes, bcm, mig, infiniband")
+    inc.add_argument("--id", help="retry a specific scenario as an incident (its id is known, objectives stay hidden)")
     sub.add_parser("mock", help="full mock exam: 30 questions + 3 labs in 120 minutes")
     ex = sub.add_parser("exam", help="timed question drill")
     ex.add_argument("-n", type=int, default=60, help="number of questions (default 60)")
@@ -105,6 +131,8 @@ def main(argv: list[str] | None = None) -> int:
             menu(ui)
         elif args.cmd == "list":
             list_scenarios(ui)
+        elif args.cmd == "incident":
+            return start_incident(ui, domain=args.domain, tag=args.topic, sid=args.id)
         elif args.cmd == "lab":
             run_lab(ui, sc.find(args.id))
         elif args.cmd == "mock":

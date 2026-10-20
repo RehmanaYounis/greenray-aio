@@ -14,7 +14,18 @@ COVERAGE_DOC = Path(__file__).resolve().parents[3] / "docs" / "COVERAGE.md"
 
 
 def check_scenario(s: sc.Scenario) -> str | None:
-    """``None`` if the scenario starts unsolved and its reference solution solves it."""
+    """``None`` if the scenario starts unsolved and its reference solution solves it.
+
+    Any exception (bad setup op, broken check, replay crash) is reported, not raised,
+    so one broken scenario cannot hide the results for the others.
+    """
+    try:
+        return _check_scenario(s)
+    except Exception as e:
+        return f"raised {type(e).__name__}: {e}"
+
+
+def _check_scenario(s: sc.Scenario) -> str | None:
     shell = Shell(s.build_state())
     if all(ok for _, ok, _ in s.grade(shell)):
         return "already solved before any action"

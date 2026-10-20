@@ -15,7 +15,7 @@ from ..content import questions as qb
 from ..content import scenarios as sc
 from . import progress
 from .exam import PRACTICE_PASS_PCT, ask_questions, load_scored_bank, offer_review
-from .lab import LabSession, run_exam_lab, show_results, show_solution
+from .lab import LabSession, read_line, run_exam_lab, show_results, show_solution
 from .ui import UI
 
 N_QUESTIONS = 30
@@ -53,6 +53,12 @@ def run_mock(ui: UI, seed: int | None = None) -> None:
 
     ui.out(ui.bold(f"\nMock NCP-AIO exam: {len(qs)} questions + {len(labs)} labs, {MINUTES} minutes total"))
     ui.out("Do the sections in any order. Labs keep your work when you go back to the menu.")
+    ui.out(
+        ui.dim(
+            "Format per NVIDIA's exam page (re-check before booking). The 50/50 question/lab weighting "
+            f"and the {PRACTICE_PASS_PCT:.0f}% target are this simulator's assumptions, not NVIDIA's rules."
+        )
+    )
     ui.out(ui.dim("No hints, no solutions, no grading until you finish.\n"))
 
     while time.time() < deadline:
@@ -62,7 +68,7 @@ def run_mock(ui: UI, seed: int | None = None) -> None:
         for i, lab in enumerate(labs, 1):
             ui.out(f"  {i}) Lab {i}: {lab.scenario.title}")
         ui.out("  f) Finish and grade")
-        choice = ui.ask("> ").strip().lower()
+        choice = read_line(ui, "> ").strip().lower()
         if choice == "q":
             ask_questions(ui, qs, deadline, answers, flagged)
         elif choice.isdigit() and 1 <= int(choice) <= len(labs):

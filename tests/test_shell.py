@@ -62,3 +62,12 @@ def test_reboot_clears_xid():
     assert "Unable to determine the device handle" in s.run("nvidia-smi")
     s.run("reboot")
     assert not g.fallen_off_bus and g.xid is None
+
+
+def test_grep_context_forms():
+    s = sh()
+    s.run("ssh dgx-01")
+    for flag in ("-A2", "-A 2", "--after-context=2"):
+        out = s.run(f"nvidia-smi -q -d PERFORMANCE -i 0 | grep {flag} 'Event Reasons'")
+        assert len(out.splitlines()) == 3, flag
+    assert "invalid context length" in s.run("echo x | grep -A x")

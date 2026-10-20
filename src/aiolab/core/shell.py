@@ -6,6 +6,7 @@ heredocs, `export VAR=val`, `sudo` (ignored, you are root), `ssh <host>` / `exit
 
 from __future__ import annotations
 
+import pickle
 from dataclasses import dataclass, field
 
 from .. import commands
@@ -13,6 +14,8 @@ from .errors import CommandError
 from .state import HEAD
 
 HEREDOC_PROMPT = "> "
+INTERNAL_ERROR_CODE = 70  # EX_SOFTWARE
+INCONSISTENT_FLAG = "_internal_error"  # set in state.flags when a failed command could not be rolled back
 
 
 @dataclass
@@ -230,6 +233,39 @@ class Shell:
                 outputs.append(out.rstrip("\n"))
         return "\n".join(outputs)
 
+    # ------------------------------------------------------------ internal-error recovery
+
+    def _checkpoint(self):
+        """Snapshot the cluster and shell position so a crashing command can be undone."""
+        try:
+            state = pickle.dumps(self.ctx.state, protocol=pickle.HIGHEST_PROTOCOL)
+        except Exception:
+            state = None
+        return state, self.ctx.host, list(self.ctx.host_stack), self.ctx.cwd
+
+    def _recover(self, argv: list[str], error: Exception, checkpoint, executed_before: int) -> str:
+        """Undo a command that raised an unexpected exception and explain what happened.
+
+        The command (and anything it ran via ``ssh host cmd``) is dropped from the
+        executed-command log, so evidence checks cannot credit a command that crashed.
+        """
+        state_blob, host, host_stack, cwd = checkpoint
+        del self.ctx.executed[executed_before:]
+        self.ctx.host, self.ctx.host_stack, self.ctx.cwd = host, host_stack, cwd
+        detail = f"{type(error).__name__}: {error}"
+        if state_blob is not None:
+            restored = pickle.loads(state_blob)
+            self.ctx.state.clear()
+            dict.update(self.ctx.state, restored)
+            outcome = "The simulated cluster was restored to its state before this command."
+        else:
+            self.ctx.state.setdefault("flags", {})[INCONSISTENT_FLAG] = f"{argv[0]}: {detail}"
+            outcome = "The cluster state could not be restored; type `reset` before continuing (grading is blocked)."
+        return (
+            f"aiolab: internal simulator error while running '{argv[0]}' ({detail}).\n"
+            f"{outcome} This is a bug in the simulator, not in your command; please report it."
+        )
+
     def _read_heredoc(self, line: str, reader):
         head, _, marker = line.partition("<<")
         marker = marker.strip().strip("'\"").lstrip("-")
@@ -265,12 +301,16 @@ class Shell:
             if not argv:
                 continue
             self.ctx.stdin = data
+            executed_before = len(self.ctx.executed)
             self.ctx.executed.append((self.ctx.host, argv))
+            checkpoint = self._checkpoint()
             try:
                 data = commands.dispatch(self.ctx, argv)
                 code = 0
             except CommandError as e:
                 data, code = str(e), e.code
+            except Exception as e:  # a simulator bug, not a user error
+                return self._recover(argv, e, checkpoint, executed_before), INTERNAL_ERROR_CODE
             if data is None:
                 data = ""
             if redirect and target:

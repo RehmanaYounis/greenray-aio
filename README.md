@@ -4,7 +4,7 @@
 
 `aiolab` gives you a broken (or half-configured) **4-node DGX H100 cluster managed by NVIDIA Base Command Manager**. You fix it by typing the same commands you would use on a real system. When you think you're done, `check` grades the end state of the cluster, not whether you typed a particular command.
 
-The real exam is **30 multiple-choice questions plus 3 hands-on labs in 120 minutes**. The labs run on live Slurm, Kubernetes and BCM clusters. `aiolab mock` reproduces that shape, and every blueprint topic has a lab. See [docs/COVERAGE.md](docs/COVERAGE.md).
+According to NVIDIA's exam page (re-check before booking), the exam is **30 multiple-choice questions plus 3 hands-on labs in 120 minutes**. The labs run on live Slurm, Kubernetes and BCM clusters. `aiolab mock` reproduces that shape, and every blueprint topic has a lab. See [docs/COVERAGE.md](docs/COVERAGE.md).
 
 ```
 root@bcm-head:~# ssh dgx-03
@@ -68,7 +68,9 @@ Run these as `uv run aiolab …` from the `simulator/` folder. If you activate t
 | --- | --- |
 | `aiolab` | Interactive menu |
 | `aiolab list` | All scenarios by exam domain, with your pass marks |
-| `aiolab lab <id>` | Start a hands-on scenario |
+| `aiolab incident [-d DOMAIN] [-t TOPIC]` | **Investigate a random incident.** Only the incident report is shown; the scenario's id, title and success criteria stay hidden until the debrief. `-t` takes a scenario tag such as `slurm`, `kubernetes`, `bcm`, `mig` or `infiniband` |
+| `aiolab incident --id <id>` | Retry a specific scenario as an incident (for a fresh independent attempt) |
+| `aiolab lab <id>` | Start a hands-on scenario in guided mode (title, objectives and hints visible) |
 | `aiolab sandbox` | A healthy cluster to explore freely |
 | `aiolab mock` | **Full mock exam:** 30 questions + 3 labs (one Slurm, one Kubernetes, one BCM) in 120 minutes, with no hints. Graded at the end |
 | `aiolab exam` | Question drill: 60 questions in 120 minutes, weighted 31/23/23/23 like the blueprint |
@@ -81,14 +83,33 @@ Inside a lab, these meta-commands are available alongside the simulated cluster 
 | Command | What it does |
 | --- | --- |
 | `task` | Show the briefing again |
-| `check` | Grade your work |
-| `hint` | Show the next hint (hints mean the pass isn't "clean") |
+| `check` | Grade your work. In incident mode, unmet criteria are counted but not named |
+| `explain <cmd>` | What a command is for, its useful options, what to look for in its output, and common errors. It never describes a scenario's fix |
+| `hint` | Show the next hint. Hints get more specific, and the last one asks for confirmation because it is close to the answer |
+| `objectives` | Incident mode only: reveal the success criteria (this attempt then counts as guided) |
+| `retry` | Incident mode only: start a fresh attempt (cluster, timer, hints and objectives reset) |
 | `solution` | Give up and see the answer, explanation and edge cases |
-| `reset` | Start the scenario over |
+| `reset` | Put the cluster back to the broken state. Same attempt: hints used and the timer carry over |
 | `commands` | List the simulated tools |
 | `quit` | Leave the lab |
 
-When you pass, you get the **debrief**: the reference solution, why it works, and the edge cases and exam traps around it. Read it even when you passed.
+When you pass, you get the **debrief**: the reference solution, why it works, the edge cases and exam traps, **your own commands** for comparison, and a related scenario to practise next. Read it even when you passed. Ctrl-C cancels the current line, as in bash.
+
+### Guided or independent
+
+`aiolab progress` shows three counts per domain:
+- **passed**
+- **without hints**
+- **as an incident, unguided**: passed in incident mode with no hints and no revealed objectives
+
+A good routine is to learn a topic in guided mode first, then prove it with `aiolab incident -t <topic>`.
+
+### What the grader can and cannot judge
+
+- It grades the **end state** of the cluster, so any valid fix passes. For example, `nvidia-smi -pm 1` and `systemctl enable --now nvidia-persistenced` are both accepted for persistence mode.
+- Evidence checks confirm that you **ran** the diagnostic commands. Except where a check says otherwise, they do **not** check that you ran them before changing anything. Diagnose first anyway; the debrief reminds you.
+- It does not generally detect unnecessary changes. Only some scenarios guard against specific harmful ones, such as raising power limits to hide a thermal fault, or killing a user's job.
+- If a command ever crashes inside the simulator (a bug), the cluster is restored to its state before that command and you are told so.
 
 Progress is stored in `~/.aiolab/progress.json` on your machine (set `AIOLAB_HOME` to move it).
 
@@ -115,6 +136,10 @@ Simulated tools:
 
 **Limits:** outputs are realistic but simplified, and only the options that matter for the exam are implemented. If something doesn't parse, try the canonical form of the command. If a real command behaves differently from the simulator, trust the real one, and please open an issue.
 
+## Trust model
+
+Scenario files are **code**: `checks` are Python expressions and `setup` may contain Python, both run on your machine. They come only from this repository and your private solutions repository. Commands you type in a lab never reach `eval`/`exec`; they are parsed by the simulated tools. Only install scenario files you trust.
+
 ## Code layout
 
 ```
@@ -122,10 +147,11 @@ src/aiolab/
   cli.py            command-line entry point (argparse)
   core/             cluster state model, bash-like shell, errors
   commands/         one module per tool family (nvidia_smi, slurm, kubectl, cmsh, ib, ...)
-  content/          loaders: scenarios, questions, private solutions, validation, domains
+  content/          loaders: scenarios, questions, private solutions, command guides, validation, domains
   app/              interactive layer: lab runner, question drill, mock exam, progress, UI
   data/scenarios/   public scenario files (problem only)
   data/questions/   public question bank (questions only)
+  data/command_guides.yaml   scenario-agnostic guides for `explain`
 tests/              pytest suite; solution-replay tests skip when the private repo is absent
 docs/               SCENARIO_FORMAT.md, COVERAGE.md
 ```

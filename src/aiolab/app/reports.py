@@ -27,7 +27,11 @@ def show_progress(ui: UI) -> None:
         ids = [s.id for s in scenarios if s.domain == d]
         done = sum(bool(data["scenarios"].get(i, {}).get("passed")) for i in ids)
         clean = sum(bool(data["scenarios"].get(i, {}).get("clean_passes")) for i in ids)
-        ui.out(f"  {d:<36} passed {done}/{len(ids)}   without hints {clean}/{len(ids)}")
+        alone = sum(bool(data["scenarios"].get(i, {}).get("independent_passes")) for i in ids)
+        ui.out(
+            f"  {d:<36} passed {done}/{len(ids)}   without hints {clean}/{len(ids)}   "
+            f"as an incident, unguided {alone}/{len(ids)}"
+        )
     todo = [s.id for s in scenarios if not data["scenarios"].get(s.id, {}).get("passed")]
     if todo:
         ui.out(ui.dim(f"  next up: {', '.join(todo[:5])}"))

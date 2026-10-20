@@ -35,7 +35,7 @@ checks:
     expr: all(nd.get('packages', {}).get('nvidia-container-toolkit') == '1.16.2-1' for h, nd in nodes.items() if h.startswith('dgx-'))
   - desc: no DGX node was rebooted or power-cycled
     expr: all(d.get('reboots', 0) == 0 for k, d in bcm.devices.items() if k.startswith('dgx-')) and all(nd.up for h, nd in nodes.items() if h.startswith('dgx-'))
-  - desc: you ran an imageupdate dry run before the real update
+  - desc: you ran an imageupdate dry run
     expr: len(bcm.get('dryruns', [])) > 0
 hints:
   - "List the images and the categories that use them: cmsh -c \"softwareimage; list\" and \"category; list\"."

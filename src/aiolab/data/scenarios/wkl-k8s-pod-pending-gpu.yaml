@@ -87,7 +87,7 @@ checks:
     expr: "k8s.nodes['dgx-01'].schedulable and k8s.nodes['dgx-02'].schedulable"
   - desc: both inference replicas are still Running
     expr: "len([p for p in pods('default', 'inference-') if p.status == 'Running']) == 2"
-  - desc: you read the scheduler's reason before fixing
+  - desc: you read the scheduler's reason
     expr: "ran(r'kubectl (describe (pod|pods|po)|get (events|ev))')"
 hints:
   - "`kubectl describe pod bert-pretrain` and read the FailedScheduling event. Count which reason applies to how many of the 5 nodes."

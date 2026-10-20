@@ -62,7 +62,7 @@ checks:
     expr: jobs(id=2002)[0].state in ('RUNNING', 'COMPLETED') and jobs(id=2002)[0].time_limit is not None and jobs(id=2002)[0].time_limit <= 240
   - desc: carol's ddp-train runs as 2 nodes x 8 GPUs (16 GPUs total)
     expr: any(j.name == 'ddp-train' and j.num_nodes == 2 and j.gpus_per_node == 8 and j.state in ('RUNNING', 'COMPLETED') for j in slurm.jobs)
-  - desc: you read the pending reasons first (squeue / scontrol show job)
+  - desc: you read the pending reasons (squeue / scontrol show job)
     expr: ran(r'^squeue') and ran(r'^(scontrol show (job|partition)|sinfo|squeue .*(%r|%R|-l))')
 hints:
   - "The last column of squeue, NODELIST(REASON), is the scheduler telling you why. scontrol show job <id> and scontrol show partition give the details."

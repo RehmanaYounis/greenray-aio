@@ -96,7 +96,14 @@ def rm(ctx, args):
 
 @command("cp")
 def cp(ctx, args):
-    src, dst = [a for a in args if not a.startswith("-")][:2]
+    operands = [a for a in args if a and not a.startswith("-")]
+    if not operands:
+        raise CommandError("cp: missing file operand\nTry 'cp --help' for more information.")
+    if len(operands) == 1:
+        raise CommandError(
+            f"cp: missing destination file operand after '{operands[0]}'\nTry 'cp --help' for more information."
+        )
+    src, dst = operands[:2]
     ctx.node.files[dst] = _read(ctx, src)
     return ""
 
@@ -170,10 +177,15 @@ def grep(ctx, args):
     after = before = 0
     it = iter(args)
     for a in it:
-        if a in ("-A", "-B", "-C"):
-            n = int(next(it))
-            after = n if a in ("-A", "-C") else after
-            before = n if a in ("-B", "-C") else before
+        ctx_opt = re.fullmatch(r"-([ABC])(\d*)|--(after|before)-context=(\d+)|--context=(\d+)", a)
+        if ctx_opt and pattern is None:
+            which = ctx_opt.group(1) or {"after": "A", "before": "B"}.get(ctx_opt.group(3) or "", "C")
+            raw = ctx_opt.group(2) or ctx_opt.group(4) or ctx_opt.group(5) or next(it, "")
+            if not raw.isdigit():
+                raise CommandError(f"grep: {raw}: invalid context length argument", 2)
+            n = int(raw)
+            after = n if which in ("A", "C") else after
+            before = n if which in ("B", "C") else before
         elif a.startswith("-") and pattern is None and len(a) > 1:
             flags.update(a[1:])
         elif pattern is None:

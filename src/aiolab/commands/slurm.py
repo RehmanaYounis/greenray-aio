@@ -2038,6 +2038,19 @@ def _scontrol_reboot(ctx, args):
     return ""
 
 
+SCONTROL_USAGE = """\
+scontrol [<OPTION>] [<COMMAND>]
+    Valid <OPTION> values are:
+     -d or --details  Show details for show commands
+     -o or --oneliner Equivalent to "oneliner" command
+    Valid <COMMAND> values (subset supported by this simulator):
+     show <ENTITY> [<ID>]   ENTITY: config, job, node, partition, hostnames
+     update <SPECIFICATIONS> e.g. NodeName=dgx-01 State=DRAIN Reason="..."
+     create|delete partition, reconfigure, reboot [ASAP] [nextstate=..] <nodes>
+     hold|release|requeue <job_list>, ping, version
+"""
+
+
 @command(
     "scontrol",
     help="scontrol show node|partition|job|config, update NodeName=.. State=.., reconfigure, reboot, hold/release/requeue",
@@ -2047,11 +2060,17 @@ def scontrol(ctx, args):
         raise _err("scontrol: error: no command given")
     if args[0] in ("-V", "--version", "version"):
         return f"slurm {SLURM_VERSION}\n"
+    if args[0] in ("-h", "--help", "help", "--usage"):
+        return SCONTROL_USAGE
     detail = False
     while args and args[0].startswith("-"):
         if args[0] in ("-d", "--details"):
             detail = True
+        elif args[0] not in ("-o", "--oneliner", "-a", "--all", "-Q", "--quiet", "-v", "--verbose"):
+            raise _err(f"scontrol: unrecognized option '{args[0]}'\nTry \"scontrol --help\" for more information")
         args = args[1:]
+    if not args:
+        raise _err("scontrol: error: no command given")
     sub = args[0].lower()
     rest = args[1:]
     state = ctx.state
