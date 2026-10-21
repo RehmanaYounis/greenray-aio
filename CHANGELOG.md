@@ -2,6 +2,23 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] - 2026-10-22
+
+Ready for a public audience.
+
+### Added
+- A documentation site built with MkDocs and published to GitHub Pages: getting started, using the lab, the study path, the simulated cluster, exam coverage, the scenario format, architecture, contributing, security and this changelog.
+- CI builds the site on every push; Dependabot groups GitHub Actions updates into one pull request.
+
+### Changed
+- The README is a front page: what the tool is, how to install it, how it teaches, and links into the documentation. The manual moved to the site.
+- `docs/COVERAGE.md` and `docs/SCENARIO_FORMAT.md` are now `docs/coverage.md` and `docs/scenario-format.md`.
+
+### Removed
+- Compatibility with the project's former name: the `AIOLAB_*` environment variables, the `~/.aiolab` progress migration and the old solutions-directory names.
+- Bundled solutions for real-hardware labs that are not part of this repository.
+- The code of conduct file; its content rule lives in CONTRIBUTING.
+
 ## [0.6.0] - 2026-10-21
 
 Teaches better.

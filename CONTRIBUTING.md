@@ -16,7 +16,14 @@ uv run pytest
 uv run greenray validate
 ```
 
-CI runs the same checks on Linux and Windows.
+CI runs the same checks on Linux and Windows, and builds the documentation site:
+
+```bash
+uv sync --group docs
+uv run mkdocs serve          # preview at http://127.0.0.1:8000
+```
+
+The site's pages live in `docs/`. The architecture, contributing, security and changelog pages are filled from the root files of the same name, so edit those, not the stubs.
 
 ## Adding or changing a scenario
 

@@ -12,3 +12,5 @@ docs
 solutions
 *.md
 !README.md
+mkdocs.yml
+site

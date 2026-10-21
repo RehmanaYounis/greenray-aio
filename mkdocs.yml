@@ -59,5 +59,6 @@ hooks:
 exclude_docs: |
   demo/
   _include.py
+  __pycache__/
 
 strict: true
