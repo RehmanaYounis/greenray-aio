@@ -17,7 +17,7 @@ GreenRay AIO drops you into a broken or half-configured **4-node DGX H100 cluste
 
 `check` grades the end state of the cluster, not whether you typed a particular command.
 
-- **45 incident and task scenarios** covering every topic of the exam blueprint ([docs/COVERAGE.md](docs/COVERAGE.md)), starting with a six-lab **on-ramp** for the basics
+- **45 incident and task scenarios** covering every topic of the exam blueprint ([docs/coverage.md](docs/coverage.md)), starting with a six-lab **on-ramp** for the basics
 - **`greenray next`** tells you what to practise, **`greenray plan`** lays out four weeks, and every mock ends with a **report card**
 - **Incident mode**: only the incident report is shown, and the root cause stays hidden until the debrief
 - **`explain <command>`** for learning tools as you need them, plus progressive hints and a debrief after every lab
@@ -182,12 +182,12 @@ src/greenray/
   data/solutions/   reference solutions, answer keys and lab solutions
   data/command_guides.yaml   scenario-agnostic guides for `explain`
 tests/              pytest suite, including a replay of every reference solution
-docs/               SCENARIO_FORMAT.md, COVERAGE.md, demo/ (recording kit for the README demo)
+docs/               scenario-format.md, coverage.md, demo/ (recording kit for the README demo)
 ```
 
 ## Adding scenarios and questions
 
-- Scenarios: the problem goes in `src/greenray/data/scenarios/` and the solution in `src/greenray/data/solutions/scenarios/`. See [docs/SCENARIO_FORMAT.md](docs/SCENARIO_FORMAT.md). Add every new scenario to [docs/COVERAGE.md](docs/COVERAGE.md).
+- Scenarios: the problem goes in `src/greenray/data/scenarios/` and the solution in `src/greenray/data/solutions/scenarios/`. See [docs/scenario-format.md](docs/scenario-format.md). Add every new scenario to [docs/coverage.md](docs/coverage.md).
 - Questions: these go in `src/greenray/data/questions/`, with the answer key in `src/greenray/data/solutions/questions/<same file>`. The format is documented in `src/greenray/content/questions.py`.
 - Run `uv run greenray validate` and `uv run pytest` before committing. CI runs lint and tests on every push.
 

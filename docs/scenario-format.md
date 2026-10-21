@@ -82,6 +82,6 @@ These names are available in `checks` expressions: `state`, `nodes`, `slurm`, `k
 
 ## Checklist for a new scenario
 
-1. Add the id to `docs/COVERAGE.md` under its blueprint topic.
+1. Add the id to `docs/coverage.md` under its blueprint topic.
 2. `uv run greenray validate` should show `ok` for it.
 3. `uv run pytest` should pass.

@@ -11,7 +11,7 @@ from . import questions as qb
 from . import scenarios as sc
 from .domains import DOMAINS
 
-COVERAGE_DOC = Path(__file__).resolve().parents[3] / "docs" / "COVERAGE.md"
+COVERAGE_DOC = Path(__file__).resolve().parents[3] / "docs" / "coverage.md"
 
 
 def check_scenario(s: sc.Scenario) -> str | None:
@@ -68,7 +68,7 @@ def hint_leaks(scenarios: list[sc.Scenario] | None = None) -> list[str]:
 
 
 def coverage_ids() -> set[str]:
-    """Scenario ids referenced in docs/COVERAGE.md."""
+    """Scenario ids referenced in docs/coverage.md."""
     if not COVERAGE_DOC.is_file():
         return set()
     return set(re.findall(r"`((?:ins|adm|wkl|tsh)-[a-z0-9-]+)`", COVERAGE_DOC.read_text(encoding="utf-8")))
@@ -94,5 +94,5 @@ def structural_problems() -> list[str]:
         if q.get("lab") and q["lab"] not in ids:
             problems.append(f"question {q['id']} links to unknown lab {q['lab']}")
     for sid in sorted(coverage_ids() - ids):
-        problems.append(f"COVERAGE.md lists missing scenario {sid}")
+        problems.append(f"coverage.md lists missing scenario {sid}")
     return problems

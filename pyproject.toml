@@ -51,6 +51,9 @@ dev = [
     "ruff>=0.6",
     "types-pyyaml>=6.0.12.20260906",
 ]
+docs = [
+    "mkdocs-material>=9.5",
+]
 
 [tool.uv.build-backend]
 module-name = "greenray"

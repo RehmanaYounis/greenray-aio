@@ -14,3 +14,4 @@ dist/
 # An external solutions directory (see content/solutions.py) stays out of the repo
 /solutions/
 /greenray-aio-solutions/
+site/
