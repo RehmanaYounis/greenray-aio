@@ -4,7 +4,6 @@ Layout, both bundled and external::
 
     scenarios/<scenario-id>.yaml   solution, explanation, edge_cases
     questions/<bank-file>.yaml     {question-id: {answer: [...], explanation: ...}}
-    labs/...                       SOLUTION.md files for the real-hardware labs
 
 The package ships a complete set under ``data/solutions``. An external directory
 takes precedence, file by file, so authors can work on unreleased content:
@@ -22,7 +21,6 @@ import yaml
 from .. import config
 
 REPO_NAME = "greenray-aio-solutions"
-LEGACY_REPO_NAMES = ("NVIDIA-NCP-AIO-Prep-solutions", "nvidia-ncp-aio-prep-solutions")
 BUNDLED = Path(__file__).resolve().parent.parent / "data" / "solutions"
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -31,8 +29,7 @@ def candidates() -> list[Path]:
     """External locations in precedence order; the bundled copy is the fallback."""
     if explicit := config.env("SOLUTIONS"):
         return [Path(explicit).expanduser()]
-    names = (REPO_NAME, *LEGACY_REPO_NAMES)
-    return [_REPO_ROOT / "solutions", *(_REPO_ROOT.parent / n for n in names), *(Path.home() / n for n in names)]
+    return [_REPO_ROOT / "solutions", _REPO_ROOT.parent / REPO_NAME, Path.home() / REPO_NAME]
 
 
 def _is_solutions_dir(path: Path) -> bool:

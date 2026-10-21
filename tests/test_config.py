@@ -1,29 +1,23 @@
-"""Settings: GREENRAY_* variables with AIOLAB_* fallbacks, and progress-folder migration."""
-
-import json
+"""Settings come from GREENRAY_* variables; the progress folder is created on first use."""
 
 from greenray import config
-from greenray.app import progress
 
 
-def test_new_name_wins_over_legacy(monkeypatch):
-    monkeypatch.setenv("AIOLAB_SOLUTIONS", "/legacy")
+def test_env_reads_prefixed_variables(monkeypatch):
     monkeypatch.setenv("GREENRAY_SOLUTIONS", "/new")
     assert config.env("SOLUTIONS") == "/new"
+    monkeypatch.setenv("GREENRAY_SOLUTIONS", "")
+    assert config.env("SOLUTIONS", "fallback") == "fallback"
 
 
-def test_legacy_name_still_works(monkeypatch):
+def test_home_is_created_where_asked(monkeypatch, tmp_path):
+    monkeypatch.setenv("GREENRAY_HOME", str(tmp_path / "profile"))
+    assert config.home() == tmp_path / "profile"
+    assert (tmp_path / "profile").is_dir()
+
+
+def test_debug_flag(monkeypatch):
     monkeypatch.delenv("GREENRAY_DEBUG", raising=False)
-    monkeypatch.setenv("AIOLAB_DEBUG", "1")
+    assert not config.debug()
+    monkeypatch.setenv("GREENRAY_DEBUG", "1")
     assert config.debug()
-
-
-def test_legacy_progress_is_migrated_once(monkeypatch, tmp_path):
-    monkeypatch.delenv("GREENRAY_HOME", raising=False)
-    monkeypatch.delenv("AIOLAB_HOME", raising=False)
-    monkeypatch.setattr(config.Path, "home", lambda: tmp_path)
-    legacy = tmp_path / ".aiolab"
-    legacy.mkdir()
-    (legacy / "progress.json").write_text(json.dumps({"scenarios": {"x": {"passed": True}}, "exams": []}))
-    assert progress.load()["scenarios"]["x"]["passed"]
-    assert (tmp_path / ".greenray" / "progress.json").exists()

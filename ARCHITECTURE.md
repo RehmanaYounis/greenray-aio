@@ -49,8 +49,9 @@ from this repository and the solutions source. What the learner types never reac
 `eval`/`exec`; it is parsed by the emulated tools.
 
 ## App
-`app/lab.py` runs an attempt (guided or incident mode) and the debrief; `app/exam.py`
-and `app/mock.py` run question drills and the mock exam (full or labs-only) and print the
-report card; `app/study.py` turns progress into a recommendation (`next`) and a four-week
-schedule (`plan`); `app/progress.py` stores results in `~/.greenray`. `app/ui.py` renders panels and tables with rich and reads lines
-through `app/console.py` (history, tab completion of commands, hosts and simulated paths).
+`app/lab.py` runs an attempt (guided or incident mode) and the debrief. `app/exam.py` and
+`app/mock.py` run question drills and the mock exam (full or labs-only) and print the report
+card. `app/study.py` turns progress into a recommendation (`next`) and a four-week schedule
+(`plan`); `app/progress.py` stores results in `~/.greenray`. `app/ui.py` renders panels and
+tables with rich and reads lines through `app/console.py` (history, tab completion of
+commands, hosts and simulated paths).

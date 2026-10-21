@@ -35,6 +35,8 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/RehmanaYounis/greenray-aio"
+Documentation = "https://rehmanayounis.github.io/greenray-aio/"
+Changelog = "https://github.com/RehmanaYounis/greenray-aio/blob/main/CHANGELOG.md"
 Issues = "https://github.com/RehmanaYounis/greenray-aio/issues"
 
 [project.scripts]
