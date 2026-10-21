@@ -7,6 +7,8 @@ greenray mock                full mock exam: 30 questions + 3 labs, 120 minutes
 greenray exam [-n] [-m] [-d] question drill
 greenray sandbox             healthy cluster, free practice
 greenray progress            scores and weakest domain
+greenray next                what to practise next
+greenray plan                four-week study schedule
 greenray validate            content self-test
 """
 
@@ -20,6 +22,7 @@ from .app.exam import run_exam
 from .app.lab import pick_incident, run_lab
 from .app.mock import run_mock
 from .app.reports import list_scenarios, show_progress
+from .app.study import show_next, show_plan
 from .app.ui import UI
 from .content import scenarios as sc
 from .content import solutions
@@ -34,6 +37,8 @@ MENU = """\
 4  Domain drill    20 questions from one domain
 5  Sandbox         a healthy cluster to explore
 6  Progress        what you have passed and your weakest domain
+7  Next            what to practise next
+8  Plan            a four-week study schedule
 q  Quit"""
 
 
@@ -71,6 +76,10 @@ def menu(ui: UI) -> None:
             run_lab(ui, None)
         elif choice == "6":
             show_progress(ui)
+        elif choice == "7":
+            show_next(ui)
+        elif choice == "8":
+            show_plan(ui)
         elif choice in ("q", "quit"):
             return
 
@@ -155,6 +164,8 @@ def build_parser() -> argparse.ArgumentParser:
     ex.add_argument("-d", "--domain", choices=DOMAINS)
     sub.add_parser("sandbox", help="healthy cluster, nothing graded")
     sub.add_parser("progress", help="your scores and weakest domain")
+    sub.add_parser("next", help="what to practise next")
+    sub.add_parser("plan", help="a four-week study schedule covering every scenario")
     sub.add_parser("validate", help="check scenarios and questions")
     sub.add_parser("doctor", help="show version, environment and where solutions come from")
     return p
@@ -180,6 +191,10 @@ def main(argv: list[str] | None = None) -> int:
             run_lab(ui, None)
         elif args.cmd == "progress":
             show_progress(ui)
+        elif args.cmd == "next":
+            show_next(ui)
+        elif args.cmd == "plan":
+            show_plan(ui)
         elif args.cmd == "validate":
             return validate(ui)
         elif args.cmd == "doctor":

@@ -88,6 +88,8 @@ Installed with uv tool, pipx or Docker, the command is `greenray …`. From a so
 | `greenray exam` | Question drill: 60 questions in 120 minutes, weighted 31/23/23/23 like the blueprint |
 | `greenray exam -n 20 -m 40 -d "Administration"` | Domain drill |
 | `greenray progress` | Passed labs, exam history, weakest domain |
+| `greenray next` | What to practise next: the on-ramp first, then your weakest domain, then guided passes to redo as incidents |
+| `greenray plan` | A four-week schedule that covers every scenario, with your passes ticked off |
 | `greenray validate` | Self-test: every scenario is solvable by its reference solution |
 | `greenray doctor` | Version, Python, terminal, editor, solutions source and progress path |
 
