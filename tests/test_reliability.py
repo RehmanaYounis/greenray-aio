@@ -5,13 +5,13 @@ import pickle
 
 import pytest
 
-from aiolab import commands
-from aiolab.app import lab, progress
-from aiolab.content import scenarios as sc
-from aiolab.content.validate import check_scenario
-from aiolab.core.shell import INCONSISTENT_FLAG, Shell
-from aiolab.core.state import make_cluster
 from conftest import ScriptedUI
+from greenray import commands
+from greenray.app import lab, progress
+from greenray.content import scenarios as sc
+from greenray.content.validate import check_scenario
+from greenray.core.shell import INCONSISTENT_FLAG, Shell
+from greenray.core.state import make_cluster
 
 
 @pytest.fixture
@@ -137,10 +137,10 @@ def test_validate_reports_broken_setup_instead_of_crashing():
 def test_check_errors_hidden_from_learner_unless_debug(monkeypatch):
     results = [("maria exists", False, "KeyError: 'maria'")]
     ui = ScriptedUI([])
-    monkeypatch.delenv("AIOLAB_DEBUG", raising=False)
+    monkeypatch.delenv("GREENRAY_DEBUG", raising=False)
     lab.show_results(ui, results)
     assert "KeyError" not in ui.text
-    monkeypatch.setenv("AIOLAB_DEBUG", "1")
+    monkeypatch.setenv("GREENRAY_DEBUG", "1")
     lab.show_results(ui, results)
     assert "KeyError" in ui.text
-    assert os.environ["AIOLAB_DEBUG"] == "1"
+    assert os.environ["GREENRAY_DEBUG"] == "1"

@@ -5,9 +5,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from aiolab.content import questions as qb
-from aiolab.content import scenarios as sc
-from aiolab.content.validate import coverage_ids, structural_problems
+from greenray.content import questions as qb
+from greenray.content import scenarios as sc
+from greenray.content.validate import coverage_ids, structural_problems
 
 
 def test_no_structural_problems():

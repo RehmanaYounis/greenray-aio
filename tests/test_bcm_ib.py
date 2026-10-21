@@ -1,15 +1,15 @@
 """Tests for cmsh (BCM), InfiniBand tools, NCCL tests and ops helpers."""
 
-from aiolab import commands
+from greenray import commands
 
 # Importing a command module directly fills the registry partially; dispatch() only
 # loads every module when the registry is empty, so load them all explicitly first.
 commands._load_all()
 
-from aiolab.commands.cmsh import _split_cmds, expand_nodes  # noqa: E402
-from aiolab.commands.ib import match_list, nccl_conf  # noqa: E402
-from aiolab.core.shell import Shell  # noqa: E402
-from aiolab.core.state import make_cluster  # noqa: E402
+from greenray.commands.cmsh import _split_cmds, expand_nodes  # noqa: E402
+from greenray.commands.ib import match_list, nccl_conf  # noqa: E402
+from greenray.core.shell import Shell  # noqa: E402
+from greenray.core.state import make_cluster  # noqa: E402
 
 MPI = "mpirun --allow-run-as-root -np 16 -H dgx-01:8,dgx-02:8"
 

@@ -1,0 +1,93 @@
+id: ins-dpu-doca-service
+title: Bring up dgx-01's BlueField-3 and deploy the DOCA Telemetry Service
+domain: Installation and Deployment
+difficulty: hard
+time_limit_min: 25
+tags: [dpu, bluefield, doca, rshim, bfb, kubelet, ngc]
+briefing: |
+  dgx-01's BlueField-3 DPU (bf3-0, /dev/mst/mt41692_pciconf0 once MST is
+  started) is back from the integrator. Its Arm OS should be reachable as host
+  dpu-01, but `ssh dpu-01` fails, and nobody knows what was done to the card.
+
+  Staged on dgx-01:
+    /root/bfb/bf-bundle-2.7.0-33_24.04_ubuntu-22.04_prod.bfb   BlueField bundle (DOCA 2.7.0)
+    /root/doca/doca_telemetry.yaml   DOCA Telemetry Service (DTS) pod manifest
+                                     from NGC's DOCA container configs resource
+
+  Make the card run as a DPU with the DOCA 2.7.0 bundle installed. Leave the
+  host-side rshim driver running and enabled at boot so the DPU can be managed
+  from dgx-01. Then deploy DTS on the DPU the way DOCA services are deployed
+  (standalone kubelet, container pulled from NGC) and verify that its container
+  is running.
+objectives:
+  - The BlueField-3 runs in DPU mode (Arm cores own the embedded switch)
+  - rshim is active and enabled on dgx-01
+  - The DOCA 2.7.0 BFB is installed and dpu-01 is reachable
+  - DTS is deployed as a static pod on dpu-01 and you verified its container is Running
+setup:
+  - python: |
+      from greenray.commands.dpu import attach_dpu
+      # shipped in NIC mode, no OS on the Arm side yet, rshim installed but not enabled
+      attach_dpu(state, host='dgx-01', arm_host='dpu-01', nic_mode=True, bfb=None, rshim='inactive')
+  - file: /root/bfb/bf-bundle-2.7.0-33_24.04_ubuntu-22.04_prod.bfb
+    host: dgx-01
+    content: "(BlueField boot stream: ATF + UEFI + Ubuntu 22.04 + DOCA 2.7.0 + NIC firmware, 1.4 GiB)\n"
+  - file: /root/doca/doca_telemetry.yaml
+    host: dgx-01
+    content: |
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: doca-telemetry-service
+      spec:
+        hostNetwork: true
+        volumes:
+          - name: telemetry-service-config
+            hostPath:
+              path: /opt/mellanox/doca/services/telemetry/config
+              type: DirectoryOrCreate
+          - name: telemetry-service-ipc-sockets
+            hostPath:
+              path: /opt/mellanox/doca/services/telemetry/ipc_sockets
+              type: DirectoryOrCreate
+          - name: telemetry-service-data
+            hostPath:
+              path: /opt/mellanox/doca/services/telemetry/data
+              type: DirectoryOrCreate
+        containers:
+          - name: doca-telemetry-service
+            image: nvcr.io/nvidia/doca/doca_telemetry:1.17.2-doca2.7.0
+            imagePullPolicy: IfNotPresent
+            resources:
+              limits:
+                memory: "1Gi"
+            volumeMounts:
+              - name: telemetry-service-config
+                mountPath: /config
+              - name: telemetry-service-ipc-sockets
+                mountPath: /tmp/ipc_sockets
+              - name: telemetry-service-data
+                mountPath: /data
+checks:
+  - desc: you queried the DPU's firmware configuration with mlxconfig
+    expr: ran(r'^mlxconfig .*\b(q|query)\b', 'dgx-01')
+  - desc: the BlueField-3 is running in DPU mode (embedded CPU owns the eswitch, offload engine enabled)
+    expr: "all(nodes['dgx-01'].dpus[0].cfg[k] == v for k, v in {'INTERNAL_CPU_MODEL': 1, 'INTERNAL_CPU_PAGE_SUPPLIER': 0, 'INTERNAL_CPU_ESWITCH_MANAGER': 0, 'INTERNAL_CPU_IB_VPORT0': 0, 'INTERNAL_CPU_OFFLOAD_ENGINE': 0}.items())"
+  - desc: rshim is active and enabled on dgx-01
+    expr: nodes['dgx-01'].services.get('rshim') == 'active' and nodes['dgx-01'].services_enabled.get('rshim') is True
+  - desc: the DOCA 2.7.0 BFB is installed and dpu-01 is up
+    expr: nodes['dgx-01'].dpus[0].bfb == '2.7.0' and nodes['dpu-01'].up
+  - desc: a DTS pod manifest (doca_telemetry image from nvcr.io) is in /etc/kubelet.d on dpu-01 and kubelet is running
+    expr: "nodes['dpu-01'].services.get('kubelet') == 'active' and any(re.search(r'image:\\s*[\"\\']?nvcr\\.io/nvidia/doca/doca_telemetry:', str(t)) for p, t in nodes['dpu-01'].files.items() if p.startswith('/etc/kubelet.d/') and p.endswith(('.yaml', '.yml')))"
+  - desc: you verified on dpu-01 (crictl ps) that the DTS container is Running
+    expr: "'doca-telemetry-service' in flags.get('dpu_running', {}).get('dpu-01', [])"
+hints:
+  - "Start on dgx-01: is the rshim driver running (systemctl status rshim)? Then mst start and mlxconfig -d /dev/mst/mt41692_pciconf0 q. Which INTERNAL_CPU_* values say whether the Arm cores or the host own the card?"
+  - "INTERNAL_CPU_OFFLOAD_ENGINE DISABLED(1) and the EXT_HOST_PF values mean NIC mode: the Arm cores don't run an OS, so there is no dpu-01 to install onto or ssh into. mlxconfig only changes the Next Boot value. Use mlxconfig -e q to compare Current and Next Boot."
+  - "DPU mode: mlxconfig -d <dev> -y s INTERNAL_CPU_MODEL=1 INTERNAL_CPU_PAGE_SUPPLIER=0 INTERNAL_CPU_ESWITCH_MANAGER=0 INTERNAL_CPU_IB_VPORT0=0 INTERNAL_CPU_OFFLOAD_ENGINE=0, then reboot dgx-01 (a cold power cycle on real hardware). Afterwards systemctl enable --now rshim and check /dev/rshim0."
+  - "bfb-install --bfb /root/bfb/<file>.bfb --rshim rshim0 re-images the DPU. Then copy the manifest into the kubelet's static pod directory on the DPU: scp /root/doca/doca_telemetry.yaml dpu-01:/etc/kubelet.d/. Verify with ssh dpu-01 and crictl pods / crictl ps."
+references:
+  - NVIDIA BlueField DPU BSP documentation - Modes of Operation (DPU mode / NIC mode)
+  - NVIDIA BlueField DPU BSP documentation - Deploying BlueField Software Using BFB from Host (rshim, bfb-install)
+  - NVIDIA DOCA Container Deployment Guide (standalone kubelet, /etc/kubelet.d)
+  - NVIDIA DOCA Telemetry Service Guide

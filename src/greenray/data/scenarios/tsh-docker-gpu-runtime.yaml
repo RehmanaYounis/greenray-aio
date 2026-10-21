@@ -1,0 +1,88 @@
+id: tsh-docker-gpu-runtime
+title: Inference containers down after a Docker config change
+domain: Troubleshooting and Optimization
+difficulty: medium
+time_limit_min: 20
+tags: [docker, nvidia-container-toolkit, containers, daemon.json, troubleshooting]
+briefing: |
+  dgx-02 runs a small Triton inference stack with Docker Compose
+  (/opt/infer/compose.yaml, project "infer"):
+    - triton-a must use GPUs 0 and 1 only
+    - triton-b must use GPUs 2 and 3 only
+  The other four GPUs are rented to another team's containers, so each service may only
+  *see* its own two GPUs.
+
+  Yesterday a colleague added log rotation and the corporate registry mirror to
+  /etc/docker/daemon.json and restarted Docker. Since then the stack is down. Also, last
+  week's security audit flagged that triton-b's container "can see all 8 GPUs" in nvidia-smi.
+
+  Bring the stack back up on dgx-02 with each service isolated to its own GPUs. Keep the
+  log rotation and registry mirror settings your colleague added.
+  (Lab note: `cd` does not change directory in this shell. Use `docker compose -f /opt/infer/compose.yaml ...`.)
+objectives:
+  - Docker is running on dgx-02 with a valid daemon.json that keeps the log rotation and registry mirror settings
+  - infer-triton-a-1 is up and sees exactly GPUs 0 and 1
+  - infer-triton-b-1 is up and sees exactly GPUs 2 and 3
+setup:
+  - file: /opt/infer/compose.yaml
+    host: dgx-02
+    content: |
+      name: infer
+      services:
+        triton-a:
+          image: nvcr.io/nvidia/tritonserver:24.05-py3
+          command: tritonserver --model-repository=/models --http-port=8000
+          restart: unless-stopped
+          shm_size: 8gb
+          environment:
+            - NVIDIA_VISIBLE_DEVICES=0,1
+          ports:
+            - "8000:8000"
+        triton-b:
+          image: nvcr.io/nvidia/tritonserver:24.05-py3
+          command: tritonserver --model-repository=/models --http-port=8100
+          restart: unless-stopped
+          shm_size: 8gb
+          environment:
+            - CUDA_VISIBLE_DEVICES=2,3
+          ports:
+            - "8100:8100"
+  - python: |
+      from greenray.commands import container as ct
+      from greenray.core.shell import Shell
+      n = state.nodes["dgx-02"]
+      n.docker_images.append("nvcr.io/nvidia/tritonserver:24.05-py3")
+      ct.container_init(state)
+      sh = Shell(state)
+      sh.run("ssh dgx-02")
+      sh.run("docker compose -f /opt/infer/compose.yaml up -d")
+      n.files["/etc/docker/daemon.json"] = (
+          '{\n'
+          '    "log-driver": "json-file",\n'
+          '    "log-opts": {\n'
+          '        "max-size": "100m",\n'
+          '        "max-file": "5"\n'
+          '    },\n'
+          '    "registry-mirrors": ["https://registry-mirror.corp.example:5000"],\n'
+          '}\n')
+      sh.run("systemctl restart docker")
+      n.journal["docker"] = [l.replace("10:31:0", "17:42:0") for l in n.journal.get("docker", [])]
+checks:
+  - desc: docker is active on dgx-02
+    expr: "nodes['dgx-02'].services.docker == 'active'"
+  - desc: daemon.json is valid and still has the log rotation and registry mirror settings
+    expr: "nodes['dgx-02'].runtime_loaded.docker.default in nodes['dgx-02'].runtime_loaded.docker.handlers and re.search(r'\"max-size\"\\s*:\\s*\"100m\"', file('dgx-02', '/etc/docker/daemon.json')) is not None and 'registry-mirror.corp.example:5000' in file('dgx-02', '/etc/docker/daemon.json') and not re.search(r',\\s*[}\\]]', file('dgx-02', '/etc/docker/daemon.json'))"
+  - desc: infer-triton-a-1 is up with exactly GPUs 0 and 1
+    expr: "any(c.name == 'infer-triton-a-1' and c.status.startswith('Up') and sorted(c.gpus) == [0, 1] for c in nodes['dgx-02'].containers)"
+  - desc: infer-triton-b-1 is up with exactly GPUs 2 and 3
+    expr: "any(c.name == 'infer-triton-b-1' and c.status.startswith('Up') and sorted(c.gpus) == [2, 3] for c in nodes['dgx-02'].containers)"
+  - desc: you read the Docker daemon's own error
+    expr: "ran(r'^(journalctl .*docker|systemctl status docker)', 'dgx-02')"
+hints:
+  - "Start with the daemon itself: `systemctl status docker` and `journalctl -u docker` on dgx-02. Docker prints exactly what it doesn't like about daemon.json."
+  - "Once dockerd starts, look at `docker ps -a` and the journal again. The containers were created with a runtime name stored in their config (`docker inspect -f '{{.HostConfig.Runtime}}' infer-triton-a-1`). Does the new daemon.json still define that runtime?"
+  - "`nvidia-ctk runtime configure --runtime=docker --set-as-default` merges the nvidia runtime (and default-runtime) back into daemon.json and keeps the other keys. Restart Docker afterwards."
+  - "For triton-b, compare `docker exec infer-triton-b-1 nvidia-smi -L` with its environment. CUDA_VISIBLE_DEVICES only filters inside CUDA. Which GPUs a container *sees* is decided by the runtime through NVIDIA_VISIBLE_DEVICES (or a GPU device request). Fix the compose file and `docker compose -f /opt/infer/compose.yaml up -d`."
+references:
+  - NVIDIA Container Toolkit - Configuring Docker / Specialized configurations (NVIDIA_VISIBLE_DEVICES)
+  - Docker documentation - daemon.json configuration file, Compose GPU support (deploy.resources.reservations.devices)

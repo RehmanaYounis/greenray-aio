@@ -4,8 +4,8 @@ A scenario has two files with the same name:
 
 | File | Repository | Contents |
 | --- | --- | --- |
-| `src/aiolab/data/scenarios/<id>.yaml` | public (this repo) | Problem: briefing, objectives, setup (fault injection), checks (grading), hints |
-| `scenarios/<id>.yaml` | private `NVIDIA-NCP-AIO-Prep-solutions` | Answer: reference solution, explanation, edge cases |
+| `src/greenray/data/scenarios/<id>.yaml` | public (this repo) | Problem: briefing, objectives, setup (fault injection), checks (grading), hints |
+| `scenarios/<id>.yaml` | private solutions repo (`greenray-aio-solutions`) | Answer: reference solution, explanation, edge cases |
 
 The loader refuses a public file that contains `solution`, `explanation` or `edge_cases`, so answers can't leak into the public repo by accident.
 
@@ -19,7 +19,7 @@ title: Short, symptom-style title
 domain: Troubleshooting and Optimization   # one of the 4 blueprint domains, spelled exactly
 difficulty: medium                          # easy | medium | hard
 time_limit_min: 15
-tags: [slurm, xid]                          # `slurm`, `kubernetes` or `bcm` makes it eligible for `aiolab mock`
+tags: [slurm, xid]                          # `slurm`, `kubernetes` or `bcm` makes it eligible for `greenray mock`
 briefing: |
   What the user or ticket says. Describe symptoms, not the cause.
 objectives:
@@ -64,8 +64,8 @@ edge_cases:
 
 ## How scenarios are presented
 
-- `aiolab lab <id>` (guided) shows the title, briefing and objectives.
-- `aiolab incident` shows only the briefing, so write the **briefing as an incident report**: symptoms, impact, and every constraint the learner must respect (e.g. "don't kill bob's job"). It must never name the root cause.
+- `greenray lab <id>` (guided) shows the title, briefing and objectives.
+- `greenray incident` shows only the briefing, so write the **briefing as an incident report**: symptoms, impact, and every constraint the learner must respect (e.g. "don't kill bob's job"). It must never name the root cause.
 - Objectives and check descriptions may name the cause. In incident mode they stay hidden until solved, or until the learner chooses `objectives`.
 - Hints should go from a pointer to an area, to a diagnostic command, to (only in the last hint) something close to the fix. The last hint is shown only after confirmation.
 
@@ -75,13 +75,13 @@ These names are available in `checks` expressions: `state`, `nodes`, `slurm`, `k
 
 - Grade the **end state**, so that any valid solution passes, and accept every legitimate way to reach it.
 - Use `ran()` only to require evidence gathering. `ran()` does **not** know the order of commands, so don't write "first" or "before …" in its description. Real ordering needs state the commands record (e.g. `slurm.nodes[n].last_resume_diag`).
-- A check that raises an exception counts as failed. The error text is shown only by `aiolab validate` or with `AIOLAB_DEBUG=1`.
+- A check that raises an exception counts as failed. The error text is shown only by `greenray validate` or with `GREENRAY_DEBUG=1`.
 - Scenario files are trusted code (`eval` for checks, `exec` for `python:` setup). Never load them from untrusted sources.
 - State objects are dicts with attribute access. A key that clashes with a dict method (`values`, `items`, `keys`, `get`, `update`, `pop`) must be read with `obj['values']`, not `obj.values`. For Helm releases, use `release('x').computed`, which holds the chart defaults merged with user values.
-- The state layout is documented in `src/aiolab/core/state.py`.
+- The state layout is documented in `src/greenray/core/state.py`.
 
 ## Checklist for a new scenario
 
 1. Add the id to `docs/COVERAGE.md` under its blueprint topic.
-2. `uv run aiolab validate` should show `ok` for it.
+2. `uv run greenray validate` should show `ok` for it.
 3. `uv run pytest` should pass.

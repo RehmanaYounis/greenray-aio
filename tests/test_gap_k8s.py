@@ -4,12 +4,12 @@ import json
 
 import pytest
 
-from aiolab.commands import container as ct
-from aiolab.commands import helm
-from aiolab.commands import kubectl as kc
-from aiolab.commands import runai as ra
-from aiolab.core.shell import Shell
-from aiolab.core.state import make_cluster
+from greenray.commands import container as ct
+from greenray.commands import helm
+from greenray.commands import kubectl as kc
+from greenray.commands import runai as ra
+from greenray.core.shell import Shell
+from greenray.core.state import make_cluster
 
 TS_CM = """\
 apiVersion: v1

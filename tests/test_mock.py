@@ -1,5 +1,5 @@
-from aiolab.app import mock
 from conftest import ScriptedUI, requires_solutions
+from greenray.app import mock
 
 
 def test_pick_labs_one_per_platform():

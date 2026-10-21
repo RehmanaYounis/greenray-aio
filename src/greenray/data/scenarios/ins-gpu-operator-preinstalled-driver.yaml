@@ -1,0 +1,56 @@
+id: ins-gpu-operator-preinstalled-driver
+title: Install the GPU Operator on DGX nodes that already have a driver
+domain: Installation and Deployment
+difficulty: medium
+time_limit_min: 20
+tags: [kubernetes, helm, gpu-operator, dgx-os]
+briefing: |
+  The Kubernetes cluster managed by BCM (control plane on bcm-head, workers dgx-01..dgx-04)
+  must start running GPU workloads. A colleague tried to install the NVIDIA GPU Operator
+  from his own account yesterday with the values file in /root/gpu-operator-values.yaml,
+  then went on leave. Nothing GPU-related works: no node advertises nvidia.com/gpu.
+
+  The DGX nodes run DGX OS, which already ships the NVIDIA data-center driver
+  (550.90.07) and keeps it loaded for nvidia-persistenced, Fabric Manager and DCGM.
+
+  Work from bcm-head as root. Your Helm client has no chart repositories configured yet.
+  Leave the cluster with a single, healthy GPU Operator release in the gpu-operator
+  namespace that uses the drivers already on the nodes.
+objectives:
+  - The NVIDIA NGC Helm repository is configured in your Helm client
+  - Exactly one GPU Operator release exists, and it does not deploy the containerized driver
+  - No nvidia-driver-daemonset pods are left in the gpu-operator namespace
+  - The device plugin runs on dgx-01..dgx-04, and each node advertises 8 allocatable nvidia.com/gpu
+  - The ClusterPolicy reports ready
+setup:
+  - python: |
+      from greenray.commands import helm
+      helm.preinstall(state, "nvidia/gpu-operator", name="gpu-operator", namespace="gpu-operator",
+                      values={"driver": {"enabled": True}, "toolkit": {"enabled": True}}, settle=1500)
+      # the colleague used his own Helm client: root has no repos configured
+      del state.k8s.helm_repos["nvidia"]
+checks:
+  - desc: NGC Helm repo https://helm.ngc.nvidia.com/nvidia is configured
+    expr: "'https://helm.ngc.nvidia.com/nvidia' in [u.rstrip('/') for u in k8s.helm_repos.values()]"
+  - desc: exactly one GPU Operator release, deployed, with driver.enabled=false
+    expr: "len([r for r in k8s.helm_releases if r.chart == 'gpu-operator']) == 1 and all(r.status == 'deployed' and str(r.computed.driver.enabled).lower() == 'false' for r in k8s.helm_releases if r.chart == 'gpu-operator')"
+  - desc: the ClusterPolicy does not manage the driver
+    expr: "k8s.clusterpolicy is not None and str(k8s.clusterpolicy.spec.driver.enabled).lower() == 'false'"
+  - desc: no nvidia-driver-daemonset pods remain
+    expr: "not pods('gpu-operator', 'nvidia-driver-daemonset')"
+  - desc: device plugin Running on all four DGX nodes
+    expr: "sorted(p.node for p in pods('gpu-operator', 'nvidia-device-plugin-daemonset') if p.status == 'Running') == ['dgx-01', 'dgx-02', 'dgx-03', 'dgx-04']"
+  - desc: every DGX node has 8 allocatable nvidia.com/gpu
+    expr: "all(k8s.nodes[n].allocatable.get('nvidia.com/gpu') == '8' for n in ['dgx-01', 'dgx-02', 'dgx-03', 'dgx-04'])"
+  - desc: ClusterPolicy status is ready
+    expr: "k8s.clusterpolicy is not None and k8s.clusterpolicy.status.state == 'ready'"
+  - desc: you read the driver pod's logs (or events)
+    expr: "ran(r'kubectl (logs|describe).*nvidia-driver')"
+hints:
+  - "Start with `kubectl get pods -n gpu-operator`. Which pod crashes, and which pods are only waiting in Init because of it?"
+  - "Read the crashing container's output: `kubectl logs -n gpu-operator ds/nvidia-driver-daemonset`. What does it try to unload, and why does that fail on a DGX?"
+  - "Compare `helm get values` with the file the colleague used. To keep the host driver, the operator has to be told not to deploy its own driver (driver.enabled)."
+  - "Helm can only resolve nvidia/gpu-operator after `helm repo add nvidia https://helm.ngc.nvidia.com/nvidia`. Then either `helm upgrade ... --reuse-values --set driver.enabled=false`, or uninstall and reinstall with that value."
+references:
+  - NVIDIA GPU Operator documentation - Getting Started / Pre-installed drivers
+  - DGX OS User Guide - Kubernetes

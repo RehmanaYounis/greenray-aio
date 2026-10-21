@@ -3,14 +3,14 @@ and BlueField DPU tooling (mlxconfig, rshim, bfb-install, static pods on the DPU
 
 import pytest
 
-from aiolab import commands
+from greenray import commands
 
 commands._load_all()
 
-from aiolab.commands.dpu import attach_dpu  # noqa: E402
-from aiolab.commands.gds import pipeline  # noqa: E402
-from aiolab.core.shell import Shell  # noqa: E402
-from aiolab.core.state import make_cluster  # noqa: E402
+from greenray.commands.dpu import attach_dpu  # noqa: E402
+from greenray.commands.gds import pipeline  # noqa: E402
+from greenray.core.shell import Shell  # noqa: E402
+from greenray.core.state import make_cluster  # noqa: E402
 
 MPI = "mpirun --allow-run-as-root -np 16 -H dgx-01:8,dgx-02:8"
 BFB = "/root/bfb/bf-bundle-2.7.0-33_24.04_ubuntu-22.04_prod.bfb"

@@ -1,0 +1,4 @@
+# Normalise line endings in the repository (avoids CRLF noise on Windows-drive clones)
+* text=auto eol=lf
+*.png binary
+*.ico binary

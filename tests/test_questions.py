@@ -1,6 +1,6 @@
-from aiolab.content import questions as qb
-from aiolab.content.domains import DOMAINS
 from conftest import requires_solutions
+from greenray.content import questions as qb
+from greenray.content.domains import DOMAINS
 
 
 def test_bank_covers_every_domain():
