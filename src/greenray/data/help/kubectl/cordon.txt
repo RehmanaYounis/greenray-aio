@@ -1,0 +1,19 @@
+Mark node as unschedulable.
+
+ The scheduler stops placing new pods on a cordoned node. Pods that are already
+running there are left alone; use "kubectl drain" to move them away as well.
+"kubectl get nodes" shows SchedulingDisabled in the STATUS column.
+
+Examples:
+  # Stop new pods from landing on node01
+  kubectl cordon node01
+
+  # Cordon every node with a label
+  kubectl cordon -l disktype=ssd
+
+Options:
+    -l, --selector='':
+        Cordon the nodes that match this selector.
+
+Usage:
+  kubectl cordon NODE [options]

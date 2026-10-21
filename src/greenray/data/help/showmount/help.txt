@@ -1,0 +1,10 @@
+Usage: showmount [-e] [--exports] [--help] [host]
+
+  -e, --exports      show the export list of the NFS server on host
+                     (the local host when host is omitted)
+      --help         display this help and exit
+
+The export list shows each exported directory followed by the clients
+allowed to mount it.
+
+(GreenRay AIO simulates the options listed above.)

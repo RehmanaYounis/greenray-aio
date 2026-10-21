@@ -1,0 +1,10 @@
+Usage: head [OPTION]... [FILE]...
+Print the first 10 lines of each FILE to standard output.
+
+With no FILE, read standard input.
+
+  -n NUM                   print the first NUM lines instead of the first 10
+  -NUM                     same as -n NUM
+      --help        display this help and exit
+
+(GreenRay AIO simulates the options listed above.)

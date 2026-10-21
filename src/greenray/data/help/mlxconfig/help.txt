@@ -1,0 +1,32 @@
+
+    NAME
+        mlxconfig - Changes the device configuration
+
+    SYNOPSIS
+        mlxconfig [Options] <commands> [Parameters]
+
+    DESCRIPTION
+        Allows the user to change some of the device configurations without
+        having to create and burn a new firmware. New values take effect
+        after the next reboot (or firmware reset).
+
+    OPTIONS
+        -d|--dev <device>               : MST device, RDMA device or PCI address to work with
+        -e|--enable_verbosity           : Show the default and current values next to the
+                                          next-boot value
+        -h|--help                       : Display help message
+        -y|--yes                        : Answer yes to the confirmation prompt
+
+    COMMANDS SUMMARY
+        q[uery]                         : Query the supported configurations (all, or the
+                                          parameters named after the command)
+        r[eset]                         : Reset all configurations to their default values
+        s[et]                           : Set configurations to a specific device
+
+    EXAMPLES
+        To query the current configuration    : mlxconfig -d /dev/mst/mt41692_pciconf0 q
+        To query a single parameter            : mlxconfig -d /dev/mst/mt41692_pciconf0 q LINK_TYPE_P1
+        To set a configuration                 : mlxconfig -d /dev/mst/mt41692_pciconf0 set SRIOV_EN=1
+        To reset all configurations            : mlxconfig -d /dev/mst/mt41692_pciconf0 reset
+
+    (GreenRay AIO simulates the options listed above.)

@@ -1,0 +1,12 @@
+
+Usage:
+ pkill [options] <pattern>
+
+Options:
+ -<sig>                    signal to send (number or name), e.g. -9
+
+ -h, --help     display this help and exit
+
+<pattern> is the process name or PID to signal.
+
+(GreenRay AIO simulates the options listed above.)

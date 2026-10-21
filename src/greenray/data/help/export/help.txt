@@ -1,0 +1,8 @@
+export: export [name[=value] ...]
+    Set export attribute for shell variables.
+    
+    Marks each NAME for automatic export to the environment of commands
+    run later. When VALUE is given, it is assigned before exporting.
+    
+    Exit Status:
+    Returns success unless an invalid option is given or NAME is invalid.

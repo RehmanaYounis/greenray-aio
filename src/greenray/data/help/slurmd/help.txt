@@ -1,0 +1,12 @@
+Usage: slurmd [OPTIONS]
+   -C                         Print the node's detected hardware as a
+                              slurm.conf NodeName line, then exit.
+   -G                         Print the GRES (GPU) configuration slurmd
+                              would use on this node, then exit.
+   -h                         Print this help message.
+   -V                         Print version information and exit.
+
+Normally slurmd runs as a systemd service (systemctl status slurmd);
+start, stop and restart it with systemctl.
+
+(GreenRay AIO simulates the options listed above.)

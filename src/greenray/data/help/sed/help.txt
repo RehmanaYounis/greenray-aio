@@ -1,0 +1,16 @@
+Usage: sed [OPTION]... {script-only-if-no-other-script} [input-file]
+
+  -e script
+                 add the script to the commands to be executed
+  -i[SUFFIX]
+                 edit files in place
+      --help     display this help and exit
+
+If no -e option is given, the first non-option argument is taken as the
+sed script to interpret. If no input file is given, standard input is
+read.
+
+Supported commands:  s/regexp/replacement/[g]   [/regexp/]d
+An optional /regexp/ address limits s to the matching lines.
+
+(GreenRay AIO simulates the options listed above.)

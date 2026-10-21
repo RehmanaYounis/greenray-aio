@@ -1,0 +1,38 @@
+NAME:
+   crictl - client for CRI
+
+USAGE:
+   crictl [global options] command [command options] [arguments...]
+
+VERSION:
+   v1.28.0
+
+DESCRIPTION:
+   crictl talks to the node's container runtime (containerd) through the
+   Container Runtime Interface. It shows the pods and containers that the
+   kubelet started on THIS node, which is useful when kubectl cannot reach the
+   API server or when a container fails before Kubernetes reports anything.
+
+COMMANDS:
+   images              List the images the runtime has pulled for pods on this node
+   info                Display runtime information, including the configured runtime handlers, as JSON
+   logs                Fetch the logs of a container (use an ID from "crictl ps -a")
+   pods                List the pod sandboxes on this node
+   ps                  List containers
+   help                Shows a list of commands or help for one command
+
+COMMAND OPTIONS (ps):
+   --all, -a      Show all containers, including exited ones (default: false)
+   --name value   Filter containers by name (substring match)
+
+GLOBAL OPTIONS:
+   --help, -h  show help
+
+EXAMPLES:
+   crictl ps
+   crictl ps -a --name my-container
+   crictl pods
+   crictl logs 3f1c2a9b7d4e5
+   crictl info
+
+(GreenRay AIO simulates the commands and options listed above.)

@@ -1,0 +1,11 @@
+Usage: cm-chroot-sw-img <image-directory> [command [args...]]
+
+Change root into a BCM software image directory (normally /cm/images/<name>)
+after bind-mounting /proc, /sys and /dev, run the command (or a shell when
+none is given), then unmount everything again.
+
+Use it to install or remove packages inside an image, for example:
+  cm-chroot-sw-img /cm/images/<image> apt-get install -y <package>
+
+Changes reach running nodes only after an image update (cmsh: device;
+imageupdate) or a reboot that provisions them from the image.

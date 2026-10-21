@@ -1,0 +1,35 @@
+sacct [<OPTION>]
+    Valid <OPTION> values are:
+     -a, --allusers:
+                   Show jobs of all users (the default for root).
+     --help:       Print this description of use.
+     -j, --jobs:
+                   Comma separated list of job IDs to show.  A step
+                   suffix (jobid.step) is accepted and matches the job.
+     -n, --noheader:
+                   Leave out the header lines.
+     -o, --format:
+                   Comma separated list of fields to print.  A width may
+                   be appended with %, for example JobName%30.
+     -p, --parsable: output is '|' delimited, with a trailing '|'
+     -P, --parsable2: output is '|' delimited, without a trailing '|'
+     -s, --state:
+                   Show only jobs in these states (comma list of names
+                   such as COMPLETED,FAILED or codes such as CD,F).
+     -u, --user:
+                   Show only jobs of this user.
+     -X, --allocations:
+                   Show allocations only; leave out the job steps.
+
+Fields available for --format:
+
+AllocCPUS         AllocNodes        AllocTRES         Account
+Cluster           Comment           DerivedExitCode   Elapsed
+End               ExitCode          JobID             JobIDRaw
+JobName           MaxRSS            NNodes            NTasks
+NodeList          Partition         Priority          QOS
+Reason            ReqCPUS           ReqTRES           Start
+State             Submit            SubmitLine        Timelimit
+User              WorkDir
+
+(GreenRay AIO simulates the options listed above.)

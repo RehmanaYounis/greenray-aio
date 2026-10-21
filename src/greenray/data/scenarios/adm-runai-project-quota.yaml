@@ -1,0 +1,75 @@
+id: adm-runai-project-quota
+title: Onboard two teams to Run:ai with guaranteed GPU quotas
+domain: Administration
+difficulty: medium
+time_limit_min: 20
+tags: [kubernetes, runai, quota, preemption, multi-tenancy]
+briefing: |
+  NVIDIA Run:ai manages the GPUs of dgx-03 and dgx-04 (16 H100s). The platform team has
+  already created the department "research" with a quota of 16 GPUs. Two teams are joining it:
+
+    project  deserved GPUs  over-quota                  members
+    -------  -------------  --------------------------  -----------------------------------
+    nlp      6              allowed (may burst on idle  alice@corp.ai (researcher)
+                            GPUs)
+    vision   10             NOT allowed (benchmarks     bob@corp.ai (researcher)
+                            must never use more than
+                            10 GPUs)
+
+  carol@corp.ai leads both teams and needs the "Research manager" role on both projects.
+  alice must not get access to vision, and bob must not get access to nlp.
+
+  Today the GPUs are busy: the "sandbox" project (no quota of its own) runs hyper-parameter
+  sweeps on all 16 GPUs. Its owners know their jobs are opportunistic.
+
+  When the projects exist, prove that vision really gets its guaranteed GPUs: submit an
+  8-GPU training workload named "vision-smoke" (image nvcr.io/nvidia/pytorch:24.05-py3)
+  into vision and get it Running. Do not delete anyone else's workloads.
+
+  Lab note: in a real cluster, departments, projects and access rules are created by an
+  admin in the Run:ai UI or REST API, not with the researcher CLI. Here the lab helper
+  `runai-ui` stands in for the UI (`runai-ui --help`). Researchers use the real `runai` CLI.
+objectives:
+  - Projects nlp (6 GPUs, over-quota allowed) and vision (10 GPUs, no over-quota) exist in department research
+  - Each project has its namespace (runai-nlp, runai-vision)
+  - alice -> nlp, bob -> vision, carol -> both as Research manager, and nobody has extra access
+  - vision-smoke (8 GPUs) is Running in vision, and the sandbox sweeps were preempted, not deleted
+setup:
+  - python: |
+      from greenray.commands import helm, kubectl as kc, runai as ra
+      helm.preinstall(state, "nvidia/gpu-operator", values={"driver": {"enabled": False}}, settle=86400 * 3)
+      ra.install(state, nodes=["dgx-03", "dgx-04"])
+      ra.create_department(state, "research", 16)
+      ra.create_project(state, "sandbox", "default", 0)
+      state.runai.users.extend(["alice@corp.ai", "bob@corp.ai", "carol@corp.ai", "dave@corp.ai"])
+      state.runai.access_rules.append({"user": "dave@corp.ai", "role": "L1 researcher", "project": "sandbox"})
+      for i in range(4):
+          ra.submit(state, f"hpo-sweep-{i}", "sandbox", "nvcr.io/nvidia/pytorch:24.05-py3", 4,
+                    user="dave@corp.ai", command="python sweep.py --trial-range %d" % i, created=kc.now(state) + i)
+      kc.reconcile(state)
+      kc.advance(state, 3600)
+      kc.reconcile(state)
+checks:
+  - desc: project nlp is in department research with 6 deserved GPUs and over-quota allowed
+    expr: "'nlp' in state.runai.projects and state.runai.projects.nlp.department == 'research' and state.runai.projects.nlp.gpu_quota == 6 and state.runai.projects.nlp.over_quota"
+  - desc: project vision is in department research with 10 deserved GPUs and cannot go over 10
+    expr: "'vision' in state.runai.projects and state.runai.projects.vision.department == 'research' and state.runai.projects.vision.gpu_quota == 10 and (not state.runai.projects.vision.over_quota or (state.runai.projects.vision.max_gpus is not None and state.runai.projects.vision.max_gpus <= 10))"
+  - desc: namespaces runai-nlp and runai-vision exist
+    expr: "'runai-nlp' in k8s.namespaces and 'runai-vision' in k8s.namespaces"
+  - desc: alice has access to nlp only, bob to vision only
+    expr: "{a.project for a in state.runai.access_rules if a.user == 'alice@corp.ai'} == {'nlp'} and {a.project for a in state.runai.access_rules if a.user == 'bob@corp.ai'} == {'vision'}"
+  - desc: carol is Research manager on nlp and vision
+    expr: "all(any(a.user == 'carol@corp.ai' and a.project == p and a.role == 'Research manager' for a in state.runai.access_rules) for p in ('nlp', 'vision'))"
+  - desc: vision-smoke is Running in vision with 8 GPUs
+    expr: "any(w.name == 'vision-smoke' and w.project == 'vision' and w.status == 'Running' and w.gpu == 8 for w in state.runai.workloads)"
+  - desc: the four sandbox sweeps still exist (preempted or running, not deleted)
+    expr: "len([w for w in state.runai.workloads if w.project == 'sandbox' and w.name.startswith('hpo-sweep-')]) == 4"
+hints:
+  - "Look around first: `runai list projects`, `runai list jobs -A`, `runai-ui department list`. Who uses the GPUs today, and is that in quota or over quota?"
+  - "Create each project with its department and deserved GPUs, e.g. `runai-ui project create nlp --department research --gpu-quota 6`. The vision rule is set at creation (or update) with --over-quota disabled (or a --max-gpus limit)."
+  - "Access is given with access rules (subject + role + scope): `runai-ui access-rule create --user alice@corp.ai --project nlp --role 'L1 researcher'`. Repeat for bob and for carol's Research manager role on both projects."
+  - "Then submit as a researcher: `runai submit vision-smoke -i nvcr.io/nvidia/pytorch:24.05-py3 -g 8 -p vision` and watch `runai list jobs -A`. The request is within vision's deserved quota, so the scheduler reclaims GPUs from over-quota workloads."
+references:
+  - NVIDIA Run:ai documentation - Departments, Projects
+  - NVIDIA Run:ai documentation - The Run:ai Scheduler (quota, over-quota, fairness, preemption)
+  - NVIDIA Run:ai documentation - Access rules and roles

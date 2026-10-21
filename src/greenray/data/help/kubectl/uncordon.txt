@@ -1,0 +1,19 @@
+Mark node as schedulable.
+
+ Reverses "kubectl cordon" or "kubectl drain": the scheduler may place new pods
+on the node again. Pods that were evicted earlier are not moved back; their
+controllers decide where replacements run.
+
+Examples:
+  # Allow pods on node01 again
+  kubectl uncordon node01
+
+  # Uncordon every node with a label
+  kubectl uncordon -l disktype=ssd
+
+Options:
+    -l, --selector='':
+        Uncordon the nodes that match this selector.
+
+Usage:
+  kubectl uncordon NODE [options]

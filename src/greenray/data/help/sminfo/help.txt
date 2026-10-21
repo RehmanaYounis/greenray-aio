@@ -1,0 +1,13 @@
+Usage: sminfo [options] <sm_lid|sm_dr_path> [modifier]
+
+Query the SMInfo attribute of the InfiniBand subnet manager. With no
+address, the master SM known to the local port is queried. The output
+shows the SM's LID, GUID, activity count, priority and state.
+
+Options:
+  --help, -h               show this usage message
+
+Examples:
+  sminfo                   # query the master SM
+
+(GreenRay AIO simulates the options listed above.)

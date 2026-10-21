@@ -1,0 +1,18 @@
+apt 2.4.12 (amd64)
+Usage: apt-cache [options] command
+       apt-cache [options] show pkg1 [pkg2 ...]
+
+apt-cache queries the package information APT has cached from the
+repositories. It never changes the system, so it is safe to run at any time.
+
+Most used commands:
+  show - Show a readable record for the package
+  policy - Show the installed version, the candidate version and the
+           repository each version comes from
+
+If "policy" reports "Candidate: (none)" or "Unable to locate package", the
+repository that provides the package is missing or "apt-get update" has not
+been run since it was added.
+
+See the apt-cache(8) and apt.conf(5) manual pages for more information.
+(GreenRay AIO simulates the commands and options listed above.)

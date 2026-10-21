@@ -10,12 +10,12 @@ import time
 
 import pytest
 
-from aiolab.app import lab, progress
-from aiolab.commands import names as command_names
-from aiolab.content import guides, solutions
-from aiolab.content import scenarios as sc
-from aiolab.core.shell import Shell
 from conftest import ScriptedUI, requires_solutions
+from greenray.app import lab, progress
+from greenray.commands import names as command_names
+from greenray.content import guides, solutions
+from greenray.content import scenarios as sc
+from greenray.core.shell import Shell
 
 SID = "tsh-power-cap-persistence"
 DIAGNOSE = [
@@ -236,7 +236,7 @@ def test_debrief_reveals_identity_and_shows_learner_commands():
     s = sc.find(SID)
     assert f"This incident was: {s.title}" in ui.text
     assert "Your commands" in ui.text and "$ nvidia-smi -pl 700" in ui.text
-    assert "Practise next: aiolab incident --id" in ui.text
+    assert "Practise next: greenray incident --id" in ui.text
 
 
 @requires_solutions
@@ -257,12 +257,12 @@ def test_progress_file_contains_no_solution_text():
 
 
 def test_public_works_without_solutions(monkeypatch, tmp_path):
-    monkeypatch.setenv("AIOLAB_SOLUTIONS", str(tmp_path / "nowhere"))
+    monkeypatch.setenv("GREENRAY_SOLUTIONS", str(tmp_path / "nowhere"))
     solutions.clear_cache()
     try:
         ui = play([*DIAGNOSE, *FIX, "check"], incident=True, hide_identity=True)
         assert "All objectives met" in ui.text
         assert "Solutions are not installed" in ui.text
     finally:
-        monkeypatch.delenv("AIOLAB_SOLUTIONS")
+        monkeypatch.delenv("GREENRAY_SOLUTIONS")
         solutions.clear_cache()

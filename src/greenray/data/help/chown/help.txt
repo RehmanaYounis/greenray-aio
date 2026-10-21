@@ -1,0 +1,13 @@
+Usage: chown [OPTION]... [OWNER][:[GROUP]] FILE...
+Change the owner and/or group of each FILE to OWNER and/or GROUP.
+
+  -R, --recursive        operate on files and directories recursively
+      --help     display this help and exit
+
+Leave out OWNER or GROUP to keep the current one.
+
+Examples:
+  chown alice notes.txt        alice becomes the owner of notes.txt
+  chown -R alice:users /data   same for /data and everything below it, group users
+
+(GreenRay AIO simulates the options listed above.)

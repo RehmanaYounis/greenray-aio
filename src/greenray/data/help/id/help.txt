@@ -1,0 +1,11 @@
+Usage: id [OPTION]... [USER]...
+Print the user and group IDs and group memberships of USER, or of the
+current user when USER is omitted.
+
+      --help        display this help and exit
+
+The output has the form uid=N(name) gid=N(group) groups=N(group),...
+Users and groups are resolved through the configured name services, so
+directory (LDAP) accounts are reported the same way as local ones.
+
+(GreenRay AIO simulates the options listed above.)

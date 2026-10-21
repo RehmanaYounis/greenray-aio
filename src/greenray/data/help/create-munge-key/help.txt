@@ -1,0 +1,10 @@
+Usage: create-munge-key [-f] [-h]
+
+Generate a new MUNGE key in /etc/munge/munge.key.
+
+  -f    overwrite the key file if it already exists
+  -h    display this help and exit
+
+This legacy script is superseded by "mungekey --create".
+
+(GreenRay AIO simulates the options listed above.)

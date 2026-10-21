@@ -1,0 +1,6 @@
+Usage: cp [OPTION]... SOURCE DEST
+Copy SOURCE to DEST.
+
+      --help     display this help and exit
+
+(GreenRay AIO simulates the options listed above.)

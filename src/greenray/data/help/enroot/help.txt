@@ -1,0 +1,40 @@
+Usage: enroot COMMAND [ARG...]
+
+Command line utility for manipulating container sandboxes.
+
+ Commands:
+   create  [options] [--] IMAGE
+   import  [options] [--] URI
+   list
+   remove  [--] NAME...
+   start   [options] [--] NAME|IMAGE [COMMAND] [ARG...]
+   version
+
+ Import options:
+   -o NAME          Name of the squashfs file to write (default: derived from the image)
+
+ Create options:
+   -n, --name       Name of the container (default: the image file name without .sqsh)
+
+ Start options:
+   -e, --env KEY[=VAL]   Set an environment variable in the container
+   -m, --mount FSTAB     Mount a host path into the container
+       --rw              Make the container root filesystem writable
+
+ URI format:
+   docker://[USER@][REGISTRY#]IMAGE[:TAG]
+
+   Note the '#' between the registry and the image path. Without a registry
+   part, Docker Hub is used. Credentials for private registries are read from
+   ~/.config/enroot/.credentials (netrc format), for example:
+     machine registry.example.com login myuser password mytoken
+
+ Examples:
+   enroot import docker://ubuntu:22.04
+   enroot import -o myimage.sqsh 'docker://registry.example.com#myorg/myimage:1.0'
+   enroot create --name myimage myimage.sqsh
+   enroot list
+   enroot start myimage cat /etc/os-release
+   enroot remove myimage
+
+(GreenRay AIO simulates the commands and options listed above.)

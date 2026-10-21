@@ -1,0 +1,24 @@
+Usage: dpkg [<option>...] <command>
+
+dpkg is the low-level package tool of Debian-based systems. The query commands
+below are handled by dpkg-query, so "dpkg -l" and "dpkg-query -l" are the same.
+
+Commands:
+  -l|--list [<pattern>...]         List installed packages, concisely. Patterns
+                                   may use shell wildcards, e.g. 'docker*'.
+  -s|--status <package>            Display the status and version of an
+                                   installed package.
+  -h|--help                        Show this help message.
+
+Reading "dpkg -l" output:
+  The first two letters give the desired and the current state: "ii" means
+  the package is marked for install and is installed. The remaining columns
+  are the name, version, architecture and description.
+
+Examples:
+  dpkg -l
+  dpkg -l 'docker*'
+  dpkg -s containerd.io
+
+Use 'apt' or 'apt-get' for installing and removing packages from repositories.
+(GreenRay AIO simulates the commands and options listed above.)

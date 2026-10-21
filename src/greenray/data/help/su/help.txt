@@ -1,0 +1,16 @@
+
+Usage:
+ su [options] [-] [<user> [<argument>...]]
+
+Change the effective user ID and group ID to that of <user>.
+A mere - implies -l.  If <user> is not given, root is assumed.
+
+Options:
+ -c, --command <command>         pass a single command to the shell with -c
+ -, -l, --login                  make the shell a login shell
+
+     --help                      display this help
+
+For more details see su(1).
+
+(GreenRay AIO simulates the options listed above; a command is required.)

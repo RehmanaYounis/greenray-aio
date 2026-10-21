@@ -1,7 +1,7 @@
 import pytest
 
-from aiolab.core.shell import Shell, tokenize
-from aiolab.core.state import make_cluster
+from greenray.core.shell import Shell, tokenize
+from greenray.core.state import make_cluster
 
 ENV = {"A": "x y", "EMPTY": ""}
 

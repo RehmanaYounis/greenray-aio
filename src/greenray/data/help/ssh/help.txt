@@ -1,0 +1,2 @@
+usage: ssh [-i identity_file] [-J destination] [-l login_name]
+           [-o option] [-p port] destination [command [argument ...]]

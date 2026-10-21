@@ -1,0 +1,29 @@
+Drain node in preparation for maintenance.
+
+ The node is first cordoned so nothing new is scheduled there, then the pods on
+it are evicted so their controllers can recreate them elsewhere.
+
+ Drain refuses to continue in two cases unless you say otherwise:
+  * Pods owned by a DaemonSet: they would be recreated on the same node at
+    once, so they are skipped with --ignore-daemonsets.
+  * Pods with no controller (created directly, not by a deployment, job, ...):
+    they would be lost for good, so removing them needs --force.
+
+ When maintenance is finished, run "kubectl uncordon" to accept pods again.
+
+Examples:
+  # Drain a node, leaving daemon set pods in place
+  kubectl drain node01 --ignore-daemonsets
+
+  # Also delete pods that have no controller
+  kubectl drain node01 --ignore-daemonsets --force
+
+Options:
+    --force=false:
+        Continue even if there are pods that are not managed by a controller.
+
+    --ignore-daemonsets=false:
+        Skip pods managed by a DaemonSet instead of failing.
+
+Usage:
+  kubectl drain NODE [options]

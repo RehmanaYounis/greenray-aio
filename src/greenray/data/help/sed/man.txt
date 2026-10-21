@@ -1,0 +1,53 @@
+SED(1)                           User Commands                           SED(1)
+
+NAME
+       sed - stream editor for filtering and transforming text
+
+SYNOPSIS
+       sed [-i[SUFFIX]] [-e SCRIPT]... [SCRIPT] [FILE]
+
+DESCRIPTION
+       sed reads its input line by line, applies the editing commands in
+       SCRIPT to each line and writes the result to standard output. With
+       -i the file is rewritten in place instead, which makes sed the usual
+       tool for changing one setting in a configuration file from a script.
+
+OPTIONS
+       -e SCRIPT
+              Add SCRIPT to the commands to run. May be given more than
+              once; the scripts run in order.
+
+       -i[SUFFIX]
+              Edit the file in place instead of printing the result.
+
+       --help Print a usage summary and exit.
+
+COMMANDS
+       s/REGEXP/REPLACEMENT/[g]
+              Replace the first match of REGEXP on each line with
+              REPLACEMENT; with the g flag, replace every match. Any
+              character may be used instead of '/' as the delimiter, which
+              helps when the text contains paths (s|/old|/new|). In
+              REPLACEMENT, & stands for the whole match and \1..\9 for
+              groups captured with parentheses.
+
+       /REGEXP/s/.../.../
+              Apply the substitution only to lines matching REGEXP.
+
+       /REGEXP/d
+              Delete the lines that match REGEXP.
+
+EXAMPLES
+       Change a value in a configuration file:
+              sed -i 's/^MaxValue=.*/MaxValue=8/' /etc/example.conf
+
+       Remove comment lines from the output:
+              sed '/^#/d' /etc/fstab
+
+       Two edits in one run:
+              sed -e 's/foo/bar/g' -e '/^$/d' notes.txt
+
+SEE ALSO
+       grep(1), awk(1)
+
+GreenRay AIO                          lab manual                           SED(1)

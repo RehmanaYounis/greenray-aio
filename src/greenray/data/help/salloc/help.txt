@@ -1,0 +1,56 @@
+Usage: salloc [OPTIONS(0)...] [ : [OPTIONS(N)...]] [command(0) [args(0)...]]
+
+Parallel run options:
+  -A, --account=name          account the job's usage is charged to
+  -c, --cpus-per-task=ncpus   CPUs needed by each task
+      --comment=name          free-form comment stored with the job
+  -C, --constraint=list       node feature(s) the job requires
+  -d, --dependency=type:jobid[:time]
+                              defer start until the dependency is satisfied
+  -D, --chdir=path            working directory for the allocation
+      --gres=list             generic resources needed per node
+      --gres-flags=opts       GRES scheduling flags (enforce-binding, ...)
+  -H, --hold                  request the job in a held state
+      --hint=                 task binding hint (compute_bound, nomultithread, ...)
+  -I, --immediate             fail unless resources are available at once
+  -J, --job-name=jobname      name shown for the job in squeue/sacct
+  -k, --no-kill               keep the allocation if a node fails
+  -m, --distribution=type     task distribution across nodes and sockets
+  -n, --ntasks=N              number of tasks the allocation must hold
+      --nice=value            lower the scheduling priority by value
+      --no-shell              grant the allocation and exit without a shell
+      --ntasks-per-node=n     tasks to place on each node
+  -N, --nodes=N               number of nodes; may be a range min[-max]
+  -p, --partition=partition   partition to allocate from
+  -q, --qos=qos               quality of service for the job
+  -Q, --quiet                 suppress informational messages
+      --reservation=name      allocate inside the named reservation
+      --signal=[R:]num[@time] signal the allocation shortly before its limit
+  -t, --time=minutes          wall-clock time limit (MM, HH:MM:SS, D-HH:MM)
+      --time-min=minutes      smallest acceptable time limit
+  -v, --verbose               increase informational output
+
+Constraint options:
+      --mem=MB                real memory required per node
+      --mem-per-gpu=MB        real memory required per allocated GPU
+      --mem-bind=type         bind task memory to NUMA domains
+  -w, --nodelist=hosts...     allocate only the listed hosts
+  -x, --exclude=hosts...      never allocate the listed hosts
+
+Consumable resources related options:
+      --exclusive             do not share allocated nodes with other jobs
+
+Affinity/Multi-core options: (when the task/affinity plugin is enabled)
+      --sockets-per-node=S    sockets required on each node
+
+GPU scheduling options:
+      --cpus-per-gpu=n        CPUs needed by each allocated GPU
+  -G, --gpus=n                total GPUs for the job, optionally type:count
+      --gpus-per-node=n       GPUs needed on each node
+      --gpus-per-task=n       GPUs needed by each task
+      --ntasks-per-gpu=n      tasks to start for every GPU
+
+Help options:
+      --help                  show this help message
+
+(GreenRay AIO simulates the options listed above.)

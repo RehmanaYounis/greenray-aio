@@ -1,0 +1,6 @@
+exit: exit [n]
+    Exit the shell.
+    
+    Ends the current shell with status N, or with the status of the last
+    command run if N is omitted. In a shell opened with ssh this closes
+    the connection and returns to the previous host.

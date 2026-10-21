@@ -1,0 +1,86 @@
+CMSH(1)                     Base Command Manager                     CMSH(1)
+
+NAME
+       cmsh - cluster management shell for Base Command Manager
+
+SYNOPSIS
+       cmsh [-h] [-c "command; command; ..."] [-f file]
+
+DESCRIPTION
+       cmsh is the command-line front end of the cluster management daemon
+       (CMDaemon) that runs on the head node. Every object the cluster
+       manager knows about - nodes, categories, software images, users -
+       can be listed, inspected and changed from cmsh.
+
+       Commands are organised in modes. Typing the name of a mode makes it
+       the current mode; an object inside a mode is selected with use.
+       Several commands may be given on one line, separated by ';'.
+
+       Property changes are staged locally. Nothing is sent to CMDaemon
+       until commit is run; refresh discards staged changes, and modified
+       shows what is still pending.
+
+OPTIONS
+       -h, --help
+              Print a usage summary and exit.
+
+       -c, --command "cmd; cmd; ..."
+              Run the given commands non-interactively, then exit.
+
+       -f, --file FILE
+              Read commands from FILE, one or more per line, then exit.
+
+MODES
+       device         nodes, switches and other managed devices
+       category       groups of nodes that share configuration
+       softwareimage  node images kept under /cm/images
+       partition      cluster-wide settings (base partition)
+       user, group    LDAP users and groups managed by BCM
+       profile        cmsh/Base View access profiles
+       main           version and licence information
+
+COMMON COMMANDS
+       list                    list objects in the current mode
+       use OBJECT              select an object
+       show [OBJECT]           print every property of an object
+       get PROPERTY            print one property
+       set PROPERTY VALUE      stage a new value
+       clear PROPERTY          reset a property to its default
+       append / removefrom     add to or remove from a list property
+       clone SOURCE NEW        copy an object
+       add NAME / remove NAME  create or delete an object
+       commit                  apply staged changes
+       refresh                 drop staged changes
+       modified                list objects with uncommitted changes
+       exit, ..                leave the current object or submode
+       help                    list the commands of the current mode
+
+DEVICE MODE COMMANDS
+       status                  node state as seen by CMDaemon
+       power on|off|reset|status -n NODES
+                               control power through the BMC
+       reboot                  reboot one or more nodes
+       imageupdate [-w] -n NODES | -c CATEGORY
+                               synchronise running nodes with their image
+       grabimage [-w] [-i IMAGE] NODE
+                               copy a node's filesystem back into an image
+       synclog                 show the last image synchronisation log
+       drain, undrain          change the workload manager state of nodes
+       pexec                   run a shell command on several nodes
+       roles, bmcsettings, fsmounts
+                               enter the corresponding submode
+
+EXAMPLES
+       Show the state of all nodes:
+              cmsh -c "device; status"
+
+       Inspect a single node:
+              cmsh -c "device; use node001; show"
+
+       Change a property and apply it:
+              cmsh -c "category; use default; set installmode AUTO; commit"
+
+SEE ALSO
+       cmha(8), cm-chroot-sw-img(8)
+
+GreenRay AIO                         lab manual                         CMSH(1)

@@ -1,7 +1,17 @@
+# Python / uv
 .venv/
 __pycache__/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
 build/
 dist/
+
+# Private solutions are never committed here (see README: Solutions)
+/solutions/
+/greenray-aio-solutions/
+/NVIDIA-NCP-AIO-Prep-solutions/

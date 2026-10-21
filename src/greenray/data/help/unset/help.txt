@@ -1,0 +1,8 @@
+unset: unset [name ...]
+    Unset values and attributes of shell variables.
+    
+    Removes each variable NAME from the shell and from the environment
+    passed to commands.
+    
+    Exit Status:
+    Returns success unless NAME is read-only.

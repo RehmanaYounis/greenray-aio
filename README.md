@@ -1,10 +1,23 @@
-# aiolab: NCP-AIO cluster simulator and mock exam
+# GreenRay AIO
 
-> **Simulated environment.** Every node, GPU, switch and log in this tool is software. Results you get here count as *simulated* evidence in [PROGRESS.md](../PROGRESS.md), not real-hardware evidence.
+**Hands-on lab simulator and mock exam for the NVIDIA-Certified Professional: AI Operations (NCP-AIO) exam.**
 
-`aiolab` gives you a broken (or half-configured) **4-node DGX H100 cluster managed by NVIDIA Base Command Manager**. You fix it by typing the same commands you would use on a real system. When you think you're done, `check` grades the end state of the cluster, not whether you typed a particular command.
+GreenRay AIO drops you into a broken or half-configured **4-node DGX H100 cluster managed by Base Command Manager (BCM)**. You investigate and fix it with the same commands you'd use on real systems:
+- `nvidia-smi` and `dcgmi`
+- Slurm
+- `kubectl` and `helm` with the GPU Operator
+- `cmsh`
+- InfiniBand tools and NCCL tests
+- Docker and NGC containers
 
-According to NVIDIA's exam page (re-check before booking), the exam is **30 multiple-choice questions plus 3 hands-on labs in 120 minutes**. The labs run on live Slurm, Kubernetes and BCM clusters. `aiolab mock` reproduces that shape, and every blueprint topic has a lab. See [docs/COVERAGE.md](docs/COVERAGE.md).
+`check` grades the end state of the cluster, not whether you typed a particular command.
+
+- **39 incident and task scenarios** covering every topic of the exam blueprint ([docs/COVERAGE.md](docs/COVERAGE.md))
+- **Incident mode**: only the incident report is shown, and the root cause stays hidden until the debrief
+- **`explain <command>`** for learning tools as you need them, plus progressive hints and a debrief after every lab
+- **Feels like a real node**: `--help` and `man` pages, `nano`/`vim` (your real editor), `cd`, a coloured prompt and real-tool colours
+- **Full mock exam** in the current format: 30 questions plus 3 hands-on labs in 120 minutes (per NVIDIA's exam page; re-check before booking)
+- Runs anywhere Python runs: Linux, WSL, macOS or Windows. **No GPU needed.**
 
 ```
 root@bcm-head:~# ssh dgx-03
@@ -14,9 +27,11 @@ root@dgx-03:~# nvidia-smi
 Unable to determine the device handle for GPU00000000:5D:00.0: Unknown Error
 ...
 root@dgx-03:~# check
-  PASS  you checked the kernel log before acting
-  FAIL  dgx-03 is back in service (IDLE)
+  PASS  you read the kernel log on dgx-03
+  ....  2 more success criteria not met yet
 ```
+
+> GreenRay AIO is an independent study tool. It is **not affiliated with, endorsed by or sponsored by NVIDIA**. NVIDIA, DGX, NCP-AIO and related names are trademarks of NVIDIA Corporation, used here only to describe the exam this tool helps you prepare for. Every node, GPU and log is simulated.
 
 ## Install
 
@@ -26,57 +41,61 @@ The project is managed with [uv](https://docs.astral.sh/uv/). uv installs the ri
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh     # once
-cd ~/NVIDIA-NCP-AIO-Prep/simulator
+git clone https://github.com/RehmanaYounis/greenray-aio.git ~/greenray-aio
+cd ~/greenray-aio
 uv sync                                             # creates .venv from pyproject.toml + uv.lock
-uv run aiolab
+uv run greenray
 ```
 
 **Windows (PowerShell)**
 
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"   # once
-cd NVIDIA-NCP-AIO-Prep\simulator
+git clone https://github.com/RehmanaYounis/greenray-aio.git
+cd greenray-aio
 uv sync
-uv run aiolab
+uv run greenray
 ```
 
 Use WSL for the best experience: you get arrow-key history and tab completion there.
 
 ### Solutions (private)
 
-Reference solutions, explanations and exam answer keys are **not** in this repository. They live in the private repository `NVIDIA-NCP-AIO-Prep-solutions`. Clone it next to this one and the simulator finds it automatically:
+Reference solutions, explanations and exam answer keys are **not** in this repository. They live in a separate private solutions repository. Clone it **next to** this one (as `greenray-aio-solutions`, or under its legacy name `NVIDIA-NCP-AIO-Prep-solutions`) and the simulator finds it automatically:
 
 ```bash
-cd ~ && git clone https://github.com/RehmanaYounis/NVIDIA-NCP-AIO-Prep-solutions.git
+cd ~ && git clone git@github.com:RehmanaYounis/NVIDIA-NCP-AIO-Prep-solutions.git   # private
 ```
 
-You can point at another location with `AIOLAB_SOLUTIONS=/path`. Without it, labs still run and grade your work. `solution`, the debrief and question scoring need it.
+You can point at another location with `GREENRAY_SOLUTIONS=/path` (the older `AIOLAB_*` variable names still work). Without it, labs still run and grade your work. `solution`, the debrief and question scoring need it.
 
-Developer commands:
+Developer commands (see [CONTRIBUTING.md](CONTRIBUTING.md)):
 
 ```bash
-uv run pytest            # test suite
+uv run pytest            # test suite (add --cov for coverage)
 uv run ruff check .      # lint
 uv run ruff format .     # format
+uv run mypy              # type checks
+uv build                 # wheel + sdist
 ```
 
 ## Use
 
-Run these as `uv run aiolab …` from the `simulator/` folder. If you activate the environment (`source .venv/bin/activate`), plain `aiolab …` works too.
+Run these as `uv run greenray …` from the repository folder. If you activate the environment (`source .venv/bin/activate`), plain `greenray …` works too.
 
 | Command | What it does |
 | --- | --- |
-| `aiolab` | Interactive menu |
-| `aiolab list` | All scenarios by exam domain, with your pass marks |
-| `aiolab incident [-d DOMAIN] [-t TOPIC]` | **Investigate a random incident.** Only the incident report is shown; the scenario's id, title and success criteria stay hidden until the debrief. `-t` takes a scenario tag such as `slurm`, `kubernetes`, `bcm`, `mig` or `infiniband` |
-| `aiolab incident --id <id>` | Retry a specific scenario as an incident (for a fresh independent attempt) |
-| `aiolab lab <id>` | Start a hands-on scenario in guided mode (title, objectives and hints visible) |
-| `aiolab sandbox` | A healthy cluster to explore freely |
-| `aiolab mock` | **Full mock exam:** 30 questions + 3 labs (one Slurm, one Kubernetes, one BCM) in 120 minutes, with no hints. Graded at the end |
-| `aiolab exam` | Question drill: 60 questions in 120 minutes, weighted 31/23/23/23 like the blueprint |
-| `aiolab exam -n 20 -m 40 -d "Administration"` | Domain drill |
-| `aiolab progress` | Passed labs, exam history, weakest domain |
-| `aiolab validate` | Self-test: every scenario is solvable by its reference solution |
+| `greenray` | Interactive menu |
+| `greenray list` | All scenarios by exam domain, with your pass marks |
+| `greenray incident [-d DOMAIN] [-t TOPIC]` | **Investigate a random incident.** Only the incident report is shown; the scenario's id, title and success criteria stay hidden until the debrief. `-t` takes a scenario tag such as `slurm`, `kubernetes`, `bcm`, `mig` or `infiniband` |
+| `greenray incident --id <id>` | Retry a specific scenario as an incident (for a fresh independent attempt) |
+| `greenray lab <id>` | Start a hands-on scenario in guided mode (title, objectives and hints visible) |
+| `greenray sandbox` | A healthy cluster to explore freely |
+| `greenray mock` | **Full mock exam:** 30 questions + 3 labs (one Slurm, one Kubernetes, one BCM) in 120 minutes, with no hints. Graded at the end |
+| `greenray exam` | Question drill: 60 questions in 120 minutes, weighted 31/23/23/23 like the blueprint |
+| `greenray exam -n 20 -m 40 -d "Administration"` | Domain drill |
+| `greenray progress` | Passed labs, exam history, weakest domain |
+| `greenray validate` | Self-test: every scenario is solvable by its reference solution |
 
 Inside a lab, these meta-commands are available alongside the simulated cluster commands:
 
@@ -97,12 +116,12 @@ When you pass, you get the **debrief**: the reference solution, why it works, th
 
 ### Guided or independent
 
-`aiolab progress` shows three counts per domain:
+`greenray progress` shows three counts per domain:
 - **passed**
 - **without hints**
 - **as an incident, unguided**: passed in incident mode with no hints and no revealed objectives
 
-A good routine is to learn a topic in guided mode first, then prove it with `aiolab incident -t <topic>`.
+A good routine is to learn a topic in guided mode first, then prove it with `greenray incident -t <topic>`.
 
 ### What the grader can and cannot judge
 
@@ -111,7 +130,7 @@ A good routine is to learn a topic in guided mode first, then prove it with `aio
 - It does not generally detect unnecessary changes. Only some scenarios guard against specific harmful ones, such as raising power limits to hide a thermal fault, or killing a user's job.
 - If a command ever crashes inside the simulator (a bug), the cluster is restored to its state before that command and you are told so.
 
-Progress is stored in `~/.aiolab/progress.json` on your machine (set `AIOLAB_HOME` to move it).
+Progress is stored in `~/.greenray/progress.json` on your machine (set `GREENRAY_HOME` to move it). Progress from the older `~/.aiolab` folder is copied over automatically the first time you run it.
 
 ## The simulated cluster
 
@@ -130,7 +149,7 @@ Simulated tools:
 - **BCM:** `cmsh` (device, category, softwareimage, user, power, imageupdate, grabimage)
 - **Fabric and Magnum IO:** `ibstat`, `ibdiagnet`, `mlxlink`, `perfquery`, NCCL tests (`all_reduce_perf`, `mpirun`), GPUDirect RDMA/Storage checks
 - **DPU:** BlueField tools (`mlxconfig`, `bfb-install`, DOCA services)
-- **Shell basics:** `cat`, `sed -i`, `grep`, heredocs, pipes and redirects for editing config files
+- **Shell basics:** `cd`, `pwd`, `ls`, `cat`, `grep`, `sed -i`, heredocs, pipes and redirects; `nano`, `vi` and `vim` open your real editor; `--help` and `man` work as on a real node
 
 `commands` inside a lab prints the full list.
 
@@ -143,7 +162,7 @@ Scenario files are **code**: `checks` are Python expressions and `setup` may con
 ## Code layout
 
 ```
-src/aiolab/
+src/greenray/
   cli.py            command-line entry point (argparse)
   core/             cluster state model, bash-like shell, errors
   commands/         one module per tool family (nvidia_smi, slurm, kubectl, cmsh, ib, ...)
@@ -158,8 +177,12 @@ docs/               SCENARIO_FORMAT.md, COVERAGE.md
 
 ## Adding scenarios and questions
 
-- Scenarios: the public problem goes in `src/aiolab/data/scenarios/`, and the solution goes in the private repo. See [docs/SCENARIO_FORMAT.md](docs/SCENARIO_FORMAT.md). Add every new scenario to [docs/COVERAGE.md](docs/COVERAGE.md).
-- Questions: these go in `src/aiolab/data/questions/`, with the answer key in the private repo under `questions/<same file>`. The format is documented in `src/aiolab/content/questions.py`.
-- Run `uv run aiolab validate` and `uv run pytest` before committing. CI runs lint and tests on every push.
+- Scenarios: the public problem goes in `src/greenray/data/scenarios/`, and the solution goes in the private repo. See [docs/SCENARIO_FORMAT.md](docs/SCENARIO_FORMAT.md). Add every new scenario to [docs/COVERAGE.md](docs/COVERAGE.md).
+- Questions: these go in `src/greenray/data/questions/`, with the answer key in the private repo under `questions/<same file>`. The format is documented in `src/greenray/content/questions.py`.
+- Run `uv run greenray validate` and `uv run pytest` before committing. CI runs lint and tests on every push.
 
 All content is original and written from public documentation concepts. It is not copied from the exam.
+
+## Related
+
+- Real-hardware practice that complements the simulator: the RTX 4060 / WSL2 labs and the rented-GPU cloud session kit live in the companion study repository, NVIDIA-NCP-AIO-Prep (`labs/gpu-local`, `labs/cloud-gpu`).

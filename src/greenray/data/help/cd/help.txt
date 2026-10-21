@@ -1,0 +1,9 @@
+cd: cd [dir]
+    Change the shell working directory.
+    
+    Make DIR the current directory. Without DIR, change to the HOME
+    directory (/root). DIR may be absolute or relative to the current
+    directory; '..' is the parent directory and '~' is HOME.
+    
+    Exit Status:
+    Returns 0 if the directory is changed; non-zero otherwise.

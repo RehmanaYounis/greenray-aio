@@ -1,0 +1,38 @@
+Execute a command in a container.
+
+ Runs a command inside a running container of a pod and prints its output.
+Put the command after '--' so that its own flags are not read by kubectl.
+Instead of a pod you can name a daemon set, deployment or job (TYPE/NAME) and
+one of its pods is used.
+
+Examples:
+  # Run a command in a pod
+  kubectl exec my-pod -- env
+
+  # Run a command in a pod in namespace demo
+  kubectl exec -n demo my-pod -- cat /etc/os-release
+
+  # Run a shell pipeline in the container
+  kubectl exec my-pod -- sh -c 'ls /data | wc -l'
+
+  # Open an interactive-style session (the simulator runs the command once)
+  kubectl exec -it my-pod -- bash -c 'hostname'
+
+  # Run a command in a pod of a deployment
+  kubectl exec deploy/web -n demo -- ls /
+
+Options:
+    -c, --container='':
+        Container name. Defaults to the pod's first container.
+
+    -n, --namespace='':
+        Namespace of the pod (default "default").
+
+    -i, --stdin=false:
+        Pass stdin to the container.
+
+    -t, --tty=false:
+        Allocate a TTY for the container.
+
+Usage:
+  kubectl exec (POD | TYPE/NAME) [-c CONTAINER] [flags] -- COMMAND [args...] [options]

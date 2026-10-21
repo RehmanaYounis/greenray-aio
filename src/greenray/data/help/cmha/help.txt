@@ -1,0 +1,12 @@
+Usage: cmha <command>
+
+Report and manage the high-availability state of the BCM head nodes.
+
+Commands:
+  status      Show which head node is active, which is passive, and
+              the result of the most recent failover checks
+
+Options:
+  -h, --help  Show this help and exit
+
+(GreenRay AIO simulates the options listed above.)

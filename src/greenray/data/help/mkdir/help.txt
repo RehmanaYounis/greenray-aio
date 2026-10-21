@@ -1,0 +1,7 @@
+Usage: mkdir [OPTION]... DIRECTORY...
+Create the DIRECTORY(ies), if they do not already exist.
+
+  -p, --parents     no error if existing, make parent directories as needed
+      --help        display this help and exit
+
+(GreenRay AIO simulates the options listed above.)

@@ -1,0 +1,31 @@
+
+This command consists of multiple subcommands which can be used to get
+extended information about a release.
+
+  values     the values supplied by the user for the release (add --all to
+             include the chart defaults, -o json for JSON output)
+  manifest   the Kubernetes objects the release generated
+  notes      the notes printed when the release was installed
+  all        the release manifest
+
+Examples:
+    $ helm get values my-release -n demo
+    $ helm get values my-release -n demo --all
+
+Usage:
+  helm get [command]
+
+Available Commands:
+  all         download all information for a named release
+  manifest    download the manifest for a named release
+  notes       download the notes for a named release
+  values      download the values file for a named release
+
+Flags:
+  -a, --all             (values) dump all (computed) values
+  -h, --help            help for get
+  -o, --output format   (values) prints the output in the specified format. Allowed values: yaml, json
+
+Global Flags:
+      --kube-context string   name of the kubeconfig context to use
+  -n, --namespace string      namespace scope for this request

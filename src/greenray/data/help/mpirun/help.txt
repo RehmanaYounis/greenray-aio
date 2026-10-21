@@ -1,0 +1,42 @@
+Usage: mpirun [OPTION]...  [PROGRAM]...
+Start the given program using Open RTE
+
+   -c|-np|--np|-n <arg0>    Number of processes to run
+   --allow-run-as-root      Allow execution as root (strongly discouraged)
+   --display-map            Display the process map just before launch
+   -H|-host|--host <arg0>   List of hosts to invoke processes on, each
+                            optionally followed by :slots
+                            (host1:8,host2:8)
+   -hostfile|--hostfile <arg0>
+                            Provide a hostfile ("hostname slots=N" per line)
+   -machinefile|--machinefile <arg0>
+                            Same as --hostfile
+   -mca|--mca <arg0> <arg1>
+                            Set the MCA parameter named arg0 to value arg1
+                            (for example --mca btl ^openib)
+   -gmca|--gmca <arg0> <arg1>
+                            Like --mca, but applies to every application
+                            context
+   --map-by <arg0>          Mapping policy (slot, node, socket, numa, ...)
+   --bind-to <arg0>         Binding policy (none, core, socket, numa, ...)
+   --rank-by <arg0>         Ranking policy (slot, node, ...)
+   -N|-npernode|--npernode <arg0>
+                            Launch this many processes on each node
+   --oversubscribe          Allow more processes than a node has slots
+   --prefix <arg0>          Prefix where Open MPI is installed on remote nodes
+   --report-bindings        Report how each process is bound
+   --tag-output             Tag each output line with [jobid,rank]<stream>
+   -v|--verbose             Be verbose
+   -wdir|--wdir <arg0>      Working directory for the started processes
+   -x <arg0>                Export an environment variable to the started
+                            processes, either NAME=value or just NAME to pass
+                            the current value
+   --help                   This help message
+
+Environment variables OMPI_ALLOW_RUN_AS_ROOT=1 and
+OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1 together have the same effect as
+--allow-run-as-root.
+
+mpiexec is a synonym for mpirun.
+
+(GreenRay AIO simulates the options listed above.)

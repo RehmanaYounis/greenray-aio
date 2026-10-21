@@ -1,0 +1,27 @@
+GreenRay AIO lab helper — stands in for a physical/UI action, not a real tool
+
+Usage: runai-ui <object> <action> [NAME] [flags]
+
+Performs the administrator actions of the Run:ai web UI / REST API.
+
+Objects and actions:
+  department list
+  department create|update NAME --gpu-quota N [--over-quota enabled|disabled]
+  project list
+  project create NAME --department D --gpu-quota N [--over-quota enabled|disabled] [--max-gpus N]
+  project update NAME [--department D] [--gpu-quota N] [--over-quota enabled|disabled] [--max-gpus N|none]
+  project delete NAME
+  access-rule list
+  access-rule create --user U[,U...] --project P [--role ROLE]
+  access-rule delete --user U[,U...] --project P
+  user list
+
+Flags:
+  --gpu-quota N        deserved (guaranteed) GPUs; 0 is allowed
+  --over-quota MODE    enabled or disabled: may workloads use idle GPUs beyond the quota
+  --max-gpus N|none    hard cap on GPUs the project may use
+  --department D       department that owns the project
+  --user U             user name(s), comma separated
+  --project P          project the access rule applies to
+  --role ROLE          role to grant (default "L1 researcher")
+  -h, --help           show this help and exit

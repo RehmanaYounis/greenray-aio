@@ -1,0 +1,18 @@
+Usage: sinfo [OPTIONS]
+  -h, --noheader             leave out the header line
+  -l, --long                 long listing (adds a timestamp banner and more
+                             columns)
+  -n, --nodes=NODES          report only on these nodes (hostlist expressions
+                             such as node[01-04] are accepted)
+  -N, --Node                 one line per node instead of per node group
+  -o, --format=format        build the output from %-field specifiers
+  -p, --partition=PARTITION  report only on these partitions (comma list)
+  -R, --list-reasons         list why nodes are down, drained or failing
+  -s, --summarize            one summary line per partition
+  -t, --states=node_state    report only nodes in these states (comma list)
+  -V, --version              print the Slurm version and exit
+
+Help options:
+  --help                     show this help message
+
+(GreenRay AIO simulates the options listed above.)

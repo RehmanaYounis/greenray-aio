@@ -1,0 +1,15 @@
+Usage: scancel [OPTIONS] [job_id[_array_id][.step_id]]
+  -n, --name=job_name             cancel only jobs with this name
+      --jobname=job_name          same as --name
+  -p, --partition=partition       cancel only jobs in this partition
+  -t, --state=states              cancel only jobs in this state
+                                  (PENDING, RUNNING, SUSPENDED or PD, R, S)
+  -u, --user=user_name            cancel only jobs owned by this user
+
+  With no job ID at least one of --name, --partition, --state or --user
+  must be given; the filters are combined.
+
+Help options:
+  --help                          show this help message
+
+(GreenRay AIO simulates the options listed above.)

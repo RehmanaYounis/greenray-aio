@@ -1,0 +1,51 @@
+MLXLINK(1)                     NVIDIA Firmware Tools                    MLXLINK(1)
+
+NAME
+       mlxlink - port link status and diagnostics for NVIDIA network adapters
+
+SYNOPSIS
+       mlxlink -d DEVICE [-m] [-c]
+       mlxlink -d DEVICE -a UP|DN|TG
+
+DESCRIPTION
+       mlxlink is part of the NVIDIA Firmware Tools (MFT). It queries the
+       port's physical layer through the adapter's access registers and
+       prints, in sections:
+
+       Operational Info      state, physical state, speed, width, FEC
+       Supported Info        speeds enabled on the port and supported by the cable
+       Troubleshooting Info  status opcode and a recommendation text
+       Tool Information      firmware and MFT versions
+
+       A port that is not Active together with "No partner detected" in the
+       recommendation usually points at the cable, transceiver or the far
+       switch port rather than at the host.
+
+OPTIONS
+       -d, --device DEVICE
+              Device to query. Accepts an MST device (/dev/mst/mt4129_pciconf0),
+              an RDMA device name (mlx5_0) or a PCI address (0000:xx:00.0).
+
+       -m, --show_module
+              Add a Module Info section: identifier, vendor, part and serial
+              number, temperature, voltage and per-lane RX/TX optical power.
+
+       -c, --show_counters
+              Add physical-layer counters: effective and raw errors, BER,
+              link-down and link-recovery counters.
+
+       -a, --port_state UP|DN|TG
+              Set the port state. DN disables the port, UP enables it, TG
+              toggles it (disable, then enable) to force link retraining.
+
+       -h, --help
+              Print the usage summary and exit.
+
+EXIT STATUS
+       0 on success, non-zero when the device cannot be opened or an
+       argument is invalid.
+
+SEE ALSO
+       mst(1), mlxconfig(1), ibstat(8), ibdiagnet(1)
+
+GreenRay AIO                          lab manual                        MLXLINK(1)

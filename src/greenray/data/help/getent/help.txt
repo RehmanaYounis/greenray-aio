@@ -1,0 +1,16 @@
+Usage: getent [OPTION...] database [key ...]
+Get entries from administrative database.
+
+      --help                 Give this help list
+
+Supported databases:
+passwd group
+
+With no key, every entry of the database is printed.  With keys, only the
+matching entries are printed, and the exit status is 2 if one or more keys
+could not be found.
+
+Each passwd entry is name:x:uid:gid:gecos:home:shell; each group entry is
+name:x:gid:member,member,...
+
+(GreenRay AIO simulates the options listed above.)

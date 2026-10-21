@@ -1,0 +1,19 @@
+Usage: taskset [options] [mask | cpu-list] [pid|cmd [args...]]
+
+
+Show the CPU affinity of a process, or start a command with a given one.
+
+Options:
+ -c, --cpu-list          use a CPU list (0,4,8-15) instead of a hex mask
+ -p, --pid               operate on an existing PID instead of starting
+                           a new command
+
+     --help              display this help
+
+Examples:
+    taskset 0x0f ./app         start ./app on CPUs 0-3
+    taskset -c 0-7 ./app       the same idea, written as a CPU list
+    taskset -p 4242            print the affinity mask of PID 4242
+    taskset -cp 4242           print it as a CPU list
+
+(GreenRay AIO simulates the options listed above.)

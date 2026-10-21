@@ -1,0 +1,15 @@
+GreenRay AIO lab helper — stands in for a physical/UI action, not a real tool
+
+Usage: reseat-cable <node> <hca>
+
+Ask the data-centre technician to reseat the InfiniBand cable of one HCA
+port: unplug the transceiver and fibre on the adapter and on the matching
+switch port, inspect and clean the connectors, and plug them back in.
+The result is reported the way the technician would (port LED colour).
+
+Arguments:
+  <node>        cluster node name, as used with ssh
+  <hca>         RDMA device of the port, e.g. mlx5_0
+
+Options:
+  --help        show this help and exit

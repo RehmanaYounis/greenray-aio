@@ -2,9 +2,9 @@
 
 import pytest
 
-from aiolab.content import scenarios as sc
-from aiolab.content.validate import check_scenario
 from conftest import requires_solutions
+from greenray.content import scenarios as sc
+from greenray.content.validate import check_scenario
 
 SCENARIOS = sc.load_all()
 IDS = [s.id for s in SCENARIOS]

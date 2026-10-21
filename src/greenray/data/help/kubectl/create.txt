@@ -1,0 +1,75 @@
+Create a resource from a file or from stdin.
+
+ Creates the objects described in a manifest. Unlike apply, create fails if an
+object with the same name already exists. A few common resource types can also
+be created directly from command-line arguments with the subcommands below.
+
+Available Commands:
+  configmap         Create a config map from literal values or files
+  deployment        Create a deployment running a given image
+  namespace         Create a namespace with the given name
+  secret            Create a secret (generic or docker-registry)
+
+Examples:
+  # Create the objects in a manifest
+  kubectl create -f my-pod.yaml
+
+  # Create a namespace
+  kubectl create namespace demo
+
+  # Create a deployment with three replicas
+  kubectl create deployment web --image=nginx --replicas=3 -n demo
+
+  # Create a config map from key/value pairs
+  kubectl create configmap my-config --from-literal=mode=fast -n demo
+
+  # Create a generic secret
+  kubectl create secret generic my-secret --from-literal=password=changeme
+
+  # Create an image pull secret for a private registry
+  kubectl create secret docker-registry my-registry-cred \
+    --docker-server=registry.example.com --docker-username=myuser \
+    --docker-password=mypassword -n demo
+
+Options:
+    --docker-email='':
+        (secret docker-registry) Email for the registry entry.
+
+    --docker-password='':
+        (secret docker-registry) Password or token for the registry.
+
+    --docker-server='https://index.docker.io/v1/':
+        (secret docker-registry) Registry server address.
+
+    --docker-username='':
+        (secret docker-registry) User name for the registry.
+
+    -f, --filename=[]:
+        Manifest file(s) to create the objects from.
+
+    --from-file=[]:
+        (secret generic, configmap) Use a file's content as a value. May be
+        repeated.
+
+    --from-literal=[]:
+        (secret generic, configmap) A key=value pair. May be repeated.
+
+    --image='':
+        (deployment) Image for the deployment's container.
+
+    -n, --namespace='':
+        Namespace to create the objects in (default "default").
+
+    --replicas=1:
+        (deployment) Number of replicas.
+
+    --type='':
+        (secret generic) Secret type to record (default "Opaque").
+
+Usage:
+  kubectl create -f FILENAME [options]
+  kubectl create namespace NAME
+  kubectl create deployment NAME --image=IMAGE [--replicas=N]
+  kubectl create configmap NAME [--from-literal=KEY=VALUE] [--from-file=PATH]
+  kubectl create secret generic NAME [--from-literal=KEY=VALUE] [--from-file=PATH]
+  kubectl create secret docker-registry NAME --docker-server=SERVER --docker-username=USER --docker-password=PASSWORD

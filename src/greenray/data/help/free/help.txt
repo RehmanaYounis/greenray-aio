@@ -1,0 +1,10 @@
+
+Usage:
+ free [options]
+
+Options:
+ -k, --kibi          show output in kibibytes (the default)
+
+     --help     display this help and exit
+
+(GreenRay AIO simulates the options listed above.)

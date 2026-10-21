@@ -1,0 +1,12 @@
+Usage: munge [OPTIONS]
+
+  -h, --help                Display this help message
+  -V, --version             Display version information
+  -n, --no-input            Encode a credential with an empty payload
+
+The credential is written to stdout and can be piped into unmunge, locally
+or on another host, to check that both ends share the same key:
+  munge -n | unmunge
+  munge -n | ssh node01 unmunge
+
+(GreenRay AIO simulates the options listed above.)

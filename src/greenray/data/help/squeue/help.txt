@@ -1,0 +1,19 @@
+Usage: squeue [OPTIONS]
+  -h, --noheader                  leave out the header line
+  -j, --jobs=job(s)               comma separated list of job IDs to show
+  -l, --long                      long listing (adds a timestamp banner and
+                                  the full job state)
+      --me                        same as --user=<your user name>
+  -o, --format=format             build the output from %-field specifiers
+  -p, --partition=partition(s)    comma separated list of partitions to show
+      --start                     show the expected start time of pending jobs
+  -t, --states=state(s)           comma separated list of job states to show
+                                  (short codes or names, or "all")
+  -u, --user=user_name(s)         comma separated list of users to show
+  -V, --version                   print the Slurm version and exit
+  -w, --nodelist=hostlist         show only jobs running on these nodes
+
+Help options:
+  --help                          show this help message
+
+(GreenRay AIO simulates the options listed above.)

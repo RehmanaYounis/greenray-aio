@@ -1,0 +1,27 @@
+Manage the rollout of one or many resources.
+
+ Valid resource types include:
+  * deployments
+  * daemonsets
+
+Available Commands:
+  restart       Restart a resource: its pods are replaced with new ones
+  status        Show the status of the rollout
+
+Examples:
+  # Restart the pods of a daemon set (for example after changing a config map
+  # that it reads at start-up)
+  kubectl rollout restart daemonset/my-daemonset -n demo
+
+  # Restart a deployment
+  kubectl rollout restart deployment web -n demo
+
+  # Check whether a deployment has finished rolling out
+  kubectl rollout status deployment/web -n demo
+
+Options:
+    -n, --namespace='':
+        Namespace of the resource (default "default").
+
+Usage:
+  kubectl rollout SUBCOMMAND (TYPE NAME | TYPE/NAME) [options]

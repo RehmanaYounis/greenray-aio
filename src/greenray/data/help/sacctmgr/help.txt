@@ -1,0 +1,63 @@
+sacctmgr [<OPTION>] [<COMMAND>]
+    Valid <OPTION> values are:
+     --help:            equivalent to the "help" command
+     -i or --immediate: commit changes right away without asking
+     -n or --noheader:  leave out the header line
+     -p or --parsable:  '|' delimited output with a trailing '|'
+     -P or --parsable2: '|' delimited output without a trailing '|'
+     -V or --version:   print the Slurm version and exit
+
+    Valid <COMMAND> values are:
+     add <ENTITY> <SPECS>     create the entity (alias: create)
+     delete <ENTITY> where <SPECS>
+                              remove the matching entities (alias: remove)
+     help                     print this text
+     list <ENTITY> [<SPECS>]  show information about entities (alias: show)
+     modify <ENTITY> where <SPECS> set <SPECS>
+                              change the matching entities (alias: update)
+
+  <ENTITY> may be ("where" is optional for add and list):
+
+     account                  - Account(s) in the fair-share tree
+     association              - User/account/cluster associations (assoc);
+                                add "tree" to list for a hierarchical view
+     cluster                  - The cluster known to slurmdbd (list only)
+     qos                      - Quality of Service records
+     user                     - Users and their account membership
+
+  <SPECS> are different for each command and entity pair.
+
+  list account     - Format=, Names=, WithAssoc
+  add account      - Description=, FairShare=, Names=, Organization=,
+                     Parent=
+  modify account   - (where) Names=
+                     (set)   Description=, FairShare=, Organization=,
+                             Parent=
+  delete account   - Names=
+
+  list assoc       - Account=, Format=, Tree, User=
+
+  list qos         - Format=, Names=
+  add qos          - Description=, Flags=, GraceTime=, GrpTRES=,
+                     MaxJobsPerUser=, MaxSubmitJobsPerUser=,
+                     MaxTRESPerJob=, MaxTRESPerUser=, MaxWall=, Names=,
+                     Preempt=, PreemptMode=, Priority=, UsageFactor=
+  modify qos       - (where) Names=
+                     (set)   same keys as add qos; TRES limits are
+                             merged, and -1 clears a limit
+  delete qos       - Names=
+
+  list user        - Format=, Names=, WithAssoc
+  add user         - Account=, DefaultAccount=, DefaultQOS=, FairShare=,
+                     Names=, QOS=
+  modify user      - (where) Account=, Names=
+                     (set)   DefaultAccount=, DefaultQOS=, FairShare=,
+                             QOS= (QOS+= and QOS-= also work)
+  delete user      - Names=, Account= (removes only those associations)
+
+  Format options are different for each entity, for example
+     list qos format=Name,Priority,MaxTRESPU,MaxWall
+     list user format=User,DefaultAccount,Admin
+     list account format=Account,Descr,Org,ParentName,Share
+
+(GreenRay AIO simulates the options listed above.)

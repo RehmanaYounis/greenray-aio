@@ -1,0 +1,24 @@
+Usage: service SERVICE_NAME COMMAND
+
+Run a System V style service command. On systemd systems "service" passes
+the request to systemctl, so
+
+    service SERVICE_NAME COMMAND
+
+does the same as
+
+    systemctl COMMAND SERVICE_NAME
+
+COMMAND is one of:
+  start        start the service
+  stop         stop the service
+  restart      stop and start the service
+  reload       ask the service to reload its configuration
+  status       show whether the service is running, with recent log lines
+
+Examples:
+  service docker status
+  service my-service restart
+
+Use systemctl for enabling services at boot (systemctl enable).
+(GreenRay AIO simulates the commands and options listed above.)

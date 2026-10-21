@@ -1,0 +1,8 @@
+Usage: uname [OPTION]...
+Print certain system information.
+
+  -a                       print all information
+  -r                       print the kernel release
+      --help     display this help and exit
+
+(GreenRay AIO simulates the options listed above.)

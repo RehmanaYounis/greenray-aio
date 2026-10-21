@@ -1,0 +1,14 @@
+Usage: sort [OPTION]... [FILE]...
+Write the lines of all FILE(s), sorted, to standard output.
+
+With no FILE, read standard input.
+
+Ordering options:
+
+  -r                          reverse the result of comparisons
+
+Other options:
+
+      --help        display this help and exit
+
+(GreenRay AIO simulates the options listed above.)

@@ -1,17 +1,53 @@
 [project]
-name = "aiolab"
-version = "0.2.0"
-description = "Hands-on cluster simulator and mock exam for the NVIDIA NCP-AIO (AI Operations) certification"
+name = "greenray-aio"
+version = "0.3.0"
+description = "GreenRay AIO: hands-on lab simulator and mock exam for the NVIDIA NCP-AIO (AI Operations) certification"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Rehmana Younis" }]
-dependencies = ["pyyaml>=6.0"]
+keywords = [
+    "ncp-aio", "nvidia-certification", "ai-infrastructure", "ai-operations", "exam-prep",
+    "slurm", "kubernetes", "gpu-operator", "base-command-manager", "dgx", "hpc", "simulator",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Education",
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Education",
+    "Topic :: System :: Clustering",
+    "Topic :: System :: Systems Administration",
+]
+dependencies = [
+    "pyyaml>=6.0",
+    "rich>=13.7",
+]
+
+[project.urls]
+Homepage = "https://github.com/RehmanaYounis/greenray-aio"
+Issues = "https://github.com/RehmanaYounis/greenray-aio/issues"
 
 [project.scripts]
-aiolab = "aiolab.cli:main"
+greenray = "greenray.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = [
+    "mypy>=2.4.0",
+    "pre-commit>=4.6.2",
+    "pytest>=8",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.6",
+    "types-pyyaml>=6.0.12.20260906",
+]
+
+[tool.uv.build-backend]
+module-name = "greenray"
 
 [build-system]
 requires = ["uv_build>=0.8,<0.12"]
@@ -19,7 +55,23 @@ build-backend = "uv_build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+
+[tool.coverage.run]
+source = ["greenray"]
+branch = true
+
+[tool.coverage.report]
+skip_empty = true
+show_missing = false
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src/greenray/config.py", "src/greenray/cli.py", "src/greenray/core", "src/greenray/content", "src/greenray/app"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+ignore_missing_imports = true
+# The command emulators (src/greenray/commands) are type-checked gradually.
 
 [tool.ruff]
 line-length = 120
@@ -38,4 +90,4 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["aiolab"]
+known-first-party = ["greenray"]

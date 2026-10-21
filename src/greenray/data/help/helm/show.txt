@@ -1,0 +1,30 @@
+
+This command consists of multiple subcommands to display information about a
+chart before it is installed.
+
+  values   the chart's default values.yaml: every key you can set with
+           --set or -f, and its default
+  chart    the chart's metadata (name, version, app version, description)
+
+Examples:
+    $ helm show values myrepo/mychart
+    $ helm show values myrepo/mychart --version 1.2.0
+    $ helm show chart myrepo/mychart
+
+Usage:
+  helm show [command]
+
+Aliases:
+  show, inspect
+
+Available Commands:
+  chart       show the chart's definition
+  values      show the chart's values
+
+Flags:
+  -h, --help             help for show
+      --version string   specify a version constraint for the chart version to use. If omitted, the latest version is used
+
+Global Flags:
+      --kube-context string   name of the kubeconfig context to use
+  -n, --namespace string      namespace scope for this request

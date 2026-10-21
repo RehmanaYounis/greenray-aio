@@ -1,0 +1,45 @@
+Delete resources by file names, stdin, resources and names, or by resources and
+label selector.
+
+ Objects can be named on the command line (TYPE NAME or TYPE/NAME), selected by
+label, or listed in a manifest file. Deleting a pod that is managed by a
+deployment, job or daemon set only removes that pod: its controller creates a
+replacement. Delete the controller to remove the workload for good.
+
+Examples:
+  # Delete a pod
+  kubectl delete pod my-pod
+
+  # Delete the objects defined in a manifest
+  kubectl delete -f my-pod.yaml
+
+  # Delete all pods with a label in namespace demo
+  kubectl delete pods -l app=web -n demo
+
+  # Delete every pod in the current namespace
+  kubectl delete pods --all
+
+  # Delete a deployment, and do not fail if it is already gone
+  kubectl delete deployment web --ignore-not-found
+
+  # Delete a namespace and everything in it
+  kubectl delete namespace demo
+
+Options:
+    --all=false:
+        Delete all objects of the given type in the namespace.
+
+    -f, --filename=[]:
+        Manifest file(s) whose objects should be deleted.
+
+    --ignore-not-found=false:
+        Treat "not found" as success.
+
+    -n, --namespace='':
+        Namespace of the objects (default "default").
+
+    -l, --selector='':
+        Delete the objects that match this label selector.
+
+Usage:
+  kubectl delete ([-f FILENAME] | TYPE [(NAME | -l label | --all)]) [options]

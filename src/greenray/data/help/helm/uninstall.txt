@@ -1,0 +1,19 @@
+
+This command takes one or more release names and uninstalls them.
+
+All Kubernetes resources created by the release are removed, together with
+the release record. Custom resources the chart's operator may have created are
+cleaned up with it.
+
+Usage:
+  helm uninstall RELEASE_NAME [...] [flags]
+
+Aliases:
+  uninstall, del, delete, un
+
+Flags:
+  -h, --help   help for uninstall
+
+Global Flags:
+      --kube-context string   name of the kubeconfig context to use
+  -n, --namespace string      namespace scope for this request

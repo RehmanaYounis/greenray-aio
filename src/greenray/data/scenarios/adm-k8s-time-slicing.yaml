@@ -1,0 +1,83 @@
+id: adm-k8s-time-slicing
+title: Share dgx-04's GPUs between many small inference pods (time-slicing)
+domain: Administration
+difficulty: hard
+time_limit_min: 20
+tags: [kubernetes, gpu-operator, time-slicing, device-plugin, gpu-sharing]
+briefing: |
+  The search team runs a fleet of small embedding services. Each replica needs a few GB of
+  GPU memory and very little compute, so giving each one a whole H100 wastes the cluster.
+  The platform decision:
+    - dgx-04 becomes the shared inference node. The GPU Operator's device plugin must
+      oversubscribe each of its 8 H100s 4 ways with time-slicing, so dgx-04 advertises
+      32 nvidia.com/gpu.
+    - dgx-01..dgx-03 stay exclusive (1 pod per GPU) for training.
+    - Keep the operator configuration in the Helm release (release "gpu-operator",
+      namespace gpu-operator), so that a future `helm upgrade` won't undo it.
+
+  The Deployment "embedder" in namespace "inference" (24 replicas, 1 nvidia.com/gpu each) is
+  already deployed and was written to land only on shared GPUs. All its pods are Pending.
+  Configure the sharing and get them running. Nothing about the Deployment needs to change.
+objectives:
+  - A time-slicing config (4 replicas of nvidia.com/gpu) lives in a ConfigMap in the gpu-operator namespace
+  - The Helm release (and so the ClusterPolicy) points devicePlugin.config at that ConfigMap
+  - dgx-04 advertises 32 nvidia.com/gpu and carries nvidia.com/gpu.replicas=4; dgx-01..03 still advertise 8
+  - All 24 embedder pods are Running on dgx-04
+setup:
+  - python: |
+      from greenray.commands import helm, kubectl as kc
+      helm.preinstall(state, "nvidia/gpu-operator", values={"driver": {"enabled": False}}, settle=86400 * 2)
+      kc.ensure_namespace(state, "inference")
+      kc.apply_yaml(state, """
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: embedder
+        namespace: inference
+        labels: {app: embedder}
+      spec:
+        replicas: 24
+        selector:
+          matchLabels: {app: embedder}
+        template:
+          metadata:
+            labels: {app: embedder}
+          spec:
+            nodeSelector:
+              nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3-SHARED
+            containers:
+            - name: embedder
+              image: nvcr.io/nvidia/tritonserver:24.05-py3
+              args: ["tritonserver", "--model-repository=/models/e5-large"]
+              resources:
+                limits:
+                  nvidia.com/gpu: 1
+      """)
+      kc.advance(state, 1800)
+      kc.reconcile(state)
+checks:
+  - desc: a ConfigMap in gpu-operator holds a time-slicing config with 4 replicas of nvidia.com/gpu
+    expr: "any(c.namespace == 'gpu-operator' and 'timeSlicing' in v and re.search(r'replicas:\\s*4\\b', v) for c in k8s.configmaps for v in (c.get('data') or {}).values())"
+  - desc: the Helm release sets devicePlugin.config.name to an existing ConfigMap
+    expr: "release('gpu-operator') is not None and release('gpu-operator').computed.devicePlugin.config.name != '' and any(c.namespace == 'gpu-operator' and c.name == release('gpu-operator').computed.devicePlugin.config.name for c in k8s.configmaps)"
+  - desc: the ClusterPolicy uses the same device-plugin config
+    expr: "k8s.clusterpolicy is not None and (k8s.clusterpolicy.spec.devicePlugin.get('config') or {}).get('name') == release('gpu-operator').computed.devicePlugin.config.name"
+  - desc: dgx-04 advertises 32 nvidia.com/gpu (8 GPUs x 4 replicas)
+    expr: "k8s.nodes['dgx-04'].allocatable.get('nvidia.com/gpu') == '32'"
+  - desc: GFD labels dgx-04 nvidia.com/gpu.replicas=4 and sharing-strategy time-slicing
+    expr: "k8s.nodes['dgx-04'].labels.get('nvidia.com/gpu.replicas') == '4' and k8s.nodes['dgx-04'].labels.get('nvidia.com/gpu.sharing-strategy') == 'time-slicing'"
+  - desc: dgx-01..dgx-03 are still exclusive (8 nvidia.com/gpu each)
+    expr: "all(k8s.nodes[n].allocatable.get('nvidia.com/gpu') == '8' and k8s.nodes[n].labels.get('nvidia.com/gpu.replicas', '1') == '1' for n in ('dgx-01', 'dgx-02', 'dgx-03'))"
+  - desc: all 24 embedder pods are Running on dgx-04
+    expr: "len([p for p in pods('inference', 'embedder-') if p.status == 'Running' and p.node == 'dgx-04']) == 24"
+  - desc: you looked at why the embedder pods were Pending
+    expr: "ran(r'kubectl (describe (pod|pods|po|deploy|deployment)|get (events|ev)).*') and ran(r'-n inference|--namespace[ =]inference|-A|--all-namespaces')"
+hints:
+  - "`kubectl describe pod -n inference <embedder pod>`: which node label does the pod select on, and which node(s) carry it today (`kubectl get nodes -L nvidia.com/gpu.product`)?"
+  - "GPU Feature Discovery appends -SHARED to nvidia.com/gpu.product on nodes where the device plugin shares GPUs. Sharing is configured with a device-plugin config file (version: v1, sharing.timeSlicing.resources: [{name: nvidia.com/gpu, replicas: 4}]) stored as one key of a ConfigMap in the gpu-operator namespace."
+  - "Point the operator at the ConfigMap with `helm upgrade gpu-operator nvidia/gpu-operator -n gpu-operator --reuse-values --set devicePlugin.config.name=<cm>`. Without devicePlugin.config.default, no node uses a config until you pick one per node."
+  - "Select the config key on dgx-04 only: `kubectl label node dgx-04 nvidia.com/device-plugin.config=<key>`. Then check `kubectl describe node dgx-04 | grep nvidia.com/gpu` and the labels nvidia.com/gpu.replicas / nvidia.com/gpu.product."
+references:
+  - NVIDIA GPU Operator - Time-Slicing GPUs in Kubernetes
+  - NVIDIA k8s-device-plugin - Shared Access to GPUs (time-slicing / MPS)
+  - NVIDIA GPU Operator - GPU Feature Discovery labels

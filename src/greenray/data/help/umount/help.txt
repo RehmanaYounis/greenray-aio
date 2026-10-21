@@ -1,0 +1,16 @@
+
+Usage:
+ umount [options] <source> | <directory>
+
+Unmount filesystems.
+
+Options:
+ -f, --force             force an unmount (for an unreachable NFS server)
+ -l, --lazy              detach the filesystem now, clean up references
+                           once it is no longer busy
+
+ -h, --help              display this help
+
+For more details see umount(8).
+
+(GreenRay AIO simulates the options listed above.)

@@ -1,0 +1,55 @@
+Create and run a particular image in a pod.
+
+ Starts a single pod named NAME with one container running IMAGE. Anything
+after '--' is passed to the container as arguments (or, with --command, as the
+command itself). With --rm and -i the pod's output is printed and the pod is
+deleted when it ends, which is handy for one-off test commands.
+
+Examples:
+  # Start a pod running nginx
+  kubectl run web --image=nginx
+
+  # Start a pod in namespace demo with labels
+  kubectl run my-pod --image=busybox --labels=app=test,tier=debug -n demo
+
+  # Run a one-off command, print its output and remove the pod
+  kubectl run tmp --rm -it --restart=Never --image=busybox -- echo hello
+
+  # Override the container command
+  kubectl run tmp --image=busybox --restart=Never --command -- sleep 3600
+
+  # Add fields that have no flag of their own with a JSON override
+  kubectl run tmp --image=busybox --restart=Never \
+    --overrides='{"spec":{"nodeSelector":{"disktype":"ssd"}}}'
+
+Options:
+    --command=false:
+        Use the arguments after '--' as the container command instead of args.
+
+    --image='':
+        The image for the container. Required.
+
+    --labels='':
+        Comma-separated labels for the pod (default "run=NAME").
+
+    -n, --namespace='':
+        Namespace to create the pod in (default "default").
+
+    --overrides='':
+        Inline JSON merged into the generated pod; its "spec" field is applied
+        to the pod spec.
+
+    --restart='Always':
+        The pod's restart policy: Always, OnFailure or Never.
+
+    --rm=false:
+        With -i, delete the pod after printing its output.
+
+    -i, --stdin=false:
+        Keep stdin open and print the pod's output.
+
+    -t, --tty=false:
+        Allocate a TTY.
+
+Usage:
+  kubectl run NAME --image=image [--labels=key=value,...] [--restart=POLICY] [--command] -- [COMMAND] [args...] [options]

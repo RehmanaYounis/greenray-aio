@@ -1,0 +1,9 @@
+Usage: sprio [OPTIONS]
+  -j, --jobs                      comma separated list of pending jobs to show
+  -l, --long                      show every priority factor (age, fair-share,
+                                  job size, partition, QOS, ...)
+
+Help options:
+  --help                          show this help message
+
+(GreenRay AIO simulates the options listed above.)

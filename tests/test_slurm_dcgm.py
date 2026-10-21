@@ -1,8 +1,8 @@
-"""Focused tests for the Slurm and DCGM emulators (aiolab/commands/slurm.py, dcgmi.py)."""
+"""Focused tests for the Slurm and DCGM emulators (greenray/commands/slurm.py, dcgmi.py)."""
 
-from aiolab.commands import slurm as sl
-from aiolab.core.shell import Shell
-from aiolab.core.state import make_cluster
+from greenray.commands import slurm as sl
+from greenray.core.shell import Shell
+from greenray.core.state import make_cluster
 
 
 def sh(host=None):

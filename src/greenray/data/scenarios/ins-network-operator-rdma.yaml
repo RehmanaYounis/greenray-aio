@@ -1,0 +1,82 @@
+id: ins-network-operator-rdma
+title: Deploy the NVIDIA Network Operator for RDMA workloads
+domain: Installation and Deployment
+difficulty: hard
+time_limit_min: 20
+tags: [kubernetes, network-operator, rdma, infiniband, helm, nfd]
+briefing: |
+  Multi-node training jobs on Kubernetes must use the eight ConnectX-7 NDR InfiniBand
+  HCAs in each DGX through GPUDirect RDMA. Today pods can't get RDMA devices: the
+  test pod from /root/rdma-test.yaml (8 GPUs + 1 rdma/rdma_shared_device_a) is Pending.
+
+  Facts:
+    - The GPU Operator is installed (namespace gpu-operator). It deployed Node Feature
+      Discovery (NFD) as part of its chart.
+    - DGX OS already provides the host DOCA/MLNX_OFED driver stack (openibd is active),
+      so no containerized OFED driver is wanted.
+    - The NGC Helm repo "nvidia" is already configured on bcm-head.
+
+  Install the NVIDIA Network Operator (chart nvidia/network-operator, version 24.4.1) as
+  release "network-operator" in the namespace "nvidia-network-operator". Have it deploy
+  the RDMA shared device plugin with the default resource rdma_shared_device_a, and get
+  the test pod running.
+objectives:
+  - Release network-operator (chart version 24.4.1) is deployed in nvidia-network-operator
+  - Only one NFD instance runs in the cluster (the GPU Operator's)
+  - No containerized MOFED/DOCA driver pods are deployed
+  - A NicClusterPolicy deploys the RDMA shared device plugin, Running on all four DGX nodes
+  - DGX nodes advertise rdma/rdma_shared_device_a and the rdma-test pod is Running
+setup:
+  - python: |
+      from greenray.commands import helm, kubectl as kc
+      helm.preinstall(state, "nvidia/gpu-operator", values={"driver": {"enabled": False}}, settle=86400 * 2)
+  - file: /root/rdma-test.yaml
+    host: bcm-head
+    content: |
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: rdma-test
+        labels:
+          app: rdma-test
+      spec:
+        restartPolicy: Never
+        containers:
+        - name: ib-perf
+          image: nvcr.io/nvidia/pytorch:24.05-py3
+          command: ["sleep", "infinity"]
+          securityContext:
+            capabilities:
+              add: ["IPC_LOCK"]
+          resources:
+            limits:
+              nvidia.com/gpu: 8
+              rdma/rdma_shared_device_a: 1
+  - python: |
+      from greenray.commands import kubectl as kc
+      kc.apply_yaml(state, state.nodes["bcm-head"].files["/root/rdma-test.yaml"])
+      kc.advance(state, 1800)
+      kc.reconcile(state)
+checks:
+  - desc: release network-operator 24.4.1 deployed in nvidia-network-operator
+    expr: "any(r.name == 'network-operator' and r.chart == 'network-operator' and r.version == '24.4.1' and r.namespace == 'nvidia-network-operator' and r.status == 'deployed' for r in k8s.helm_releases)"
+  - desc: exactly one NFD master in the cluster
+    expr: "len([p for p in k8s.pods if p.component == 'nfd-master']) == 1 and len([d for d in k8s.daemonsets if d.component == 'nfd-worker']) == 1"
+  - desc: no containerized MOFED driver pods
+    expr: "not [p for p in k8s.pods if p.component == 'mofed']"
+  - desc: NicClusterPolicy with rdmaSharedDevicePlugin exists and is ready
+    expr: "k8s.nicclusterpolicy is not None and 'rdmaSharedDevicePlugin' in k8s.nicclusterpolicy.spec and k8s.nicclusterpolicy.status.state == 'ready'"
+  - desc: RDMA shared device plugin Running on dgx-01..dgx-04
+    expr: "sorted(p.node for p in k8s.pods if p.component == 'rdma-shared-dp' and p.status == 'Running') == ['dgx-01', 'dgx-02', 'dgx-03', 'dgx-04']"
+  - desc: DGX nodes advertise rdma/rdma_shared_device_a
+    expr: "all(int(k8s.nodes[n].allocatable.get('rdma/rdma_shared_device_a', '0')) > 0 for n in ('dgx-01', 'dgx-02', 'dgx-03', 'dgx-04'))"
+  - desc: rdma-test is Running
+    expr: "any(p.name == 'rdma-test' and p.status == 'Running' for p in pods('default'))"
+hints:
+  - "`kubectl describe pod rdma-test`: which resource does no node offer? Then `kubectl get pods -A | grep feature-discovery` to see what already runs."
+  - "Look at the chart defaults with `helm show values nvidia/network-operator`. Three values matter here: nfd.enabled, deployCR and ofedDriver.deploy."
+  - "Two NFD deployments fight over the same node labels. Install the Network Operator with --set nfd.enabled=false because the GPU Operator already runs NFD."
+  - "Without deployCR=true the chart installs only the operator; nothing tells it what to deploy. Set deployCR=true and rdmaSharedDevicePlugin.deploy=true (keep ofedDriver.deploy=false on DGX OS), or apply a NicClusterPolicy yourself."
+references:
+  - NVIDIA Network Operator documentation - Deployment with RDMA shared device plugin
+  - NVIDIA GPU Operator - GPUDirect RDMA

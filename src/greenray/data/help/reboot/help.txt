@@ -1,0 +1,8 @@
+reboot [OPTIONS...]
+
+Restart the system.
+
+Options:
+     --help      Show this help
+
+(GreenRay AIO simulates the options listed above.)

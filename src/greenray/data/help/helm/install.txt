@@ -1,0 +1,40 @@
+
+This command installs a chart as a new release.
+
+The chart is given as REPO/CHART, using a repository added with "helm repo add".
+Every release needs a name: give one as the first argument, or let Helm make one
+up with --generate-name.
+
+Configuration values override the chart's defaults. Use '--set' for single
+values and '-f'/'--values' for YAML files; both can be repeated, and when the
+same key is given more than once the last one wins. '--set' paths use dots for
+nesting and accept comma-separated lists of assignments:
+
+    $ helm install my-release myrepo/mychart --set image.tag=1.2.3
+    $ helm install my-release myrepo/mychart --set a=1,b.c=true
+    $ helm install my-release myrepo/mychart -f my-values.yaml
+
+Use '--set-string' when a value must stay a string (for example "true" or a
+version number that looks like a float). Run 'helm show values REPO/CHART' to
+see which keys a chart accepts.
+
+To check what would be installed without changing the cluster, add --dry-run.
+
+Usage:
+  helm install [NAME] [CHART] [flags]
+
+Flags:
+      --create-namespace         create the release namespace if not present
+      --dry-run                  simulate an install and print the computed values
+  -g, --generate-name            generate the name (and omit the NAME parameter)
+  -h, --help                     help for install
+      --set stringArray          set values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)
+      --set-string stringArray   set STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)
+      --timeout duration         time to wait for any individual Kubernetes operation (default 5m0s)
+  -f, --values strings           specify values in a YAML file (can specify multiple)
+      --version string           specify a version constraint for the chart version to use. If omitted, the latest version is used
+      --wait                     wait until the release's pods are ready before returning
+
+Global Flags:
+      --kube-context string   name of the kubeconfig context to use
+  -n, --namespace string      namespace scope for this request

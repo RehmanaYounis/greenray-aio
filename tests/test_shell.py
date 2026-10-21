@@ -1,5 +1,5 @@
-from aiolab.core.shell import Shell
-from aiolab.core.state import make_cluster
+from greenray.core.shell import Shell
+from greenray.core.state import make_cluster
 
 
 def sh():

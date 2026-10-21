@@ -1,0 +1,12 @@
+Usage: chroot [OPTION] NEWROOT [COMMAND [ARG]...]
+  or:  chroot OPTION
+Run COMMAND with its root directory set to NEWROOT.
+
+      --help     display this help and exit
+
+If no COMMAND is given, an interactive shell is started ('${SHELL} -i').
+
+On a BCM head node, software images live under /cm/images/<image>; prefer
+cm-chroot-sw-img, which also mounts /proc, /sys and /dev for the command.
+
+(GreenRay AIO simulates the options listed above.)

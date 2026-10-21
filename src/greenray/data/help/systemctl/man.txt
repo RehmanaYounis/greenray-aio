@@ -1,0 +1,99 @@
+SYSTEMCTL(1)                         systemctl                        SYSTEMCTL(1)
+
+NAME
+       systemctl - Control the systemd system and service manager
+
+SYNOPSIS
+       systemctl [OPTIONS...] COMMAND [UNIT...]
+
+DESCRIPTION
+       systemctl inspects and controls the state of the systemd system and
+       service manager. Services (daemons such as a container runtime, a
+       scheduler daemon or a GPU management agent) are described by unit files
+       and are started, stopped and queried through this command.
+
+       A service has two independent properties: whether it is running now
+       (active/inactive/failed) and whether it is started automatically at
+       boot (enabled/disabled). "start" and "stop" change the first, "enable"
+       and "disable" change the second, and "enable --now" changes both.
+
+COMMANDS
+   Unit Commands
+       list-units
+           List the service units the manager knows about, with their load
+           and active state.
+
+       status UNIT...
+           Show the load state, enablement and active state of each unit,
+           followed by the last few lines it wrote to the journal. Use
+           journalctl(1) with -u to see more of the log.
+
+       is-active UNIT...
+           Print the active state of each unit (active, inactive, failed).
+           Handy in scripts.
+
+       start UNIT...
+           Start (activate) the units. If a unit fails to start, the error
+           points to "systemctl status" and "journalctl -xeu" for details.
+
+       stop UNIT...
+           Stop (deactivate) the units.
+
+       restart UNIT...
+           Stop and then start the units, or start them if they are not
+           running. Use this after changing a service's configuration file.
+
+       reload UNIT...
+           Ask the units to reload their configuration without a full
+           restart.
+
+   Unit File Commands
+       list-unit-files
+           List installed unit files.
+
+       enable UNIT...
+           Mark the units to start at boot. With --now, also start them.
+
+       disable UNIT...
+           Stop the units from starting at boot. With --now, also stop them.
+
+       is-enabled UNIT...
+           Print whether each unit is enabled or disabled.
+
+   Manager State Commands
+       daemon-reload
+           Reload the manager configuration. Run this after creating or
+           editing a unit file so that the change is seen.
+
+OPTIONS
+       -h, --help
+           Print a short help text and exit.
+
+       --now
+           When used with enable or disable, also start or stop the units.
+
+NOTES
+       Unit names may be given with or without the ".service" suffix. An
+       unknown name fails with "Unit NAME.service could not be found."
+
+EXAMPLES
+       Check a service and look at its recent messages:
+
+           systemctl status docker
+
+       Restart a service after changing its configuration:
+
+           systemctl restart containerd
+
+       Start a service now and at every boot:
+
+           systemctl enable --now my-service
+
+       Use in a script:
+
+           systemctl is-active my-service
+
+SEE ALSO
+       journalctl(1), service(8)
+
+GreenRay AIO                                                       SYSTEMCTL(1)

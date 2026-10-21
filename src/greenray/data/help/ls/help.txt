@@ -1,0 +1,12 @@
+Usage: ls [OPTION]... [FILE]...
+List information about the FILEs (the current directory by default).
+Entries are sorted alphabetically.
+
+  -1                         list one file per line
+      --help                 display this help and exit
+
+Exit status:
+ 0  if OK,
+ 2  if a FILE could not be accessed.
+
+(GreenRay AIO simulates the options listed above.)

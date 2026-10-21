@@ -1,0 +1,20 @@
+
+This command rolls back a release to a previous revision.
+
+The first argument is the name of a release, and the second is a revision
+(version) number. If the revision is omitted, the release goes back to the
+revision before the current one. To see revision numbers, run
+'helm history RELEASE'.
+
+A rollback is recorded as a new revision that reuses the chart version and
+values of the target revision.
+
+Usage:
+  helm rollback <RELEASE> [REVISION] [flags]
+
+Flags:
+  -h, --help   help for rollback
+
+Global Flags:
+      --kube-context string   name of the kubeconfig context to use
+  -n, --namespace string      namespace scope for this request

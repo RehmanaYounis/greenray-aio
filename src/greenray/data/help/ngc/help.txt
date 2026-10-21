@@ -1,0 +1,40 @@
+usage: ngc [--version] [-h] {config,org,registry,user} ...
+
+NVIDIA NGC CLI
+
+options:
+  -h, --help            Show this help message and exit.
+  --version             Show the CLI version and exit.
+
+ngc:
+  {config,org,registry,user}
+    config              Configure the CLI: API key, output format, org and team.
+    org                 Organization commands.
+    registry            Container image registry commands.
+    user                User commands.
+
+commands:
+  ngc config set                    Prompt for API key, output format (ascii, csv,
+                                    json), org and team, and save them to
+                                    ~/.ngc/config. Answers can be fed on stdin.
+  ngc config current                Show the active configuration and where each
+                                    value comes from.
+  ngc config clear                  Remove the saved configuration.
+  ngc registry image list [PATTERN] List the images you can access; PATTERN may
+                                    use '*' wildcards, e.g. 'nvidia/*'.
+  ngc registry image info IMAGE[:TAG]
+                                    Show details and available tags of an image.
+  ngc org list                      List the organizations your key belongs to.
+  ngc user who                      Show the user the API key belongs to.
+
+environment:
+  NGC_CLI_API_KEY       API key to use when ~/.ngc/config has none.
+  NGC_CLI_ORG           Default org when none is configured.
+
+examples:
+  ngc config set
+  ngc config current
+  ngc registry image list 'nvidia/*'
+  ngc registry image info nvidia/cuda
+
+(GreenRay AIO simulates the commands and options listed above.)

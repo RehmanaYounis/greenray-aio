@@ -1,0 +1,14 @@
+kill: kill [-sigspec] pid ...
+    Send a signal to a process.
+    
+    Send the processes identified by PID the signal named by SIGSPEC.
+    If SIGSPEC is not given, SIGTERM is sent.
+    
+    Options:
+      -sigspec	a signal name or number, e.g. -9 or -KILL
+    
+    Kill is a shell builtin so that it still works when the limit on the
+    number of processes has been reached.
+    
+    Exit Status:
+    Returns success unless no matching process was found or an error occurs.
