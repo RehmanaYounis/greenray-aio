@@ -1,0 +1,15 @@
+# Run `uv run pre-commit install` once to check every commit locally.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+  - repo: local
+    hooks:
+      - id: no-private-solutions
+        name: no solution keys in public scenario files
+        language: pygrep
+        entry: "^(solution|explanation|edge_cases):"
+        files: ^src/greenray/data/scenarios/.*\.yaml$

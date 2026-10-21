@@ -15,6 +15,7 @@ GreenRay AIO drops you into a broken or half-configured **4-node DGX H100 cluste
 - **39 incident and task scenarios** covering every topic of the exam blueprint ([docs/COVERAGE.md](docs/COVERAGE.md))
 - **Incident mode**: only the incident report is shown, and the root cause stays hidden until the debrief
 - **`explain <command>`** for learning tools as you need them, plus progressive hints and a debrief after every lab
+- **Feels like a real node**: `--help` and `man` pages, `nano`/`vim` (your real editor), `cd`, a coloured prompt and real-tool colours
 - **Full mock exam** in the current format: 30 questions plus 3 hands-on labs in 120 minutes (per NVIDIA's exam page; re-check before booking)
 - Runs anywhere Python runs: Linux, WSL, macOS or Windows. **No GPU needed.**
 
@@ -68,12 +69,14 @@ cd ~ && git clone git@github.com:RehmanaYounis/NVIDIA-NCP-AIO-Prep-solutions.git
 
 You can point at another location with `GREENRAY_SOLUTIONS=/path` (the older `AIOLAB_*` variable names still work). Without it, labs still run and grade your work. `solution`, the debrief and question scoring need it.
 
-Developer commands:
+Developer commands (see [CONTRIBUTING.md](CONTRIBUTING.md)):
 
 ```bash
-uv run pytest            # test suite
+uv run pytest            # test suite (add --cov for coverage)
 uv run ruff check .      # lint
 uv run ruff format .     # format
+uv run mypy              # type checks
+uv build                 # wheel + sdist
 ```
 
 ## Use
@@ -146,7 +149,7 @@ Simulated tools:
 - **BCM:** `cmsh` (device, category, softwareimage, user, power, imageupdate, grabimage)
 - **Fabric and Magnum IO:** `ibstat`, `ibdiagnet`, `mlxlink`, `perfquery`, NCCL tests (`all_reduce_perf`, `mpirun`), GPUDirect RDMA/Storage checks
 - **DPU:** BlueField tools (`mlxconfig`, `bfb-install`, DOCA services)
-- **Shell basics:** `cat`, `sed -i`, `grep`, heredocs, pipes and redirects for editing config files
+- **Shell basics:** `cd`, `pwd`, `ls`, `cat`, `grep`, `sed -i`, heredocs, pipes and redirects; `nano`, `vi` and `vim` open your real editor; `--help` and `man` work as on a real node
 
 `commands` inside a lab prints the full list.
 

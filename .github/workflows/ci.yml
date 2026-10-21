@@ -4,13 +4,28 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+
   test:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, windows-latest]
         python: ["3.10", "3.13"]
     steps:
       - uses: actions/checkout@v4
@@ -19,9 +34,9 @@ jobs:
           python-version: ${{ matrix.python }}
           enable-cache: true
       - run: uv sync --locked
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
-      # The private solutions repo is not available in CI: solution replays are skipped,
-      # structure, parsers, scenario setup and grading are still tested.
-      - run: uv run pytest
+      # The private solutions repo is not available in CI: solution replays are skipped;
+      # structure, parsers, scenario setup, grading, help pages and the UI are still tested.
+      - run: uv run pytest --cov --cov-report=term --cov-report=xml
       - run: uv run greenray validate
+      - run: uv build
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'

@@ -39,6 +39,7 @@ greenray = "greenray.cli:main"
 [dependency-groups]
 dev = [
     "mypy>=2.4.0",
+    "pre-commit>=4.6.2",
     "pytest>=8",
     "pytest-cov>=7.1.0",
     "ruff>=0.6",
@@ -54,7 +55,23 @@ build-backend = "uv_build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+
+[tool.coverage.run]
+source = ["greenray"]
+branch = true
+
+[tool.coverage.report]
+skip_empty = true
+show_missing = false
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src/greenray/config.py", "src/greenray/cli.py", "src/greenray/core", "src/greenray/content", "src/greenray/app"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+ignore_missing_imports = true
+# The command emulators (src/greenray/commands) are type-checked gradually.
 
 [tool.ruff]
 line-length = 120
