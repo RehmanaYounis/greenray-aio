@@ -1,0 +1,56 @@
+# Private solution for scenario tsh-storage-io-bottleneck
+solution:
+  - ssh dgx-02
+  - nvidia-smi dmon -c 10
+  - dataloader-bench
+  - cat /home/alice/resnet50/job.env
+  - cat /proc/mounts
+  - nfsiostat /home
+  - iostat -x
+  - ls /lustre/datasets/imagenet-npy
+  - /usr/local/cuda/gds/tools/gdscheck -p
+  - lsmod | grep nvidia_fs
+  - modprobe nvidia-fs
+  - echo nvidia-fs > /etc/modules-load.d/nvidia-fs.conf
+  - sed -i 's#^DATA_DIR=.*#DATA_DIR=/lustre/datasets/imagenet-npy#' /home/alice/resnet50/job.env
+  - sed -i 's/^NUM_WORKERS=[0-9]*/NUM_WORKERS=12/' /home/alice/resnet50/job.env
+  - /usr/local/cuda/gds/tools/gdscheck -p
+  - dataloader-bench
+explanation: |
+  The GPU signature of an input-bound job is SM utilisation that bursts to
+  ~100% for a step, then drops to ~0% while the next batch is loaded. The
+  average looks "low", and every DDP rank stalls at the same time. The GPUs and
+  NCCL are fine. The question is which stage of the input pipeline is slowest.
+
+  Three problems were stacked:
+
+  1. Storage path. DATA_DIR pointed at /home, an NFSv3-over-TCP export from the
+     BCM head node, mounted with rsize/wsize=8192. nfsiostat showed 8 kB read
+     ops and long queue times, which is about 0.3 GB/s = ~2,000 samples/s of
+     150 kB each. Eight H100s need ~3.6 GB/s for this model. Even a better
+     mount (rsize=1M, nconnect) can't get past the head node's Ethernet link,
+     and serving training data from the head node also hurts everything else
+     it does. The same dataset was already staged on the Lustre (EXAScaler)
+     filesystem at /lustre. iostat -x showed idle local disks, because iostat
+     doesn't see NFS or Lustre traffic. That is a common blind spot.
+  2. GPUDirect Storage was requested (USE_GDS=1) but not active. gdscheck -p
+     showed nvidia_fs not loaded and every filesystem Unsupported. With
+     allow_compat_mode=true, cuFile silently falls back to POSIX reads through
+     bounce buffers in host memory. That works, but it costs CPU time and
+     memory bandwidth per sample. NFS over TCP can never do GDS. Lustre with a
+     GDS-enabled client can, once nvidia_fs is loaded.
+  3. Workers. Two workers per GPU (16 in total on a 224-core node) could not
+     decode and augment fast enough even with fast storage. 8-12 per GPU
+     removes that limit.
+
+  After the fix, dataloader-bench reports more samples/s than the GPUs can
+  consume (GPU-bound). That is the goal: the expensive resource is now the
+  bottleneck.
+edge_cases:
+  - "Check for compat mode explicitly. A job that 'uses GDS' prints no error when cuFile falls back. Use gdscheck -p, /proc/driver/nvidia-fs/stats (the read counters should increase), or cufile.log with logging.level raised. Setting allow_compat_mode=false in /etc/cufile.json turns the silent fallback into a hard error, which is useful when validating a setup."
+  - "Which filesystems support GDS depends on the client: local NVMe with ext4/xfs, NVMe-oF, DDN EXAScaler/Lustre, WekaFS, IBM Storage Scale, VAST and others, and NFS only over RDMA with the right client. Exact versions and kernel requirements change between GDS releases. Check the GDS release notes for your stack."
+  - "Loading nvidia_fs needs the matching GPU driver and (for remote filesystems) a working RDMA stack. Make it persistent with /etc/modules-load.d/ or, on BCM, in the software image. In Kubernetes, the GPU Operator can deploy it (gds.enabled=true)."
+  - "NFS tuning still matters for home and project shares: rsize/wsize=1048576, nconnect=8-16 (kernel 5.3 or later), vers=4.1/4.2 and proto=rdma where supported. Small rsize also affects tools that walk directory trees. But for training data, the scalable answer is the parallel filesystem or staging to local NVMe (/raid), not a better head-node export."
+  - "Don't set NUM_WORKERS as high as possible. Each worker uses CPU, RAM and file handles. Past the core count per GPU (here about 28), you get contention and OOM kills instead of speed. Increase until the loader is no longer the limit, then stop."
+  - "iostat -x only covers local block devices. For NFS use nfsiostat or mountstats. For Lustre use lctl get_param llite.*.stats or the client's jobstats. For GPUs use nvidia-smi dmon or dcgmi dmon -e 1002,1005 (SM active, DRAM active)."
+  - "A fully network-bound pipeline can also be caused by the storage NIC: the wrong interface, a missing RDMA (o2ib) LNet setup, or a link at reduced speed. Check lnetctl net show, ibstat on the storage HCAs, and the client mount source."

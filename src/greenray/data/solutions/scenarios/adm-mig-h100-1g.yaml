@@ -1,0 +1,23 @@
+# Private solution for scenario adm-mig-h100-1g
+solution:
+  - ssh dgx-02
+  - nvidia-smi
+  - kill 48211
+  - nvidia-smi -i 0 -mig 1
+  - nvidia-smi mig -i 0 -lgip
+  - nvidia-smi mig -i 0 -cgi 19,19,19,19,19,19,19 -C
+  - nvidia-smi -L
+explanation: |
+  MIG has two layers. A GPU instance (GI) carves out SMs and memory slices.
+  A compute instance (CI) inside it is what CUDA processes actually run on.
+  Creating GIs without CIs (forgetting -C or `mig -cci`) leaves devices that
+  show up in `-lgi` but that no workload can use.
+  If a process still holds the GPU, `-mig 1` leaves the mode *pending*
+  (shown as "Enabled*" in the table). It becomes active only after the
+  process is stopped and the GPU is reset, or the node reboots.
+edge_cases:
+  - "On A100 (and older drivers) enabling MIG always needs a GPU reset (nvidia-smi -r -i 0) or a reboot. On H100 it is usually immediate when the GPU is idle."
+  - "Monitoring agents (DCGM / dcgm-exporter, nvsm) and Fabric Manager can hold the GPU. On real DGX systems you may have to stop them first."
+  - "MIG instances do not persist across a reboot. Use nvidia-mig-parted or the GPU Operator's MIG Manager (nvidia.com/mig.config label) to make layouts persistent."
+  - "1g.10gb x7 uses all 7 compute slices. You cannot also fit a 1g.20gb; mixing profiles is limited by both compute and memory slices."
+  - "To undo: destroy CIs first (mig -dci), then GIs (mig -dgi), then -mig 0. The order matters."

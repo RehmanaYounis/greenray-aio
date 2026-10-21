@@ -1,0 +1,56 @@
+# Private solution for scenario adm-dcgm-health-policy
+solution:
+  - ssh dgx-04
+  - dcgmi discovery -l
+  - systemctl status nvidia-dcgm
+  - systemctl enable --now nvidia-dcgm
+  - dcgmi discovery -l
+  - dcgmi group -c prod-gpus --default
+  - dcgmi group -l
+  - dcgmi health -g 2 -s a
+  - dcgmi health -g 2 -f
+  - dcgmi policy -g 2 --set 0,0 -e -x -T 85 -P 650
+  - dcgmi policy -g 2 --get
+  - dcgmi policy -g 2 --reg
+  - dcgmi health -g 2 -c
+  - dcgmi test --inject --gpuid 3 -f 311 -v 1
+  - dcgmi health -g 2 -c
+  - nvidia-smi -i 3 -q -d ECC
+explanation: |
+  DCGM's proactive monitoring has two parts, both scoped to a GPU group on one
+  host engine:
+
+  * Health watches (`dcgmi health -g <gid> -s a`) tell the host engine to keep
+    watching the PCIe, memory, InfoROM, thermal/power and NVLink signals in the
+    background. `dcgmi health -g <gid> -c` then reports Healthy, Warning or
+    Failure per GPU and subsystem. You poll for the result.
+  * Policies (`dcgmi policy -g <gid> --set <action>,<validation> <conditions>`)
+    push events instead. The conditions are -e (DBE), -p (PCIe), -n (NVLink),
+    -x (XID), -M (retired pages), -T (temperature) and -P (power). The action is
+    0 = none or 1 = GPU reset. Validation is 0 = none, or 1, 2 or 3 = run a
+    short, medium or long diagnostic after the action. A client has to register
+    for callbacks (`dcgmi policy --reg`, or dcgmPolicyRegister in the API) to be
+    told about a violation.
+
+  The host engine was disabled on the re-imaged node, so every dcgmi call failed
+  with "Unable to connect to host engine". `systemctl enable --now nvidia-dcgm`
+  fixes both "running now" and "running after a reboot". The group,
+  watches, policy and listener all live only in the running host engine, so they
+  must be created after it starts (and again after every restart).
+
+  `dcgmi test --inject` writes a value into the host engine's field cache. DCGM's
+  health and policy logic see a volatile DBE on GPU 3, while the hardware (and
+  nvidia-smi) still show zero. That makes it a safe end-to-end test of the
+  alerting path. The health check turns to Failure (Memory) for GPU 3, and the
+  registered listener prints "A double-bit ECC error has violated policy manager
+  values." Notify-only (0,0) was chosen because an automatic GPU reset would
+  kill whatever job runs on that GPU. Draining through the scheduler is the
+  gentler response.
+edge_cases:
+  - "Groups, health watches, policies and policy registrations are not persistent. They vanish when nv-hostengine restarts or the node reboots. Production setups recreate them from a startup script or a monitoring agent, or use dcgm-exporter with Prometheus alert rules instead."
+  - "`dcgmi policy --reg` blocks and prints violations until you press Ctrl-C. It only notifies while it runs. Run it under a supervisor (systemd unit, tmux) or use the DCGM API from your monitoring agent. The simulator keeps the listener alive for the rest of the lab session."
+  - "The real action set is small: 0 = none, 1 = GPU reset. A reset fails if processes are still using the GPU, and resetting one GPU on an NVSwitch system may need the other GPUs to be idle too. Validation 1-3 runs the matching diagnostic level after the reset."
+  - "Group 0 (DCGM_ALL_SUPPORTED_GPUS) exists by default, and `dcgmi group -c NAME --default` creates a new group with all GPUs in it. Group IDs you create start at 2 on a fresh host engine. Read the ID from the output instead of assuming it."
+  - "Health watch letters: p PCIe, m memory, i InfoROM, t thermal and power, n NVLink, a all. Newer DCGM releases add more (for example driver and NVSwitch). Run `dcgmi health --help` on your version."
+  - "Field IDs to know: 311 DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, 310 SBE volatile, 230 XID errors, 150 GPU temp, 155 power. The `dcgmi test --inject` syntax (--gpuid, -f/--field, -v/--value) is a development and test feature, and its options have changed between releases. Check `dcgmi test --help`."
+  - "Health checks and policies watch different things. Health reports state when asked (Warning on SBE storms, Failure on DBE). A policy fires once per new event to a registered client. Use both: health checks in Slurm prolog/epilog or HealthCheckProgram, policies or dcgm-exporter for alerting."

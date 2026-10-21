@@ -1,0 +1,40 @@
+# Private solution for scenario adm-bcm-user-role
+solution:
+  - cmsh -c "user; list; group; list; profile; list"
+  - su - maria -c "sbatch --wrap=hostname"
+  - cmsh -c "user; add maria; set id 2010; set password Welcome-2026!; set profile readonly; commit"
+  - cmsh -c "group; use mlteam; append members maria; commit"
+  - cmsh -c "user; show maria"
+  - id maria
+  - ssh dgx-03 id maria
+  - su - maria -c "sbatch --wrap=hostname"
+  - sacctmgr show assoc format=account,user,share
+  - sacctmgr -i add user maria account=vision
+  - sacctmgr show user maria format=user,defaultaccount
+  - su - maria -c "sbatch --wrap=hostname"
+  - squeue -o "%.6i %.8u %.10a %.8T %N"
+explanation: |
+  Onboarding a user touches three separate systems, and each has its own commit:
+
+  1. Identity (BCM user mode). cmsh user objects are stored by CMDaemon in the
+     cluster LDAP, and every node resolves them through LDAP, which is why
+     `id maria` works on dgx-03 without touching it. `set id` pins the UID so NFS
+     file ownership matches. Like everything in cmsh, nothing happens until `commit`.
+  2. Group membership. In BCM it is a list property of the group (`append
+     members`), not of the user. On commit, BCM creates the user's own primary
+     group with the same number.
+  3. BCM role. Access to CMDaemon (cmsh, Base View) is controlled by profiles,
+     which are sets of tokens. `readonly` can look at everything and change
+     nothing. `admin` can do everything. Least privilege means readonly.
+
+  Slurm is a fourth, separate system: the job submission fails with "Invalid
+  account or account/partition combination specified" until sacctmgr adds the
+  maria/vision association, because this cluster enforces associations. For a
+  new user, the first account added also becomes the default account.
+edge_cases:
+  - "cmsh user mode 'set password' takes the clear-text password, and CMDaemon stores the hash in LDAP. Force a change at first login with the user's shadow settings, or ask the user to run passwd."
+  - "A BCM profile limits what the user can do through CMDaemon (cmsh/Base View/API) only. It is not sudo and does not affect what they can do on the nodes."
+  - "CMDaemon authenticates users with certificates that carry a profile. Depending on the BCM version and setup, the certificate is generated for the user from the profile set in user mode, or an admin creates it in cmsh cert mode. Check the Administrator Manual of your version for the exact flow."
+  - "useradd on one node creates a local account that exists only there, with a UID that may clash with LDAP. On a BCM cluster, always create users in cmsh (or Base View)."
+  - "Adding the user to the Linux group mlteam does not give Slurm access, and a Slurm association does not create a Linux user. Exams like to mix these up."
+  - "sacctmgr add user for an existing user adds another association but keeps the old DefaultAccount. Set defaultaccount explicitly when moving people between teams."

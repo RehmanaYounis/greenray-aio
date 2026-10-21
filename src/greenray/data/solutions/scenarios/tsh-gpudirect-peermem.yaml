@@ -1,0 +1,45 @@
+# Private solution for scenario tsh-gpudirect-peermem
+solution:
+  - mpirun --allow-run-as-root -np 16 -H dgx-01:8,dgx-02:8 -x NCCL_DEBUG=INFO all_reduce_perf -b 1G -e 8G -f 2 -g 1
+  - ssh dgx-01
+  - lsmod | grep -i peer
+  - modprobe nvidia-peermem
+  - echo nvidia-peermem > /etc/modules-load.d/nvidia-peermem.conf
+  - lsmod | grep -i peer
+  - exit
+  - ssh dgx-02
+  - modprobe nvidia-peermem
+  - echo nvidia-peermem > /etc/modules-load.d/nvidia-peermem.conf
+  - reboot
+  - ssh dgx-02 lsmod
+  - mpirun --allow-run-as-root -np 16 -H dgx-01:8,dgx-02:8 -x NCCL_DEBUG=INFO all_reduce_perf -b 1G -e 8G -f 2 -g 1
+explanation: |
+  With GPUDirect RDMA (GDR), the InfiniBand HCA reads and writes GPU memory
+  directly over PCIe. Without it, NCCL's IB transport still works, but every
+  message is staged through a bounce buffer in host memory: the GPU copies to
+  host, the HCA sends from host, and the receiver copies again. That costs PCIe
+  and memory bandwidth plus extra latency. On an 8-rail NDR system it typically
+  costs a large share of inter-node bus bandwidth. Nothing fails, so the job
+  "works" and the problem only shows up as a slow benchmark.
+
+  For the classic GDR path, the HCA's verbs stack needs the nvidia-peermem kernel
+  module (module name nvidia_peermem; the older third-party nv_peer_mem has been
+  replaced by it). It ships with the GPU driver, but it isn't loaded
+  automatically. Before the update, someone had loaded it by hand. The driver
+  reinstall and reboot dropped it, and nothing made it persistent.
+
+  The evidence is in NCCL_DEBUG=INFO: "NET/IB : GPU Direct RDMA Disabled for HCA
+  N 'mlx5_N' (no module)", and channel lines that end in `via NET/IB/0` instead
+  of `via NET/IB/0/GDRDMA`. "Using network IB" alone does not prove GDR is on.
+  The fix is `modprobe nvidia-peermem` on each node (live) plus an entry in
+  /etc/modules-load.d/ (persistent). The solution reboots dgx-02 to prove the
+  module comes back, then reruns the two-node test and sees /GDRDMA and full
+  busbw.
+edge_cases:
+  - "lsmod shows the module as nvidia_peermem (underscore). modprobe accepts nvidia-peermem or nvidia_peermem. Both mean the same module."
+  - "If modprobe nvidia-peermem fails with 'Invalid argument' or unknown symbols, the module was built against a different MLNX_OFED/DOCA-OFED or inbox RDMA stack than the one now loaded. Reinstall the driver after OFED (or rebuild with DKMS) so the symbols match. Loading order matters: the IB core modules must be present first."
+  - "With the GPU Operator on Kubernetes, nvidia-peermem is loaded by the driver container when driver.rdma.enabled=true (useHostMofed=true if OFED is installed on the host). Loading it by hand on the host is the wrong fix there."
+  - "Newer stacks can do GPUDirect RDMA through Linux DMA-BUF instead of nvidia-peermem. That needs the open GPU kernel modules, kernel 5.12 or later, and a recent NCCL and RDMA core. NCCL then logs DMA-BUF support, and a missing nvidia_peermem is not a problem. Check which path your platform uses before blaming the module. (The simulator models only the nvidia-peermem path.)"
+  - "Other things that disable or limit GDR: NCCL_NET_GDR_LEVEL set too low, GPU and HCA on different PCIe root complexes (check nvidia-smi topo -m: PIX/PXB are good, SYS is bad), ACS/IOMMU settings on the PCIe switches, or NCCL_IB_DISABLE=1, which falls back to sockets entirely."
+  - "On BCM-managed nodes, a file you add under /etc on a node is lost at the next reprovision or imageupdate unless the same change is in the software image. Put modules-load.d/nvidia-peermem.conf into /cm/images/<image>/etc/ (or exclude the path from sync) and imageupdate."
+  - "Compare busbw at large message sizes (1 GB or more), not the 'Avg bus bandwidth' line. GDR mainly helps bandwidth at large sizes and latency at small ones."

@@ -1,0 +1,332 @@
+# Answer key for troubleshooting.yaml: answer = zero-based choice indexes
+tsh-001:
+  answer: [1, 4]
+  explanation: |
+    XID 79 means the GPU stopped responding on PCIe. Common causes are PCIe link,
+    power or thermal problems, or hardware failure. Take the node out of service
+    and capture logs before a reboot or reset clears the state. Then reset or
+    reboot, and run diagnostics. If it happens again, escalate for hardware
+    service. Resuming the node sends more jobs to a broken GPU. Changing the
+    power limit is not the fix and nvidia-smi may not even reach the GPU.
+    Deleting output files destroys user data and doesn't help.
+
+tsh-002:
+  answer: [0]
+  explanation: |
+    XID 48 reports a double-bit ECC error (DBE), which can't be corrected. The
+    affected application is usually terminated, and the GPU may need a reset
+    (on GPUs with row remapping, a remap is then applied). NVLink problems are
+    XID 74, falling off the bus is XID 79, and application memory faults usually
+    show as XID 13 or 31.
+
+tsh-003:
+  answer: [1]
+  explanation: |
+    XID 31 (and often 13) are usually caused by the application accessing an
+    invalid address. When the errors follow one user's code across many GPUs
+    while other workloads are healthy, the hardware is very unlikely to be at
+    fault. Running the code under compute-sanitizer helps find the bug. Fabric
+    Manager failure stops CUDA from initializing. IB problems show up as
+    network errors, not GPU page faults.
+
+tsh-004:
+  answer: [2]
+  explanation: |
+    XID 63 logs an ECC page retirement or row remapping event. XID 64 means
+    that recording failed, for example because no spare rows were left in a
+    bank. A remapping failure is a sign the GPU needs to be looked at for
+    replacement. NVLink errors are XID 74. Neither XID relates to application
+    timeouts or clock changes.
+
+tsh-005:
+  answer: [2]
+  explanation: |
+    Pending: Yes means a row remap was recorded but only becomes active after
+    a GPU reset. Until then, the bad row is still in use. Drain, reset, then check
+    that Pending is No and run DCGM diagnostics. Remapping is a normal
+    self-healing feature, so one remapped row isn't automatically an RMA; a
+    remapping failure would be. Disabling ECC removes protection and hides
+    errors.
+
+tsh-006:
+  answer: [3]
+  explanation: |
+    A remapping failure means the GPU couldn't remap a faulty row (for example,
+    no spare rows left), so the error can't be fixed in the field. NVIDIA
+    guidance is to take the GPU out of service and contact support. A few
+    remapped rows from correctable errors are normal. Pending: Yes only needs a
+    reset. Zero errors is healthy.
+
+tsh-007:
+  answer: [0]
+  explanation: |
+    XID 74 reports NVLink errors. Check link status and error counters
+    (nvidia-smi nvlink commands, DCGM NVLink health) and the Fabric Manager logs.
+    Persistent errors on one GPU often mean a hardware problem with that GPU or
+    its baseboard. InfiniBand, storage and Slurm accounting don't produce NVLink
+    XIDs.
+
+tsh-008:
+  answer: [2]
+  explanation: |
+    With error containment, the driver can sometimes limit an uncorrectable
+    error to the processes that used the bad memory (XID 94). Those processes
+    are terminated, and others continue. If containment isn't possible (XID 95),
+    all work on the GPU is affected and the GPU must be reset. Both are
+    uncorrectable ECC events, not correctable ones, and neither is NVLink or
+    PCIe. A node reboot is not specifically required for XID 94.
+
+tsh-009:
+  answer: [3]
+  explanation: |
+    XID 45 (preemptive cleanup due to previous errors) is usually a follow-on
+    event. It also appears when a process is killed while using the GPU. The
+    root cause is the earlier XID (or the process kill), so don't treat it as
+    hardware failure on its own. Falling off the bus is XID 79. MIG changes
+    don't generate XID 45.
+
+tsh-010:
+  answer: [0]
+  explanation: |
+    XID 92 means the GPU is seeing a high rate of single-bit ECC errors. They are
+    corrected, but a high rate suggests memory is degrading, so watch it closely
+    (row remaps, DCGM health). Throttling, MIG and container problems aren't
+    reported through XID 92.
+
+tsh-011:
+  answer: [0]
+  explanation: |
+    XID 43 is generally reported when an application's work on the GPU stops
+    because of a fault in that application (often with XID 13 or 31). The GPU
+    stays usable for other work. Since other jobs are fine and health is clean,
+    focus on the application. Falling off the bus is XID 79. A fabric outage
+    blocks all CUDA work. Nothing here points to firmware.
+
+tsh-012:
+  answer: [0]
+  explanation: |
+    Run level 1 is the quick check of the deployment (driver, permissions,
+    libraries and similar). Level 2 adds short tests, level 3 runs longer
+    hardware tests, and level 4 is the extended, longest run. dcgmi stats is
+    for job statistics, not diagnostics.
+
+tsh-013:
+  answer: [3]
+  explanation: |
+    A memory test failure with DBE on one GPU is a hardware concern. Keep the
+    node out of production, collect evidence (diag output, bug report, ECC and
+    remap status) and engage support if a reset and re-test confirm it.
+    Returning the node risks jobs. Running a lighter test hides the problem.
+    Disabling ECC removes the protection that found it.
+
+tsh-014:
+  answer: [0]
+  explanation: |
+    PCIe replays are link-level retransmissions. A high replay rate points to
+    signal integrity problems (seating, riser, cable, slot) and can lower
+    bandwidth or lead to more serious errors such as XID 79. MIG, the exporter
+    and Slurm state don't produce PCIe health warnings.
+
+tsh-015:
+  answer: [1]
+  explanation: |
+    "SW Power Cap: Active" means the driver lowers clocks to keep power under the
+    configured limit. With a limit well below the default, someone (or a script)
+    lowered it. Restore it and make sure it isn't reapplied by mistake at boot.
+    Overheating would show HW/SW thermal slowdown. IB affects communication, not
+    clock event reasons. ECC mode doesn't cap power.
+
+tsh-016:
+  answer: [1]
+  explanation: |
+    HW Thermal Slowdown means the hardware is cutting clocks because the GPU is
+    too hot. When only one GPU is hot under the same load, cooling for that
+    position is the most likely problem. A power cap would show "SW Power Cap".
+    Slurm and NCCL settings don't change GPU temperature.
+
+tsh-017:
+  answer: [2]
+  explanation: |
+    The PERFORMANCE section of nvidia-smi -q lists the clock event (throttle)
+    reasons and which are active. topo -m shows interconnect topology, -L lists
+    GPUs, and mig -lgi lists MIG GPU instances.
+
+tsh-018:
+  answer: [3]
+  explanation: |
+    On NVSwitch systems, CUDA can't initialize until Fabric Manager has set up
+    the NVLink fabric, and error 802 is the typical symptom. nvidia-smi can still
+    list the GPUs. The IB subnet manager affects inter-node networking, not local
+    CUDA init. MIG doesn't cause 802. gres.conf only affects Slurm scheduling.
+
+tsh-019:
+  answer: [3]
+  explanation: |
+    Fabric Manager must match the driver version exactly. Upgrading the driver
+    without FM leaves them mismatched. Install the matching FM (and pin both to
+    avoid partial upgrades). The CUDA toolkit version is unrelated. NVSwitch
+    systems don't fall back to working without FM. MIG doesn't remove the need
+    for Fabric Manager.
+
+tsh-020:
+  answer: [3]
+  explanation: |
+    Physical state Polling means the port is looking for a link partner and
+    can't find one, so the problem is at the physical layer (cable, optics or
+    the switch side). If the subnet manager were missing, the port would be
+    LinkUp but stuck in Initializing. NCCL settings and the GPU driver don't
+    change the physical link state.
+
+tsh-021:
+  answer: [0]
+  explanation: |
+    LinkUp with the full rate means the physical links are fine. Ports stay in
+    Initializing until a subnet manager sweeps the fabric, assigns LIDs and
+    activates them. If this happens fabric-wide after maintenance, check the SM.
+    Damaged cables would show Polling or degraded rates. GPU drivers and Fabric
+    Manager (NVSwitch) don't control InfiniBand port states.
+
+tsh-022:
+  answer: [2]
+  explanation: |
+    A port running below the fabric's expected rate (or width) is usually a cable,
+    transceiver or port problem, and the slow link lowers collective
+    performance. Link-level tools show the details. Rate isn't negotiated per
+    job. Restarting the SM doesn't fix a physical problem. Excluding healthy
+    HCAs makes things worse.
+
+tsh-023:
+  answer: [0, 2]
+  explanation: |
+    perfquery reads the performance and error counters of a port. ibdiagnet scans
+    the fabric and reports links with errors, rate or width problems, and other
+    issues. Symbol errors that keep rising point to a bad cable or connector.
+    nvidia-smi nvlink covers NVLink, not InfiniBand. DCGM r1 is a GPU deployment
+    check. sinfo -R shows Slurm node reasons.
+
+tsh-024:
+  answer: [1]
+  explanation: |
+    "Using network Socket" means inter-node traffic goes over TCP instead of
+    InfiniBand, which explains the very low bandwidth. Check NCCL_IB_HCA values
+    against ibstat or ibv_devinfo names, NCCL_IB_DISABLE, and whether the
+    container has access to /dev/infiniband. NVLink problems would affect
+    intra-node results. The large message sizes were already tested. Throttling
+    doesn't switch NCCL to sockets.
+
+tsh-025:
+  answer: [2]
+  explanation: |
+    algbw is bytes moved by the operation divided by elapsed time. busbw applies
+    a correction factor for each collective so the number reflects the bandwidth
+    used on the busiest link and doesn't depend on rank count. Use busbw when
+    comparing with hardware peak. They aren't tied to particular interconnects,
+    and the factor isn't a constant one half.
+
+tsh-026:
+  answer: [1]
+  explanation: |
+    NCCL_IB_HCA has to match the actual device names. Here it includes the
+    storage HCAs and leaves out two compute HCAs, so NCCL uses the wrong rails.
+    Unsetting NCCL_DEBUG only hides logs. Disabling IB forces sockets. Adding
+    GPUs doesn't fix the HCA choice.
+
+tsh-027:
+  answer: [3, 4]
+  explanation: |
+    GPUDirect RDMA needs nvidia-peermem so the HCA can access GPU memory, and
+    NCCL only uses it when the GPU and NIC are close enough in the PCIe topology
+    (policy set by NCCL_NET_GDR_LEVEL). MIG mode, slurmdbd and Prometheus don't
+    decide whether GPUDirect RDMA is used.
+
+tsh-028:
+  answer: [1]
+  explanation: |
+    The nvidia-fs kernel module enables the direct DMA path for GDS. Without it
+    (or on an unsupported filesystem or configuration), cuFile can fall back to
+    compatibility mode, which works but stages data in host memory and loses the
+    benefit. It doesn't simply refuse to run. nvidia-fs is unrelated to NVLink
+    and to MIG.
+
+tsh-029:
+  answer: [1]
+  explanation: |
+    The NVIDIA Container Toolkit only injects GPU devices and driver utilities
+    such as nvidia-smi when the container asks for GPUs (--gpus or the NVIDIA
+    runtime). Without that, the container has no GPU access. A newer host
+    driver is normally fine. A corrupt image would usually fail to start. MIG
+    GPUs are still visible to containers that request them.
+
+tsh-030:
+  answer: [3]
+  explanation: |
+    The device plugin needs NVML from the host driver, which is injected through
+    the NVIDIA runtime. With toolkit.enabled=false, the operator expects the host
+    toolkit to be installed and configured for containerd. If it isn't, the
+    plugin can't find NVML and crashes. GPU count, Prometheus and the MIG label
+    don't cause NVML load failures.
+
+tsh-031:
+  answer: [0]
+  explanation: |
+    Secrets are namespaced. Pods elsewhere work because their namespace has the
+    NGC pull secret. A 401 is an authentication error. A deleted tag gives
+    "not found". GPU availability and the device plugin affect scheduling, not
+    image pulls.
+
+tsh-032:
+  answer: [2]
+  explanation: |
+    slurmd reports the GPUs it finds from gres.conf (or autodetection). If that
+    is less than the count in slurm.conf, the controller marks the node invalid.
+    Fix gres.conf (or slurm.conf) so they agree, restart slurmd, then resume the
+    node. MIG would change how GPUs are counted, but nvidia-smi shows 8 normal
+    GPUs. A munge failure would stop the node registering at all, not report 4.
+    Nodes don't have time limits.
+
+tsh-033:
+  answer: [0]
+  explanation: |
+    nvidia-bug-report.sh collects driver state, kernel logs, nvidia-smi output,
+    PCI information and more into one compressed log that support expects. The
+    other commands capture only a small part of that information.
+
+tsh-034:
+  answer: [1]
+  explanation: |
+    Systematic troubleshooting starts by defining the problem and its scope,
+    comparing with a baseline, before changing anything. A cluster-wide reboot
+    or driver upgrade adds risk and destroys evidence without a diagnosis.
+    Fair-share affects queue order, not job speed.
+
+tsh-035:
+  answer: [1, 2]
+  explanation: |
+    The GPUs are starved by the input pipeline. Faster storage (local NVMe cache
+    or a parallel filesystem) and more parallel prefetching keep them fed. A
+    lower power limit slows compute further. MIG doesn't fix I/O. Disabling IB
+    only affects NCCL networking, not NFS reads, and a single-node job barely uses
+    it.
+
+tsh-036:
+  answer: [2, 4]
+  explanation: |
+    Magnum IO groups NVIDIA's I/O and communication technologies, including
+    GPUDirect RDMA, GPUDirect Storage, NCCL, NVSHMEM and UCX-based libraries.
+    Slurm is a scheduler, Prometheus is monitoring, and Helm is a Kubernetes
+    package manager.
+
+tsh-037:
+  answer: [2]
+  explanation: |
+    nvidia-smi nvlink -s (--status) lists each NVLink link of each GPU with its
+    speed, showing links that are down or inactive. ibstat covers InfiniBand
+    HCAs. The ECC section shows memory errors. sinfo shows Slurm nodes.
+
+tsh-038:
+  answer: [3]
+  explanation: |
+    Starting with A100, GPUs repair bad memory rows with row remapping instead
+    of the dynamic page retirement used on V100 and earlier. Row remapper status
+    is shown in nvidia-smi and DCGM. A100 tracks memory errors in detail. Slurm
+    doesn't report GPU page data. Disabling ECC removes error detection.

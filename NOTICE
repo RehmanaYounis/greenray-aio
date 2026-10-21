@@ -1,0 +1,10 @@
+GreenRay AIO
+Copyright 2026 Rehmana Younis
+
+Licensed under the Apache License, Version 2.0.
+
+GreenRay AIO is an independent study tool. It is not affiliated with, endorsed by
+or sponsored by NVIDIA Corporation. NVIDIA, DGX, Base Command Manager, NCP-AIO and
+related names are trademarks of NVIDIA Corporation and are used only to describe
+the certification this tool helps you prepare for. Every node, GPU, switch and log
+in GreenRay AIO is simulated; no NVIDIA software is included.

@@ -2,7 +2,17 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
-## [0.4.0] - unreleased
+## [0.5.0] - unreleased
+
+Installs anywhere and ships complete.
+
+### Added
+- Reference solutions and exam answer keys ship with the package; an external solutions directory still overrides them.
+- Apache-2.0 licence and a NOTICE with the NVIDIA non-affiliation statement.
+- PyPI publishing through trusted publishing, and a multi-arch Docker image on GHCR, both built by the release workflow.
+- `greenray doctor` prints the version, environment, editor and solutions source.
+
+## [0.4.0] - 2026-10-21
 
 Feels like a real terminal.
 

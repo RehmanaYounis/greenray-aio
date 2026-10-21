@@ -1,0 +1,34 @@
+# Private solution for scenario tsh-nccl-ib-hca
+solution:
+  - mpirun --allow-run-as-root -np 16 -H dgx-01:8,dgx-02:8 all_reduce_perf -b 8 -e 8G -f 2 -g 1
+  - mpirun --allow-run-as-root -np 16 -H dgx-01:8,dgx-02:8 -x NCCL_DEBUG=INFO all_reduce_perf -b 1G -e 8G -f 2 -g 1
+  - ssh dgx-01 ibstat
+  - cmsh -c "device; pexec -n dgx-01..dgx-04 'cat /etc/nccl.conf'"
+  - cat /cm/images/dgx-os-6.2-h100-image/etc/nccl.conf
+  - sed -i 's/^NCCL_IB_HCA=.*/NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7/' /cm/images/dgx-os-6.2-h100-image/etc/nccl.conf
+  - sed -i '/NCCL_IB_GID_INDEX/d' /cm/images/dgx-os-6.2-h100-image/etc/nccl.conf
+  - cmsh -c "device; imageupdate -c dgx-h100"
+  - cmsh -c "device; imageupdate -w -c dgx-h100"
+  - mpirun --allow-run-as-root -np 16 -H dgx-01:8,dgx-02:8 -x NCCL_DEBUG=INFO all_reduce_perf -b 1G -e 8G -f 2 -g 1
+explanation: |
+  NCCL reads its settings from environment variables and from
+  /etc/nccl.conf (plus ~/.nccl.conf and the file named by NCCL_CONF_FILE).
+  Environment variables take precedence. `NCCL_IB_HCA` is a filter list:
+  plain entries are prefix matches, `=` makes them exact, `^` excludes, and
+  `:port` picks a port. With `NCCL_IB_HCA=mlx5_bond_0` no HCA matched, so the
+  IB transport found no devices and NCCL quietly fell back to the TCP Socket
+  transport ("NET/IB : No device found", "Using network Socket"). The job ran
+  correctly, about 100x slower. NCCL_DEBUG=INFO is the fastest way to see
+  which transport and which NICs NCCL really picked.
+
+  The nodes get /etc from their BCM software image. Fixing only the running
+  nodes would be undone by the next `imageupdate` or reprovision. Fixing the
+  image and then syncing it with `imageupdate -w` makes the change persistent
+  and consistent across all nodes.
+edge_cases:
+  - "mpirun does NOT forward your shell environment to remote ranks. Use `-x VAR` / `-x VAR=value` (Open MPI). Settings in /etc/profile.d are not read by the non-login shells that start remote ranks, but /etc/nccl.conf is read by NCCL itself."
+  - "`export NCCL_IB_HCA=...` on the head node only affects ranks started on the head node. That is a common reason why 'my fix did nothing'."
+  - "NCCL_IB_HCA=mlx5_1 also matches mlx5_10, mlx5_11, ... (prefix match). Use `=mlx5_1` for an exact match. On a real DGX H100 the compute HCAs are not contiguous (mlx5_0,3,4,5,6,9,10,11), and the others are storage/in-band NICs."
+  - "NCCL_SOCKET_IFNAME names the interface for bootstrap/OOB traffic. If it matches no interface, initialization fails with 'unhandled system error' instead of running slowly."
+  - "NCCL_IB_DISABLE=1, a missing nvidia_peermem (no GPUDirect RDMA), or HCAs in Ethernet link-layer mode also give low inter-node bandwidth. Check the INFO lines for 'GPU Direct RDMA' and 'Using network'."
+  - "nccl-tests reports algbw and busbw. Compare busbw (corrected for the collective's algorithm), and use large messages (>= 1 GB). The 'Avg bus bandwidth' line averages small sizes too and is always much lower."

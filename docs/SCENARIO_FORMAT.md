@@ -4,14 +4,14 @@ A scenario has two files with the same name:
 
 | File | Repository | Contents |
 | --- | --- | --- |
-| `src/greenray/data/scenarios/<id>.yaml` | public (this repo) | Problem: briefing, objectives, setup (fault injection), checks (grading), hints |
-| `scenarios/<id>.yaml` | private solutions repo (`greenray-aio-solutions`) | Answer: reference solution, explanation, edge cases |
+| `src/greenray/data/scenarios/<id>.yaml` | problem | Problem: briefing, objectives, setup (fault injection), checks (grading), hints |
+| `src/greenray/data/solutions/scenarios/<id>.yaml` | answer | Answer: reference solution, explanation, edge cases |
 
-The loader refuses a public file that contains `solution`, `explanation` or `edge_cases`, so answers can't leak into the public repo by accident.
+The loader refuses a problem file that contains `solution`, `explanation` or `edge_cases`, so the lab UI can always keep the answer hidden until it is asked for.
 
 Prefix ids with the domain: `ins-`, `adm-`, `wkl-`, `tsh-`. The file name must equal the id.
 
-## Public file
+## Problem file
 
 ```yaml
 id: tsh-example
@@ -46,7 +46,7 @@ references:
   - Public doc titles to read next
 ```
 
-## Private file
+## Answer file
 
 ```yaml
 solution:                    # replayed by the test-suite; must make every check pass

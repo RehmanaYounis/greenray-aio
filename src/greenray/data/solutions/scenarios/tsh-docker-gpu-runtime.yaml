@@ -1,0 +1,60 @@
+# Private solution for scenario tsh-docker-gpu-runtime
+solution:
+  - ssh dgx-02
+  - systemctl status docker
+  - journalctl -u docker
+  - cat /etc/docker/daemon.json
+  - |
+    cat > /etc/docker/daemon.json <<EOF
+    {
+        "log-driver": "json-file",
+        "log-opts": {
+            "max-size": "100m",
+            "max-file": "5"
+        },
+        "registry-mirrors": ["https://registry-mirror.corp.example:5000"]
+    }
+    EOF
+  - nvidia-ctk runtime configure --runtime=docker --set-as-default
+  - cat /etc/docker/daemon.json
+  - systemctl restart docker
+  - docker info | grep -i runtime
+  - docker ps -a
+  - docker exec infer-triton-b-1 nvidia-smi -L
+  - docker inspect -f '{{.HostConfig.Runtime}} {{json .Config.Env}}' infer-triton-b-1
+  - sed -i 's/CUDA_VISIBLE_DEVICES=2,3/NVIDIA_VISIBLE_DEVICES=2,3/' /opt/infer/compose.yaml
+  - docker compose -f /opt/infer/compose.yaml up -d
+  - docker exec infer-triton-a-1 nvidia-smi -L
+  - docker exec infer-triton-b-1 nvidia-smi -L
+explanation: |
+  Three problems were stacked on top of each other:
+
+  1. Invalid JSON. A trailing comma after the last key ("registry-mirrors": [...],) makes
+     dockerd refuse to start: `unable to configure the Docker daemon with file
+     /etc/docker/daemon.json: invalid character '}' looking for beginning of object key
+     string`. systemctl only says the unit failed. journalctl -u docker has the reason.
+
+  2. The rewrite dropped the NVIDIA runtime. The old file had "runtimes": {"nvidia": ...}
+     and "default-runtime": "nvidia". The compose services request no GPUs explicitly. They
+     relied on the default runtime, and their containers were created with
+     HostConfig.Runtime=nvidia. With the JSON fixed, dockerd starts, but their restart policy
+     fails with "unknown or invalid runtime name: nvidia". Without the default runtime, a
+     recreated container would run with runc and see no GPUs at all.
+     `nvidia-ctk runtime configure --runtime=docker --set-as-default` merges both keys back
+     without losing log-opts / registry-mirrors. Then restart Docker.
+
+  3. Isolation through the wrong variable. The nvidia runtime decides which GPU device nodes
+     are mounted into the container from NVIDIA_VISIBLE_DEVICES (default for NGC images:
+     "all"). CUDA_VISIBLE_DEVICES=2,3 only tells the CUDA runtime inside the container which
+     of the *visible* GPUs to use. triton-b could see and touch all 8 GPUs (nvidia-smi lists
+     8). Setting NVIDIA_VISIBLE_DEVICES=2,3 (or a compose device reservation with
+     device_ids: ["2","3"]) mounts only those two. Inside the container they appear as
+     GPU 0 and 1.
+edge_cases:
+  - "Validate before restarting: `python3 -m json.tool /etc/docker/daemon.json` (or `jq . file`) catches syntax errors. `dockerd --validate --config-file /etc/docker/daemon.json` exists on Docker 23+."
+  - "Setting \"default-runtime\": \"nvidia\" without defining it under \"runtimes\" also stops dockerd from starting (the default runtime does not exist)."
+  - "NVIDIA_VISIBLE_DEVICES=void (or none) gives a container no GPU devices even with the nvidia runtime. none still injects the driver libraries, void doesn't. If it is left in an image or env file, every container from it starts without GPUs."
+  - "CUDA_VISIBLE_DEVICES is relative to what the container sees. With NVIDIA_VISIBLE_DEVICES=2,3, CUDA_VISIBLE_DEVICES=2,3 inside the container points at devices that don't exist. Use 0,1 or drop it."
+  - "Compose alternatives to the default runtime: `runtime: nvidia` per service, or `deploy.resources.reservations.devices: [{driver: nvidia, device_ids: ['2','3'], capabilities: [gpu]}]` (needs the toolkit hook, like --gpus)."
+  - "`systemctl restart docker` stops every container on the host, including the other team's, unless \"live-restore\": true is set. Some keys (e.g. runtimes, default-runtime, registry-mirrors) can be applied with `systemctl reload docker` (SIGHUP). Others, such as log-driver, need a restart and only affect newly created containers. Check the reloadable list in the Docker docs for your version."
+  - "Docker uses `--gpus` / device requests and does not use the Kubernetes device plugin. Kubernetes nodes with containerd use /etc/containerd/config.toml instead, and the GPU Operator's toolkit DaemonSet manages it."

@@ -1,0 +1,41 @@
+# Private solution for scenario wkl-slurm-pending-reasons
+solution:
+  - squeue
+  - squeue -o "%.6i %.9P %.14j %.8u %.2t %.10l %.3D %b %r"
+  - scontrol show job 2002
+  - scontrol show partition batch
+  - sinfo
+  - scontrol update partitionname=batch state=up
+  - scontrol update jobid=2002 timelimit=04:00:00
+  - sbatch /root/ddp.sbatch
+  - sed -i 's/^#SBATCH -N 1/#SBATCH -N 2/' /root/ddp.sbatch
+  - sed -i 's/gpu:16/gpu:8/' /root/ddp.sbatch
+  - sbatch /root/ddp.sbatch
+  - squeue
+explanation: |
+  Each job was blocked by a different layer:
+
+  * 2001 (PartitionDown): partition batch was set DOWN for maintenance with
+    scontrol and never brought back up. A DOWN partition accepts submissions,
+    but the scheduler won't start anything in it. scontrol update
+    partitionname=batch state=up fixes the running state. slurm.conf already says
+    State=UP, so a later scontrol reconfigure would also have reset it. Runtime
+    scontrol changes to partitions don't persist.
+  * 2002 (PartitionTimeLimit): bob asked for 2 days in a partition whose MaxTime is
+    4 hours. With the default EnforcePartLimits=NO, Slurm accepts the job and leaves
+    it pending forever instead of rejecting it. An admin (or bob, since this
+    only lowers the limit) can fix it with scontrol update jobid=2002
+    timelimit=04:00:00.
+  * carol's job never got a job ID. --gres=gpu:16 asks for 16 GPUs on each
+    node, so no node in the partition can satisfy it and sbatch rejects it at
+    submit time. Two nodes with 8 GPUs each gives 16 GPUs and maps onto two
+    DGX nodes with NVLink inside each node and InfiniBand between them.
+    --gpus=16 (a job-wide total) is an alternative that lets Slurm work out the
+    node count.
+edge_cases:
+  - "Resources vs Priority: the top-priority waiting job shows Resources. Jobs queued behind it show Priority, even if they would fit (unless backfill can start them without delaying the top job)."
+  - "ReqNodeNotAvail / 'Nodes required for job are DOWN, DRAINED or reserved...' means the job can only use nodes that are drained or down (often because of -w/--nodelist). Fix the nodes or drop the constraint."
+  - "QOSMaxGRESPerUser, QOSGrpGRES, AssocGrpGRES and similar reasons come from accounting limits. Look at sacctmgr show qos / assoc, not at the nodes."
+  - "With EnforcePartLimits=ALL (or YES/ANY), the same over-long or over-sized job is rejected at submit time instead of pending with PartitionTimeLimit / PartitionNodeLimit."
+  - "Dependency / DependencyNeverSatisfied: an afterok dependency on a job that failed never resolves. Cancel the job or change it with scontrol update jobid=X dependency=."
+  - "JobHeldAdmin / JobHeldUser: release with scontrol release <id>. BeginTime: the job was requeued or submitted with --begin."

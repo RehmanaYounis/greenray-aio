@@ -35,39 +35,31 @@ root@dgx-03:~# check
 
 ## Install
 
-The project is managed with [uv](https://docs.astral.sh/uv/). uv installs the right Python version and the dependencies for you. A GPU is **not** required.
+Pick one. A GPU is **not** required.
 
-**WSL / Linux (recommended)**
+**With uv or pipx** (any OS with Python 3.10+):
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh     # once
-git clone https://github.com/RehmanaYounis/greenray-aio.git ~/greenray-aio
-cd ~/greenray-aio
-uv sync                                             # creates .venv from pyproject.toml + uv.lock
-uv run greenray
+uv tool install greenray-aio      # or: pipx install greenray-aio
+greenray
 ```
 
-**Windows (PowerShell)**
+**With Docker** (nothing to install):
 
-```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"   # once
+```bash
+docker run -it --rm -v greenray:/home/lab/.greenray ghcr.io/rehmanayounis/greenray-aio
+```
+
+The named volume keeps your progress between runs.
+
+**From source** (to contribute):
+
+```bash
 git clone https://github.com/RehmanaYounis/greenray-aio.git
-cd greenray-aio
-uv sync
-uv run greenray
+cd greenray-aio && uv sync && uv run greenray
 ```
 
-Use WSL for the best experience: you get arrow-key history and tab completion there.
-
-### Solutions (private)
-
-Reference solutions, explanations and exam answer keys are **not** in this repository. They live in a separate private solutions repository. Clone it **next to** this one (as `greenray-aio-solutions`, or under its legacy name `NVIDIA-NCP-AIO-Prep-solutions`) and the simulator finds it automatically:
-
-```bash
-cd ~ && git clone git@github.com:RehmanaYounis/NVIDIA-NCP-AIO-Prep-solutions.git   # private
-```
-
-You can point at another location with `GREENRAY_SOLUTIONS=/path` (the older `AIOLAB_*` variable names still work). Without it, labs still run and grade your work. `solution`, the debrief and question scoring need it.
+Use WSL rather than PowerShell on Windows for the best terminal experience. `greenray doctor` prints your environment when something looks wrong.
 
 Developer commands (see [CONTRIBUTING.md](CONTRIBUTING.md)):
 
@@ -77,11 +69,12 @@ uv run ruff check .      # lint
 uv run ruff format .     # format
 uv run mypy              # type checks
 uv build                 # wheel + sdist
+docker build -t greenray-aio .
 ```
 
 ## Use
 
-Run these as `uv run greenray …` from the repository folder. If you activate the environment (`source .venv/bin/activate`), plain `greenray …` works too.
+Installed with uv tool, pipx or Docker, the command is `greenray …`. From a source checkout use `uv run greenray …`.
 
 | Command | What it does |
 | --- | --- |
@@ -96,6 +89,7 @@ Run these as `uv run greenray …` from the repository folder. If you activate t
 | `greenray exam -n 20 -m 40 -d "Administration"` | Domain drill |
 | `greenray progress` | Passed labs, exam history, weakest domain |
 | `greenray validate` | Self-test: every scenario is solvable by its reference solution |
+| `greenray doctor` | Version, Python, terminal, editor, solutions source and progress path |
 
 Inside a lab, these meta-commands are available alongside the simulated cluster commands:
 
@@ -155,9 +149,13 @@ Simulated tools:
 
 **Limits:** outputs are realistic but simplified, and only the options that matter for the exam are implemented. If something doesn't parse, try the canonical form of the command. If a real command behaves differently from the simulator, trust the real one, and please open an issue.
 
+## Licence
+
+Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
 ## Trust model
 
-Scenario files are **code**: `checks` are Python expressions and `setup` may contain Python, both run on your machine. They come only from this repository and your private solutions repository. Commands you type in a lab never reach `eval`/`exec`; they are parsed by the simulated tools. Only install scenario files you trust.
+Scenario files are **code**: `checks` are Python expressions and `setup` may contain Python, both run on your machine. They come only from this package and, if you use one, your own solutions directory. Commands you type in a lab never reach `eval`/`exec`; they are parsed by the simulated tools. Only install scenario files you trust.
 
 ## Code layout
 
@@ -166,19 +164,20 @@ src/greenray/
   cli.py            command-line entry point (argparse)
   core/             cluster state model, bash-like shell, errors
   commands/         one module per tool family (nvidia_smi, slurm, kubectl, cmsh, ib, ...)
-  content/          loaders: scenarios, questions, private solutions, command guides, validation, domains
+  content/          loaders: scenarios, questions, solutions, command guides, validation, domains
   app/              interactive layer: lab runner, question drill, mock exam, progress, UI
-  data/scenarios/   public scenario files (problem only)
-  data/questions/   public question bank (questions only)
+  data/scenarios/   scenario files (problem only)
+  data/questions/   question bank (questions only)
+  data/solutions/   reference solutions, answer keys and lab solutions
   data/command_guides.yaml   scenario-agnostic guides for `explain`
-tests/              pytest suite; solution-replay tests skip when the private repo is absent
+tests/              pytest suite, including a replay of every reference solution
 docs/               SCENARIO_FORMAT.md, COVERAGE.md
 ```
 
 ## Adding scenarios and questions
 
-- Scenarios: the public problem goes in `src/greenray/data/scenarios/`, and the solution goes in the private repo. See [docs/SCENARIO_FORMAT.md](docs/SCENARIO_FORMAT.md). Add every new scenario to [docs/COVERAGE.md](docs/COVERAGE.md).
-- Questions: these go in `src/greenray/data/questions/`, with the answer key in the private repo under `questions/<same file>`. The format is documented in `src/greenray/content/questions.py`.
+- Scenarios: the problem goes in `src/greenray/data/scenarios/` and the solution in `src/greenray/data/solutions/scenarios/`. See [docs/SCENARIO_FORMAT.md](docs/SCENARIO_FORMAT.md). Add every new scenario to [docs/COVERAGE.md](docs/COVERAGE.md).
+- Questions: these go in `src/greenray/data/questions/`, with the answer key in `src/greenray/data/solutions/questions/<same file>`. The format is documented in `src/greenray/content/questions.py`.
 - Run `uv run greenray validate` and `uv run pytest` before committing. CI runs lint and tests on every push.
 
 All content is original and written from public documentation concepts. It is not copied from the exam.

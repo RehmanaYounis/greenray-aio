@@ -1,0 +1,46 @@
+# Private solution for scenario tsh-dcgm-diag-failure
+solution:
+  - ssh dgx-03
+  - nvidia-smi -q -d ECC
+  - dcgmi discovery -l
+  - dcgmi group -c allgpus --default
+  - dcgmi health -g 2 -s mn
+  - dcgmi health -g 2 -c
+  - dcgmi diag -r 3
+  - nvidia-bug-report.sh
+  - exit
+  - scontrol update nodename=dgx-03 state=drain reason="DCGM diag r3 fail - GPU5 DBE ECC (Xid 48), GPU2 NVLink 4,5 down (Xid 74)"
+  - hwticket create --node dgx-03 --component gpu --summary "dcgmi diag -r 3 fails - GPU5 volatile DBE x2 / Xid 48, GPU2 NVLink links 4,5 down / Xid 74; bug report on node"
+  - sinfo -R
+  - squeue -w dgx-03
+explanation: |
+  nvidia-smi's default table shows only volatile uncorrectable ECC and
+  utilisation, which is why the node looked "mostly fine". DCGM correlates the
+  signals:
+
+  * dcgmi health with memory (m) and NVLink (n) watches reported a failure on
+    GPU 5 (volatile double-bit ECC errors) and on GPU 2 (NVLink links 4 and 5
+    down). These match the Xid 48 and Xid 74 entries in dmesg.
+  * dcgmi diag -r 3 confirmed both under load. GPU Memory, Diagnostic and Memory
+    Bandwidth failed on GPU 5; PCIe/NVLink and the P2P part of the Diagnostic
+    failed on GPU 2. A data-parallel job is only as fast as its slowest link,
+    hence the NCCL timeouts across nodes.
+
+  Draining (not downing) stops new work from landing on dgx-03 while the VIP job,
+  which runs on unaffected GPUs 0 and 1, finishes. Its state moves DRAINING ->
+  DRAINED. Write the evidence into the drain reason so the next admin doesn't
+  resume the node blindly.
+
+  Neither fault is something to "fix" in the field. A high aggregate DBE count
+  (11) plus NVLink links down inside the HGX baseboard means an NVIDIA Enterprise
+  Support case with nvidia-bug-report.log.gz and the dcgmi diag output, which
+  typically ends in a GPU or baseboard RMA. A reboot can clear the volatile
+  counters and briefly make the node pass, but that hides the problem rather
+  than fixing it.
+edge_cases:
+  - "dcgmi health -c only evaluates the systems watched for that group, and watches are per host engine. They disappear when nvidia-dcgm restarts or the node reboots."
+  - "Diag levels: -r 1 deployment/software checks (seconds), -r 2 adds PCIe/NVLink and a short memory test, -r 3 adds stress/power/bandwidth (around 30 minutes on real hardware), -r 4 adds memtest/pulse tests (hours). Run -r 3 or 4 before RMA or return-to-service decisions."
+  - "Diags give misleading results with workloads on the GPUs. On a real node, wait for the drain to complete before the long diag, or run it only on idle GPUs with -i."
+  - "A single volatile SBE count is normal. DBEs (uncorrectable) are not. On A100/H100 each DBE triggers a row remap that needs a GPU reset to activate. Repeated DBEs or a remap failure mean RMA."
+  - "NVLink down on one GPU may also be an NVSwitch or Fabric Manager problem. Check nvidia-smi nvlink -s, nvidia-smi topo -m and the nvidia-fabricmanager journal before blaming the GPU."
+  - "DCGM policies (dcgmi policy --set 0,0 -e -x -n) can trigger actions or notifications automatically on DBE, XID or NVLink errors. dcgm-exporter exposes the same fields to Prometheus."

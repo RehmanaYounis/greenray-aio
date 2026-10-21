@@ -1,0 +1,19 @@
+# Private solution for scenario tsh-power-cap-persistence
+solution:
+  - ssh dgx-03
+  - nvidia-smi --query-gpu=index,power.draw,power.limit,clocks.sm,temperature.gpu --format=csv
+  - nvidia-smi -q -d PERFORMANCE
+  - nvidia-smi -q -d POWER
+  - nvidia-smi -pl 700
+  - nvidia-smi -pm 1
+explanation: |
+  Every GPU drew right up to its 350 W limit while the SM clock sat well below the
+  maximum, and "SW Power Cap" was active. That is a software power limit, not a
+  thermal problem. Restoring the default limit (700 W for H100 SXM) brings the clocks back.
+  Persistence mode keeps the driver loaded with no client attached, which removes
+  the multi-second initialisation delay and keeps settings stable between jobs.
+edge_cases:
+  - "A limit set with -pl does not survive a reboot. Settings that must persist belong in a systemd unit, the BCM node/category configuration, or DCGM policy."
+  - "HW Thermal Slowdown or HW Power Brake points to cooling or PSU problems. Do not 'fix' those by raising the power limit."
+  - "nvidia-persistenced (the daemon) is the recommended way to get persistence on modern drivers. nvidia-smi -pm 1 is the legacy toggle, and both appear in exam questions."
+  - "Read the limits range first (-q -d POWER). nvidia-smi rejects values outside Min/Max Power Limit."

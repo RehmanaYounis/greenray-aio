@@ -1,0 +1,33 @@
+# Private solution for scenario tsh-fabricmanager-down
+solution:
+  - ssh dgx-01
+  - deviceQuery
+  - systemctl status nvidia-fabricmanager
+  - journalctl -u nvidia-fabricmanager
+  - nvidia-smi
+  - nv-fabricmanager --version
+  - cat /var/log/apt/history.log
+  - systemctl enable --now nvidia-fabricmanager
+  - systemctl status nvidia-fabricmanager
+  - deviceQuery
+explanation: |
+  On HGX/DGX systems with NVSwitch (A100, H100 8-GPU baseboards), the GPUs
+  cannot be used for CUDA until NVIDIA Fabric Manager has configured the
+  NVSwitches and registered every GPU with the NVLink fabric. Until then, CUDA
+  initialisation returns error 802, cudaErrorSystemNotReady ("system not yet
+  initialized"). nvidia-smi still works, because it only talks to the driver.
+  That is what makes this failure confusing.
+
+  The journal tells the story. After the driver upgrade, the old FM package
+  (550.54.15) refused to start because FM and the driver must be exactly the
+  same version. Someone then disabled the unit to stop the alerts, upgraded FM
+  to 550.90.07, and never started or re-enabled it. The versions now match, so
+  `systemctl enable --now nvidia-fabricmanager` fixes the node and keeps it
+  fixed across reboots.
+edge_cases:
+  - "If the versions still differ, starting FM fails again with \"... don't match with driver version ...\". Upgrade nvidia-fabricmanager-<branch> to the exact driver version (on BCM, in the software image) before restarting."
+  - "Driver upgrades on NVSwitch systems should upgrade the driver and FM together. DGX OS and BCM images pin both packages for this reason."
+  - "H100 systems also need the NVLink Subnet Manager (nvlsm) for some configurations, and FM logs then show it. On A100 HGX, FM alone is enough."
+  - "nvidia-smi -q shows 'Fabric > State: In Progress / Completed' on H100. 'In Progress' for a long time also points to FM/NVSwitch trouble."
+  - "Restarting FM while CUDA jobs are running is disruptive. Drain the node first on a production cluster."
+  - "Fabric Manager is not used on PCIe GPUs or on systems without NVSwitch. Don't 'fix' error 802 on such nodes by installing it."

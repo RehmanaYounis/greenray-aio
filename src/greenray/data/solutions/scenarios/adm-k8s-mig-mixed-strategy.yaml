@@ -1,0 +1,38 @@
+# Private solution for scenario adm-k8s-mig-mixed-strategy
+solution:
+  - kubectl describe pod mig-inference
+  - kubectl get nodes -L nvidia.com/mig.capable,nvidia.com/mig.config,nvidia.com/mig.strategy
+  - helm get values gpu-operator -n gpu-operator -a
+  - helm upgrade gpu-operator nvidia/gpu-operator -n gpu-operator --reuse-values --set mig.strategy=mixed
+  - kubectl label node dgx-04 nvidia.com/mig.config=all-1g.10gb --overwrite
+  - kubectl get node dgx-04 -L nvidia.com/mig.config,nvidia.com/mig.config.state
+  - kubectl logs -n gpu-operator -l app=nvidia-mig-manager --tail=6
+  - kubectl describe node dgx-04 | grep mig-1g
+  - ssh dgx-04 nvidia-smi -L
+  - kubectl get pod mig-inference -o wide
+explanation: |
+  The GPU Operator's MIG support has two parts:
+    - The MIG manager (nvidia-mig-manager DaemonSet) applies a named layout from its
+      mig-parted config whenever a node's nvidia.com/mig.config label changes. It
+      stops GPU clients, enables MIG mode, creates the GPU and compute instances,
+      restarts the clients and sets nvidia.com/mig.config.state=success. Because the
+      label is the desired state, the layout is re-applied after reboots. MIG
+      instances themselves are not persistent.
+    - The device plugin and GFD advertise the result according to mig.strategy:
+        single : all GPUs on a node must use one identical profile. Slices are
+                 advertised as nvidia.com/gpu (dgx-04 would show nvidia.com/gpu: 56)
+                 and the product label becomes ...-MIG-1g.10gb.
+        mixed  : every profile gets its own resource, nvidia.com/mig-1g.10gb: 56,
+                 while non-MIG GPUs stay nvidia.com/gpu. Required to request a
+                 profile by name and to mix profiles on a node.
+  The operator labels MIG-capable nodes with the default config (all-disabled), so
+  the first `kubectl label` without --overwrite fails. Setting mig.strategy through
+  `helm upgrade --reuse-values` keeps it in the release values. A `kubectl patch` of
+  the ClusterPolicy works immediately but would be reverted by the next helm upgrade.
+edge_cases:
+  - "With mig.strategy=single, a node whose GPUs have different profiles (or MIG enabled with no instances) is invalid: the device plugin crash-loops with 'invalid MIG configuration'. Use all-<profile> layouts or switch to mixed."
+  - "Labelling a MIG layout while a workload is using the GPUs makes the MIG manager fail (mig.config.state=failed). Drain GPU pods (and host GPU jobs) first."
+  - "all-balanced on H100 80GB gives 2x1g.10gb + 1x2g.20gb + 1x3g.40gb per GPU. That only makes sense with the mixed strategy."
+  - "MIG devices created by hand with nvidia-smi on a MIG-manager node are not tracked by the label and disappear on reboot. Let the MIG manager own the layout (custom layouts go in a ConfigMap referenced by migManager.config.name)."
+  - "Don't forget `--reuse-values`: an upgrade with only --set mig.strategy=mixed resets driver.enabled to true on these DGX nodes and starts crash-looping driver pods."
+  - "Pods ask for MIG slices via limits only, e.g. nvidia.com/mig-1g.10gb: 1. Asking for nvidia.com/gpu on dgx-04 under mixed fails, because all its GPUs are now in MIG mode."

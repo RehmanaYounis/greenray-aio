@@ -1,0 +1,32 @@
+# Private solution for scenario wkl-k8s-taint-toleration
+solution:
+  - kubectl get pods -o wide
+  - kubectl describe pod -l app=triton-inference
+  - kubectl describe node dgx-01 | grep Taints
+  - cat /root/triton.yaml
+  - "sed -i 's/value: \"true\"/value: \"present\"/' /root/triton.yaml"
+  - kubectl apply -f /root/triton.yaml
+  - kubectl rollout status deployment/triton-inference
+  - kubectl get pods -o wide
+explanation: |
+  A NoSchedule taint repels every pod that has no matching toleration. With
+  `operator: Equal` a toleration matches only if key, value and effect are all equal
+  (an empty effect matches every effect). The manifest tolerated nvidia.com/gpu=true,
+  but the nodes are tainted nvidia.com/gpu=present, so the scheduler reported
+  "4 node(s) had untolerated taint {nvidia.com/gpu: present}" next to the usual
+  control-plane taint on bcm-head.
+
+  The fix belongs in the Deployment's pod template. Applying the corrected manifest
+  changes the template hash, the Deployment creates a new ReplicaSet, and the new
+  pods schedule onto GPU nodes, while the Pending pods of the old ReplicaSet are
+  removed. Patching the individual Pending pods would not stick, because the
+  ReplicaSet recreates pods from the template.
+  The GPU Operator's own DaemonSets tolerate nvidia.com/gpu by default
+  (daemonsets.tolerations), which is why the operator kept working on the tainted nodes.
+edge_cases:
+  - "`operator: Exists` with a key matches any value of that key. `operator: Exists` with no key tolerates every taint. That is too broad for user workloads."
+  - "A toleration only *allows* a pod onto a tainted node; it does not attract it there. To force GPU pods onto GPU nodes, also use a GPU resource request, nodeSelector or node affinity (e.g. nvidia.com/gpu.present=true)."
+  - "NoExecute taints also evict running pods without a matching toleration (optionally after tolerationSeconds). NoSchedule only affects new scheduling decisions."
+  - "Many clusters run the ExtendedResourceToleration admission plugin, which adds a toleration for nvidia.com/gpu automatically to pods that request nvidia.com/gpu (operator Exists). Don't count on it being enabled in the exam."
+  - "Pod tolerations may only be *added* to an existing pod. Changing or removing one requires recreating the pod."
+  - "Removing the taint (`kubectl taint nodes dgx-01 nvidia.com/gpu=present:NoSchedule-`) would also unblock the pods, but it breaks the policy for every other workload. Read the constraints."

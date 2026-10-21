@@ -1,0 +1,56 @@
+# Private solution for scenario adm-slurm-fairshare-accounts
+solution:
+  - sacctmgr show assoc format=account,user,share tree
+  - sshare -a
+  - scontrol show config | grep -i -E "PriorityType|AccountingStorageEnforce"
+  - sacctmgr -i add account research description="AI research" organization=ai-lab
+  - sacctmgr -i add account nlp parent=research fairshare=60 description="NLP team"
+  - sacctmgr -i add account vision parent=research fairshare=40 description="Vision team"
+  - sacctmgr -i add user alice,bob account=nlp
+  - sacctmgr -i add user carol,dave account=vision
+  - sacctmgr -i modify user alice,bob set defaultaccount=nlp
+  - sacctmgr -i modify user carol,dave set defaultaccount=vision
+  - sacctmgr -i delete user alice,bob,carol,dave where account=root
+  - sacctmgr -i delete user eve
+  - echo "AccountingStorageEnforce=associations,limits,qos" >> /etc/slurm/slurm.conf
+  - systemctl restart slurmctld
+  - scontrol show config | grep -i AccountingStorageEnforce
+  - sacctmgr show assoc format=account,user,share tree
+  - su - bob -c "sbatch --wrap='sleep 600'"
+  - su - eve -c "sbatch --wrap='sleep 600'"
+  - squeue -o "%.6i %.8u %.10a %.8T %N"
+  - sshare -a
+explanation: |
+  Slurm accounting is a tree of associations, each a (cluster, account, user,
+  partition) tuple. Fair-share works on that tree:
+
+  * Accounts get shares relative to their siblings. research -> {nlp 60,
+    vision 40} means that, inside research's slice, NLP is entitled to 60% and
+    vision to 40%. A user's shares count inside their account (each user
+    association defaults to 1 share).
+  * The multifactor plugin (PriorityType=priority/multifactor, with
+    PriorityWeightFairshare > 0) turns "share vs. recent usage" into the
+    FAIRSHARE term that sprio shows. sshare shows RawShares, NormShares
+    (normalised among siblings), RawUsage, EffectvUsage and the resulting
+    FairShare factor.
+
+  Two details catch people here:
+  1. sacctmgr add user X account=Y adds an association. For an existing user it
+     does not move their default, so alice would still be charged to root.
+     Set defaultaccount explicitly and then remove the old root association. You
+     cannot drop the association that is still the default first.
+  2. Without AccountingStorageEnforce=associations (or limits/safe, which imply
+     it), slurmctld does not check associations at all. eve, or anyone
+     else, could keep submitting to any account. The setting has to go into
+     slurm.conf (BCM: the slurm role or wlm settings) and be picked up by slurmctld.
+
+  The proof: bob's job without -A shows Account=nlp in squeue/sacct, eve's
+  submission is rejected with "Invalid account or account/partition combination
+  specified", and sshare -a shows research/nlp/vision with 60/40 shares.
+edge_cases:
+  - "Fair Tree (the default since Slurm 19.05) ranks associations level by level using LevelFS = NormShares / EffectvUsage. Classic fairshare uses 2^(-usage/shares). Both reward under-served accounts, but their numbers differ. Know which one PriorityFlags selects."
+  - "RawUsage decays with PriorityDecayHalfLife (default 7 days). PriorityUsageResetPeriod can reset it instead. A team that used a lot last month may already have its fair-share back."
+  - "fairshare=parent makes a user or account inherit its parent's share instead of competing within the level. It is useful for 'all users in this account are equal'."
+  - "AccountingStorageEnforce=associations rejects jobs without a valid association. 'limits' adds GrpTRES/MaxTRES enforcement, 'qos' requires a valid QOS, and 'safe' only starts jobs that can finish within GrpTRESMins limits."
+  - "Deleting a user's last association removes the user from accounting. Their Linux account still exists. With enforcement on they simply can't submit. Without enforcement they still could."
+  - "In a BCM cluster, slurm.conf is generated from the slurmserver role settings. A hand edit can be overwritten when the role is changed in cmsh. Set the parameter in the WLM/role configuration as well."

@@ -1,0 +1,474 @@
+# Answer key for installation.yaml: answer = zero-based choice indexes
+ins-001:
+  answer: [1]
+  explanation: |
+    cmsh is the BCM cluster management shell. It talks to CMDaemon and can run
+    interactively or non-interactively (cmsh -c "device; status"), which makes it
+    the tool for scripting. cm-chroot-sw-img only opens a chroot inside a software
+    image. nvsm is the DGX system management/health tool, not a BCM cluster
+    manager. Base View is the web GUI the administrator wants to avoid.
+
+ins-002:
+  answer: [0]
+  explanation: |
+    FULL makes the node-installer repartition, recreate filesystems and copy the
+    full image every time. AUTO (the default) only does a full install when the
+    partitions don't match the disk setup and otherwise just syncs the image.
+    NOSYNC skips syncing the image entirely. MAIN stops the node-installer for
+    maintenance and doesn't provision the node.
+
+ins-003:
+  answer: [0]
+  explanation: |
+    The default mode is AUTO. If the existing partitions are valid, the
+    node-installer does an rsync-style sync against the software image, so local
+    changes that are not in the image are overwritten and missing files are added.
+    A full wipe only happens in FULL mode or when AUTO finds invalid partitions.
+    The node still PXE boots and talks to the provisioning node, so it does not
+    skip the head node. Standard BCM provisioning installs the image on local
+    disk, not on an NFS root.
+
+ins-004:
+  answer: [3]
+  explanation: |
+    NOSYNC tells the node-installer to mount the existing filesystems without
+    syncing them against the software image, so local changes survive the reboot.
+    AUTO would sync and overwrite them. FULL would wipe the disk. MAIN halts the
+    node-installer for maintenance and the node doesn't finish booting. When
+    debugging is done, put the fix into the software image (or grab it with
+    grabimage) and switch the node back to AUTO.
+
+ins-005:
+  answer: [1]
+  explanation: |
+    imageupdate syncs running nodes with their software image without a reboot.
+    Some BCM versions do a dry run first and ask you to repeat it with -w, so
+    review the sync result. grabimage goes the other way: it copies a node's
+    filesystem into the image, which would undo nothing here and could pull in
+    node-specific junk. FULL install mode only applies at the next boot, so it
+    needs a reboot. /cm/shared is a shared NFS path, not a way to install
+    packages into the image.
+
+ins-006:
+  answer: [1]
+  explanation: |
+    Software images are directory trees under /cm/images on the head node.
+    cm-chroot-sw-img opens a chroot (with the right mounts) inside the image so
+    you can use the normal package manager. Then imageupdate or a reboot pushes
+    the change. The head node's own packages are not part of node images.
+    Installing on each node is lost at the next AUTO sync. Categories do not have
+    a package list that installs software.
+
+ins-007:
+  answer: [1]
+  explanation: |
+    grabimage copies a running node's filesystem into its software image (or a
+    new image). It goes from node to image. imageupdate goes from image to node.
+    clone copies an existing object such as an image or category inside cmsh.
+    commit saves pending property changes to CMDaemon and doesn't copy any
+    filesystem.
+
+ins-008:
+  answer: [1]
+  explanation: |
+    Nodes inherit settings such as the software image from their category, so
+    changing it once on the category updates all members. Then reboot or run
+    imageupdate. Setting it on every device works but is error-prone, and
+    node-level values override the category, which makes later changes harder.
+    grabimage copies node to image, not image to node. Renaming images to
+    default-image is confusing and changes nothing for a category that names its
+    own image.
+
+ins-009:
+  answer: [0]
+  explanation: |
+    Cloning an existing device copies its category, interfaces and other
+    properties. You then change what must be unique: hostname, MAC and IP.
+    commit saves it, and the node can be identified when it PXE boots. grabimage
+    is about images, not device definitions. A category per node is wrong; a
+    category groups many nodes. Copying an image directory doesn't define a node.
+
+ins-010:
+  answer: [0]
+  explanation: |
+    Cloning the image keeps the production image unchanged. A separate category
+    (or node-level image setting) puts only the test nodes on the new image.
+    If tests pass, move the production category to the new image. Changing
+    default-image in place affects every node at once. Head node packages don't
+    reach compute nodes. NOSYNC only protects local changes; it is not a way to
+    stage a rollout.
+
+ins-011:
+  answer: [3]
+  explanation: |
+    Base View (web GUI) and cmsh (shell) are both clients of CMDaemon on the head
+    node, which keeps the cluster configuration. A change committed in one shows
+    up in the other. Base View can make changes and is not read-only. cmsh does
+    not bypass CMDaemon. Base View manages the whole cluster, not a single node.
+
+ins-012:
+  answer: [2]
+  explanation: |
+    BCM head node HA is active/passive. Before the passive head takes over the
+    shared IP and services, it must be sure that the old active head is really
+    down. Otherwise both could serve the cluster (split-brain) and corrupt
+    shared state. Powering it off through its BMC is the fencing method.
+    Both heads don't serve at the same time. Firmware updates are not related.
+    Nodes PXE boot on the internal provisioning network, not through the BMC.
+
+ins-013:
+  answer: [3]
+  explanation: |
+    The node first PXE boots on the internal network, then the node-installer
+    runs and works out which configured node it is (by MAC or switch port). Only
+    then does it know which category, disk setup and image to use, so it can
+    partition and sync. Finally it hands over to the installed system.
+    The other orders either identify the node before it has booted anything, or
+    install before the node knows which image it should get.
+
+ins-014:
+  answer: [1]
+  explanation: |
+    No DHCP offer means the PXE request never reached the head node's DHCP
+    service. The usual causes are cabling or VLAN problems, or the node is
+    booting from a NIC that isn't on the internal network. Drivers and CUDA are
+    inside the image and don't matter until much later. Slurm has nothing to do
+    with provisioning.
+
+ins-015:
+  answer: [0]
+  explanation: |
+    Mission Control is NVIDIA's operations software for AI factories and
+    SuperPOD-class systems. It builds on components such as Base Command Manager
+    and integrates scheduling (Slurm, Run:ai), telemetry and automated health
+    checks and recovery. It is not a firmware tool, a driver or a device plugin.
+
+ins-016:
+  answer: [2]
+  explanation: |
+    slurmd runs on each compute node; it launches and monitors job steps. slurmctld
+    is the central controller (with an optional backup). slurmdbd is the
+    accounting database daemon, usually on one host. slurmrestd is the optional
+    REST API.
+
+ins-017:
+  answer: [0]
+  explanation: |
+    gres.conf lists the devices on the node with Name= and File= (optionally
+    Type=, Cores=). Name=gpu File=/dev/nvidia[0-7] declares 8 GPU devices so Slurm
+    can bind and constrain them. Gres=gpu:8 belongs on the NodeName line in
+    slurm.conf. GresTypes=gpu is also a slurm.conf setting. "Gpus=8" is not a
+    valid node parameter. Alternatively, AutoDetect=nvml lets slurmd find the
+    GPUs if Slurm was built with NVML support.
+
+ins-018:
+  answer: [3, 4]
+  explanation: |
+    slurm.conf must declare the GRES type (GresTypes=gpu) and tell the controller
+    how many each node has (Gres=gpu:8 on NodeName). Without them, the
+    controller rejects GPU requests. select/linear allocates whole nodes and is
+    not needed for GRES (select/cons_tres is the usual choice for GPUs).
+    ConstrainDevices is a cgroup.conf setting for isolation, not GRES
+    definition. MpiDefault doesn't affect GRES.
+
+ins-019:
+  answer: [3]
+  explanation: |
+    Slurm expects all nodes to use the same slurm.conf. Copy it everywhere, or
+    use a shared path or configless mode where slurmd fetches config from
+    slurmctld, then reconfigure or restart. Different configs can give odd
+    scheduling and node state problems, so the warning is not cosmetic. Deleting
+    the file without enabling configless mode stops slurmd from starting.
+    munge handles authentication, not config consistency.
+
+ins-020:
+  answer: [1, 2]
+  explanation: |
+    munge credentials are encrypted with a shared key and carry a timestamp. A
+    different key causes decode (invalid credential) failures. Clock skew makes
+    credentials look expired or rewound. Use the same key everywhere and run NTP
+    or chrony. MIG mode, the accounting daemon and CPU core counts don't affect
+    munge authentication.
+
+ins-021:
+  answer: [2]
+  explanation: |
+    The munge key is a shared secret. It should be owned by the munge account and
+    readable only by it (0400 or 0600). munged refuses to start with a key that
+    is too permissive. World-readable keys let any user forge credentials. The
+    slurm and nobody accounts are wrong owners.
+
+ins-022:
+  answer: [2, 4]
+  explanation: |
+    Device isolation needs the cgroup task plugin plus ConstrainDevices=yes. Then
+    the job's cgroup only allows the allocated /dev/nvidiaX devices. Slurm sets
+    CUDA_VISIBLE_DEVICES per job, but that is a convenience, not enforcement.
+    Hardcoding it in /etc/environment is wrong for every other job. Persistence
+    mode only keeps the driver loaded. OverSubscribe allows more sharing, which is
+    the opposite of what is needed.
+
+ins-023:
+  answer: [1]
+  explanation: |
+    Associations (cluster/account/user), QOS, fair-share usage and job history
+    are kept in the accounting database through slurmdbd, which normally uses
+    MySQL or MariaDB. slurm.conf needs AccountingStorageType=accounting_storage/slurmdbd.
+    A backup controller gives HA, not accounting. Prometheus and DCGM give
+    telemetry, not Slurm associations. NFS home directories are unrelated.
+
+ins-024:
+  answer: [0]
+  explanation: |
+    AccountingStorageEnforce controls whether Slurm requires valid associations
+    and enforces limits and QOS. Without it, the database records data but
+    doesn't block jobs. PriorityType selects the priority plugin. SchedulerType
+    picks backfill or builtin scheduling. JobAcctGatherType controls how resource
+    usage is sampled. None of these turn on limit enforcement.
+
+ins-025:
+  answer: [3]
+  explanation: |
+    DGX OS includes the driver on the host. The GPU Operator should then not
+    deploy its containerized driver, so set driver.enabled=false. The operator
+    still deploys the device plugin, GFD, DCGM exporter and the other components.
+    The MIG strategy is a separate choice. Disabling the DCGM exporter removes
+    monitoring. Disabling the device plugin means pods can't request GPUs at all.
+
+ins-026:
+  answer: [0, 3]
+  explanation: |
+    When the driver and the container toolkit are already on the host, the
+    operator should not deploy its own copies: driver.enabled=false and
+    toolkit.enabled=false. nfd.enabled=false only applies when Node Feature
+    Discovery is already deployed in the cluster. Disabling validation loses a
+    useful readiness check. The runtime is containerd, so setting docker would be
+    wrong.
+
+ins-027:
+  answer: [0]
+  explanation: |
+    The device plugin registers with the kubelet and advertises nvidia.com/gpu
+    (or MIG resources), and it handles device allocation to containers. GPU
+    Feature Discovery adds node labels (product, memory, count). The DCGM
+    exporter exposes metrics. The validator checks that the stack works.
+
+ins-028:
+  answer: [0]
+  explanation: |
+    GFD inspects the GPUs on each node and adds labels such as
+    nvidia.com/gpu.product, nvidia.com/gpu.memory and nvidia.com/gpu.count. The
+    MIG manager applies MIG layouts. The toolkit daemonset configures the
+    container runtime. The DCGM exporter publishes Prometheus metrics, not labels.
+
+ins-029:
+  answer: [1]
+  explanation: |
+    The operator validator runs staged checks: driver, toolkit, a CUDA sample and
+    the device plugin. Its pod reaches Running/Completed only when they pass.
+    GFD and DCGM exporter can run while a CUDA workload still fails. The NFD
+    master only collects hardware feature labels.
+
+ins-030:
+  answer: [3]
+  explanation: |
+    The GPU Operator relies on NFD labels (for example, the NVIDIA PCI vendor ID
+    label) to find GPU nodes. By default it deploys NFD. If NFD is already
+    there, set nfd.enabled=false to avoid duplicate deployments. Removing the
+    other team's NFD is unnecessary. The driver setting is unrelated to NFD. Two
+    NFD deployments fight over labels and are not recommended.
+
+ins-031:
+  answer: [2]
+  explanation: |
+    The GPU Operator reconciles a ClusterPolicy custom resource that describes
+    each component (driver, toolkit, device plugin, DCGM exporter, MIG manager,
+    validator...). Helm values are rendered into it, so you change it with helm
+    upgrade or by editing the ClusterPolicy. Device plugin ConfigMaps only cover
+    sharing settings. kubelet config is per node and unrelated. NicClusterPolicy
+    belongs to the Network Operator.
+
+ins-032:
+  answer: [2]
+  explanation: |
+    The GPU Operator is distributed as a Helm chart in NVIDIA's NGC Helm
+    repository. The usual install creates a gpu-operator namespace. It is not an
+    apt package or a systemd service, and you don't install it by running its
+    container with docker. nvcr.io is a container registry, not a manifest host.
+
+ins-033:
+  answer: [1, 3]
+  explanation: |
+    The GPU Operator manages the GPU software stack: driver (optional), container
+    toolkit, device plugin, GFD, DCGM/DCGM exporter, MIG manager and the
+    validator. The RDMA shared device plugin is part of the NVIDIA Network
+    Operator. Slurm is not deployed by the GPU Operator. Run:ai installs its own
+    scheduler and uses the GPU Operator as a prerequisite.
+
+ins-034:
+  answer: [1]
+  explanation: |
+    The RDMA shared device plugin advertises a named extended resource. Pods
+    request it like any other extended resource, and the plugin mounts the RDMA
+    devices into the container. Labels on pods don't grant devices.
+    hostNetwork alone gives network namespace access but not the RDMA device
+    files, and it removes isolation. nvidia.com/rdma is not the resource name
+    advertised here.
+
+ins-035:
+  answer: [0]
+  explanation: |
+    GPUDirect RDMA needs the nvidia-peermem kernel module, which lets the NIC
+    read and write GPU memory directly. The GPU Operator loads it when RDMA
+    support is enabled for the driver (with extra settings when the network
+    driver is on the host instead). The MIG strategy and the ServiceMonitor are
+    unrelated. Disabling the device plugin would stop GPU scheduling.
+
+ins-036:
+  answer: [1]
+  explanation: |
+    Multus is a meta-CNI that attaches more networks (defined in
+    NetworkAttachmentDefinitions) to pods besides the default one. The Network
+    Operator can deploy it with secondary network plugins and IPAM such as
+    whereabouts. CoreDNS handles name resolution. kube-proxy implements Service
+    routing. GFD labels GPU nodes.
+
+ins-037:
+  answer: [0]
+  explanation: |
+    nvidia-ctk runtime configure registers the NVIDIA runtime in
+    /etc/docker/daemon.json. Docker must be restarted to load it. Persistence
+    mode and nvidia-peermem have nothing to do with container runtime setup.
+    There is no "docker plugin install nvidia" step in the current toolkit.
+
+ins-038:
+  answer: [2]
+  explanation: |
+    For containerd, nvidia-ctk adds the nvidia runtime to the containerd config
+    (optionally as the default runtime). containerd must then be restarted.
+    Configuring docker doesn't help when Kubernetes uses containerd. kubelet has
+    no --gpus flag. nvidia-docker2 is a legacy Docker wrapper and doesn't
+    configure containerd.
+
+ins-039:
+  answer: [3]
+  explanation: |
+    CDI describes devices in a spec file that container engines read. nvidia-ctk
+    cdi generate writes the spec for the GPUs present (regenerate it after driver
+    or MIG changes). Podman then requests devices by CDI name. --gpus is a
+    Docker convention and needs extra setup. Setting an environment variable
+    globally doesn't inject devices. nvidia-fs is for GPUDirect Storage.
+
+ins-040:
+  answer: [3]
+  explanation: |
+    This error means Docker has no GPU device driver registered: the NVIDIA
+    Container Toolkit is missing, or nvidia-ctk runtime configure was not run, or
+    Docker was not restarted afterwards. A missing tag gives a "manifest unknown"
+    pull error. The host driver works because nvidia-smi runs. MIG mode
+    doesn't produce this Docker error.
+
+ins-041:
+  answer: [3]
+  explanation: |
+    nvcr.io uses the literal username $oauthtoken and the NGC API key as the
+    password. Quote it ('$oauthtoken') in shells so it isn't expanded as a
+    variable. Email addresses, "nvidia" or an empty password don't work.
+
+ins-042:
+  answer: [0, 4]
+  explanation: |
+    Kubernetes pulls images with credentials from secrets referenced in
+    imagePullSecrets (directly or through the service account). The secret must
+    be in the same namespace as the pod. docker login on one node doesn't give
+    kubelet/containerd credentials on the worker nodes. Labels don't affect
+    image pulls. imagePullPolicy: Never only works if the image is already on
+    the node.
+
+ins-043:
+  answer: [2]
+  explanation: |
+    ngc config set stores the API key and default org/team in the CLI config so
+    later commands such as registry and model downloads are authenticated.
+    docker login only configures Docker. CUDA_VISIBLE_DEVICES and the GPU
+    Operator are unrelated to the CLI.
+
+ins-044:
+  answer: [1]
+  explanation: |
+    enroot reads registry credentials in netrc format from its config directory
+    (by default $HOME/.config/enroot/.credentials). For nvcr.io, the login is
+    $oauthtoken and the password is the NGC API key. Docker's config.json is used
+    by Docker, not enroot. plugstack.conf only loads SPANK plugins such as pyxis.
+    slurm.conf has no NGC_API_KEY setting.
+
+ins-045:
+  answer: [2]
+  explanation: |
+    pyxis is a Slurm SPANK plugin. It must be listed in plugstack.conf (or a file
+    in plugstack.conf.d) so srun/sbatch and slurmd load it and add the
+    --container-* options. It is not a GRES and has no daemon of its own.
+    enroot import only creates an image file; it doesn't register options.
+
+ins-046:
+  answer: [2]
+  explanation: |
+    Fabric Manager talks to the driver through a versioned interface. A version
+    mismatch prevents the service from starting. On NVSwitch systems that means
+    the GPUs can't be used for CUDA work. FM is required on NVSwitch-based
+    systems, not optional, and has nothing to do with MIG. It runs as a host
+    service (or in the GPU Operator driver container), not inside each workload
+    container.
+
+ins-047:
+  answer: [0]
+  explanation: |
+    Fabric Manager configures NVSwitch memory fabrics and NVLink routing on
+    systems such as DGX A100, DGX H100 and HGX 8-GPU boards. Without it,
+    NVSwitch systems won't run CUDA work. NVLink bridges between two PCIe cards
+    and PCIe-only or single-GPU systems have no NVSwitch fabric to manage.
+
+ins-048:
+  answer: [3]
+  explanation: |
+    The host talks to the DPU over RShim (USB or PCIe), which exposes a boot
+    device. Pushing a BFB through RShim installs the DPU's OS and firmware.
+    nvidia-smi manages GPUs, not DPUs. A GPU node software image isn't a DPU
+    image. Updating host packages doesn't re-image the DPU.
+
+ins-049:
+  answer: [2]
+  explanation: |
+    Run:ai runs on Kubernetes. Its cluster component (installed with Helm)
+    connects to a control plane that is hosted by NVIDIA or self-hosted. It uses
+    the NVIDIA GPU stack, typically provided by the GPU Operator, to expose GPUs.
+    It doesn't replace Kubernetes, ship a driver, or plug into Slurm.
+
+ins-050:
+  answer: [2]
+  explanation: |
+    DGX OS manages drivers as packages from the NVIDIA repositories, so
+    dependencies such as Fabric Manager, DCGM and peermem stay consistent. Drain
+    workloads first and reboot after the upgrade. Mixing the .run installer with
+    package-managed drivers breaks package management and future upgrades. pip
+    packages ship user-space libraries, not the kernel driver. The CUDA toolkit
+    does not upgrade the kernel driver.
+
+ins-051:
+  answer: [2, 3]
+  explanation: |
+    Firmware updates need the node to be idle, and NVIDIA's release notes give
+    supported version combinations and the steps (often including a cold power
+    cycle) needed to activate new firmware. Updating everything at once risks
+    the whole cluster if something goes wrong; use a canary node first. Always
+    check versions and health after the update. Never run stress diagnostics
+    during a flash.
+
+ins-052:
+  answer: [3]
+  explanation: |
+    BCM provides a workload manager setup tool that installs Slurm, assigns the
+    controller and client roles to nodes and categories, and writes the
+    configuration, including GPU GRES. Hand-compiling on each node is slow and
+    error-prone. Jobs aren't forwarded over SSH by BCM. The GPU Operator doesn't
+    install Slurm.

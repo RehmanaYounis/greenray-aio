@@ -1,0 +1,333 @@
+# Answer key for administration.yaml: answer = zero-based choice indexes
+adm-001:
+  answer: [3]
+  explanation: |
+    nvidia-smi -i 0 -mig 1 enables MIG mode on GPU 0 only. Without -i, the change
+    applies to every GPU. -cgi creates GPU instances, which needs MIG mode
+    already enabled. -c changes the compute mode, which is not MIG.
+
+adm-002:
+  answer: [0]
+  explanation: |
+    A GPU instance reserves SMs and memory slices, but CUDA processes run on
+    compute instances inside it. Without CIs, the GIs exist but no workload can
+    use them. -C creates the default CI in the same step as -cgi. A reboot would
+    actually remove the instances because they don't persist. Persistence mode
+    and Fabric Manager don't create compute instances.
+
+adm-003:
+  answer: [3]
+  explanation: |
+    A100, H100 and similar MIG-capable GPUs can be split into at most seven GPU
+    instances, for example 7 x 1g.10gb on H100 80GB. 4 is the number of 1g.20gb
+    instances. 8 and 16 are not possible.
+
+adm-004:
+  answer: [2]
+  explanation: |
+    The H100 has seven compute slices for MIG. Two 4g instances would need eight,
+    so 4g.40gb + 4g.40gb can't be built. 7 x 1g.10gb uses all seven compute
+    slices. Two 3g.40gb use six compute slices and all memory slices.
+    4g.40gb + 3g.40gb uses seven compute slices and fits.
+
+adm-005:
+  answer: [0]
+  explanation: |
+    MIG objects are nested: CIs live inside GIs. Remove CIs first, then GIs, then
+    disable MIG mode with nvidia-smi -i <id> -mig 0 (no processes may be using the
+    GPU). You can't disable MIG while instances exist. Removing GIs never turns
+    MIG mode off. MIG mode itself persists across reboots; only the instances
+    don't.
+
+adm-006:
+  answer: [1, 3]
+  explanation: |
+    MIG mode is persistent, but GPU and compute instances are not. mig-parted
+    applies a named layout from a YAML file and is meant to run at boot. In
+    Kubernetes, the MIG manager watches the nvidia.com/mig.config label and
+    applies the layout using mig-parted. Persistence mode only keeps the driver
+    loaded. MIG instances are not saved in NVRAM. ECC has nothing to do with MIG
+    layout.
+
+adm-007:
+  answer: [0]
+  explanation: |
+    nvidia-mig-parted reads the config file (-f) and applies the named
+    configuration (-c), enabling MIG and creating the GIs and CIs needed.
+    nvidia-smi has no such file option. dcgmi doesn't apply MIG layouts. The
+    mig-parted file is not a Kubernetes manifest.
+
+adm-008:
+  answer: [1]
+  explanation: |
+    With the mixed strategy, the device plugin advertises each MIG profile as its
+    own resource (nvidia.com/mig-<profile>), so pods can ask for a size. The
+    single strategy shows MIG devices as nvidia.com/gpu and expects all instances
+    on a node to be the same profile, so it doesn't fit heterogeneous layouts.
+    "none" ignores MIG. Mixed doesn't use nvidia.com/gpu for MIG devices.
+
+adm-009:
+  answer: [2]
+  explanation: |
+    The MIG manager applies the layout named in the nvidia.com/mig.config node
+    label and reports progress in nvidia.com/mig.config.state (pending,
+    success, failed). Manual nvidia-smi changes are not tracked and can be
+    reverted. mig.strategy only selects single/mixed resource naming. Restarting
+    the device plugin doesn't change the layout.
+
+adm-010:
+  answer: [1]
+  explanation: |
+    The single strategy exposes MIG devices as nvidia.com/gpu and needs a
+    uniform layout so that one "gpu" means the same thing on the node. With
+    mixed profiles, the device plugin can't advertise them consistently (usually
+    reported as an error, or the resources are not exposed). Profile-specific
+    names only appear with the mixed strategy. Nothing switches strategies
+    automatically. Three instances per GPU across 8 GPUs is 24, not 21, and
+    in any case they are not advertised that way.
+
+adm-011:
+  answer: [0]
+  explanation: |
+    QOS limits are stored in the accounting database and changed with sacctmgr.
+    MaxTRESPerUser=gres/gpu=8 caps the GPUs one user can use across running jobs
+    in that QOS. Partitions have no MaxGPUs parameter. sbatch submits a job; it
+    doesn't set limits. "maxgpus" is not a sacctmgr user option.
+
+adm-012:
+  answer: [0]
+  explanation: |
+    Slurm associations (user/account/cluster) are managed in the accounting
+    database with sacctmgr. useradd creates a Linux user or group, not a Slurm
+    association. scontrol doesn't manage accounting users. sbatch submits jobs
+    and doesn't create associations.
+
+adm-013:
+  answer: [2]
+  explanation: |
+    DRAIN stops new jobs from being scheduled on the node while running jobs
+    finish (the node shows as "draining", then "drained"). A reason is required.
+    Setting DOWN marks the node unusable and kills or requeues running jobs.
+    scancel kills jobs right away. Stopping slurmd makes the node non-responsive
+    and it will be marked DOWN.
+
+adm-014:
+  answer: [0]
+  explanation: |
+    state=resume clears DRAIN/DOWN and returns the node to service (IDLE if
+    nothing is running). scontrol reconfigure re-reads config but doesn't undrain
+    nodes. sinfo only shows information. Restarting slurmctld doesn't clear
+    administrative drain states.
+
+adm-015:
+  answer: [3]
+  explanation: |
+    sinfo -R (--list-reasons) shows unavailable nodes with the reason, user and
+    timestamp. squeue lists jobs. sacct reports job accounting. scontrol show
+    partition shows partition settings, not node reasons.
+
+adm-016:
+  answer: [0, 4]
+  explanation: |
+    sprio shows how the age, fair-share, job size, partition and QOS factors add
+    up to each pending job's priority. sshare shows accounts' and users' shares
+    and recent usage, which drive the fair-share factor. scontrol reboot restarts
+    nodes. nvidia-smi topo shows GPU topology. sinfo -R shows node reasons, not
+    job priority.
+
+adm-017:
+  answer: [2, 3]
+  explanation: |
+    QOS-based preemption needs the preempt/qos plugin and a preemption mode in
+    slurm.conf, plus the QOS relationship (which QOS can preempt which) set with
+    sacctmgr. Partition priority doesn't define QOS preemption. ConstrainDevices
+    is device isolation. OverSubscribe controls resource sharing, not preemption
+    between QOS levels.
+
+adm-018:
+  answer: [3]
+  explanation: |
+    AllowAccounts limits which accounts can submit to the partition (AllowGroups
+    and AllowQos are similar for Unix groups and QOS). Hidden only hides the
+    partition from default listings. Default=NO just means it isn't the default
+    partition. PriorityTier changes scheduling order, not access.
+
+adm-019:
+  answer: [3]
+  explanation: |
+    A NoSchedule taint repels pods unless they tolerate it, so only workloads
+    with the matching toleration land there. A label alone attracts pods that
+    select it but doesn't repel others. Cordoning blocks all new pods, including
+    GPU ones. Removing kube-proxy breaks Service networking.
+
+adm-020:
+  answer: [3]
+  explanation: |
+    ResourceQuota caps total resource use in a namespace. Extended resources such
+    as GPUs are quota'd as requests.nvidia.com/gpu. A LimitRange sets per-pod or
+    per-container defaults and bounds, not a namespace total. NetworkPolicy
+    controls traffic. PriorityClass affects scheduling order and preemption, not
+    quotas.
+
+adm-021:
+  answer: [1]
+  explanation: |
+    Role and RoleBinding are namespaced, so the permissions apply only in
+    "research" (least privilege). A ClusterRole can also be bound with a
+    RoleBinding to limit it to one namespace, but a ClusterRoleBinding grants it
+    cluster-wide. cluster-admin and system:masters give full control of the
+    cluster.
+
+adm-022:
+  answer: [0]
+  explanation: |
+    Run:ai lets projects use idle GPUs beyond their quota, but those over-quota
+    workloads are preemptible. When another project needs its guaranteed
+    (deserved) quota, the scheduler reclaims GPUs from over-quota workloads.
+    Waiting for them would break the quota guarantee. Quotas don't change on
+    their own, and workloads within quota are not rejected.
+
+adm-023:
+  answer: [2]
+  explanation: |
+    Run:ai GPU fractions let several workloads share one GPU, with each
+    workload's GPU memory limited by software, without needing MIG hardware.
+    Node pools group nodes. Distributed training spreads one job over many GPUs,
+    the opposite need. Departments are an organisational level above projects
+    for quotas.
+
+adm-024:
+  answer: [1, 4]
+  explanation: |
+    DCGM works on GPU groups. Create the group, set the health watch systems
+    (a = all: PCIe, memory, InfoROM, thermal/power, NVLink...) and later run the
+    health check against the group. Running r4 diagnostics every minute is a
+    heavy stress test, not a background watch. Persistence mode is unrelated.
+    discovery lists GPUs; it doesn't clear errors.
+
+adm-025:
+  answer: [2]
+  explanation: |
+    DCGM policies define conditions (such as DBE, PCIe errors, thermal or power
+    violations) and actions or notifications when they occur. dcgmi diag runs
+    active diagnostics on demand. dcgmi stats collects per-job or per-process
+    statistics. dcgmi discovery lists GPUs.
+
+adm-026:
+  answer: [0]
+  explanation: |
+    DCGM job statistics record GPU metrics and events between a start and stop
+    marker for a job ID and summarise them. Prolog/epilog scripts are a common
+    hook. Health watches flag problems but don't build per-job usage reports.
+    A quick diag only checks the GPU state at that point. A single nvidia-smi
+    snapshot misses everything during the job.
+
+adm-027:
+  answer: [1]
+  explanation: |
+    BCM manages cluster users through CMDaemon, by default stored in the LDAP
+    service on the head node that all nodes are configured to use. Running
+    useradd on each node gives inconsistent UIDs. Editing /etc/passwd in the
+    image misses the head node and isn't the managed path. slurm.conf doesn't
+    create users.
+
+adm-028:
+  answer: [2]
+  explanation: |
+    power status queries the configured power control (usually IPMI/Redfish
+    through the BMC) for the selected nodes. status shows the node's state as seen
+    by CMDaemon (UP, DOWN, INSTALLING...), not the power state. ipmitool is a
+    separate tool, not a cmsh command. sinfo is Slurm.
+
+adm-029:
+  answer: [3]
+  explanation: |
+    A hung node needs a hardware reset through its BMC, which cmsh power
+    commands do. imageupdate and grabimage need a responsive node. The install
+    mode only matters once the node reboots and doesn't reboot it.
+
+adm-030:
+  answer: [3]
+  explanation: |
+    The DCGM exporter exposes Prometheus metrics over HTTP (port 9400 by default).
+    With Prometheus Operator, a ServiceMonitor tells Prometheus to scrape it.
+    Grafana visualises data from Prometheus and doesn't need to run on GPU nodes.
+    The device plugin socket is for the kubelet, not metrics. Cron jobs with
+    nvidia-smi are fragile and not Prometheus-native.
+
+adm-031:
+  answer: [1]
+  explanation: |
+    DCGM_FI_DEV_GPU_UTIL is GPU utilization in percent. FB_USED is framebuffer
+    (GPU memory) used, GPU_TEMP is temperature and POWER_USAGE is power draw in
+    watts.
+
+adm-032:
+  answer: [2]
+  explanation: |
+    Without persistence, the driver tears down GPU state when no client is
+    attached and initializes it again on the next use. nvidia-persistenced
+    (preferred over the older nvidia-smi -pm 1) keeps it loaded. ECC, compute
+    mode and MIG don't affect driver unload.
+
+adm-033:
+  answer: [2]
+  explanation: |
+    nvidia-smi -pl changes the runtime power limit, which is lost when the driver
+    reloads or the node reboots. Reapply it at boot with a systemd oneshot
+    service, BCM configuration or a DCGM-based tool. The command did work
+    (-pm 0 would disable persistence, unrelated). VBIOS flashing is not
+    the way to set an operating limit. Fabric Manager doesn't manage power
+    limits.
+
+adm-034:
+  answer: [1]
+  explanation: |
+    ECC mode changes are pending until the GPU is reset or the system reboots.
+    Then Current matches Pending. Until then the change is not active.
+    Restarting persistenced doesn't reset the GPU. A DCGM diagnostic doesn't
+    apply configuration.
+
+adm-035:
+  answer: [1]
+  explanation: |
+    EXCLUSIVE_PROCESS allows a single process context on the GPU at a time.
+    PROHIBITED allows no compute contexts at all. Persistence mode is unrelated.
+    MIG splits the GPU into several instances, which is the opposite of
+    exclusive use.
+
+adm-036:
+  answer: [1]
+  explanation: |
+    MIG gives each instance dedicated SMs, memory slices and memory bandwidth,
+    with hardware fault isolation. Time-slicing shares the whole GPU in turns with
+    no memory isolation. MPS runs work from several processes concurrently, but
+    a fatal fault can affect other clients and it doesn't partition memory
+    bandwidth the way MIG does. Sharing one container gives no isolation.
+
+adm-037:
+  answer: [0, 2]
+  explanation: |
+    Time-slicing advertises each physical GPU as several replicas (8 x 4 = 32)
+    and lets their processes take turns on the GPU. There is no memory or fault
+    isolation; that needs MIG. Time-slicing works without MIG and on many GPU
+    types, not only A100.
+
+adm-038:
+  answer: [1]
+  explanation: |
+    Without MPS, contexts from different processes time-share the GPU and their
+    kernels don't overlap. MPS lets kernels from several processes run at the
+    same time, which helps many small ranks. MIG partitions would give each rank
+    only a fixed slice and cap it at 7. EXCLUSIVE_PROCESS would allow only one
+    process (except through an MPS server). Disabling ECC gives little and
+    removes protection.
+
+adm-039:
+  answer: [0]
+  explanation: |
+    A partition QOS gives the partition the limits defined in that QOS (for
+    example, total GRES or per-user limits) for every job in it, in addition to
+    the job's own QOS. Restricting allowed QOS is done with AllowQos. The
+    default QOS comes from the association (DefaultQOS). It is not ignored
+    with multifactor priority.

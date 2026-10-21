@@ -1,0 +1,37 @@
+# Private solution for scenario tsh-ecc-row-remap
+solution:
+  - ssh dgx-04
+  - nvidia-smi -q -d ROW_REMAPPER -i 6
+  - dmesg | grep -i xid
+  - exit
+  - scontrol update nodename=dgx-04 state=drain reason="GPU6 row remap pending (Xid 63) - GPU reset"
+  - squeue -w dgx-04
+  - scontrol requeue 3101
+  - squeue
+  - ssh dgx-04
+  - nvidia-smi
+  - nvidia-smi -r -i 6
+  - nvidia-smi --query-gpu=index,remapped_rows.pending,remapped_rows.failure --format=csv
+  - exit
+  - scontrol update nodename=dgx-04 state=resume
+  - sinfo
+explanation: |
+  On A100/H100, HBM uses row remapping instead of the older page retirement.
+  When an uncorrectable (DBE) error hits, the driver reports it (Xid 94 for a
+  contained error: only the process using that memory is affected) and marks the
+  faulty row for remapping (Xid 63, "reset gpu to activate"). The spare row is
+  used only after the GPU is reset, so until then nvidia-smi shows
+  "Remapped Rows: Pending: Yes" and the GPU is not considered healthy.
+
+  The safe procedure is the standard maintenance loop: drain, evacuate, reset,
+  verify, resume. Draining stops new work. Requeuing the checkpointed job frees
+  the GPUs without losing its progress (Slurm reschedules it on another node).
+  nvidia-smi -r -i 6 then succeeds because no process holds the GPU, and the
+  remap pending flag clears. Resume only after the query shows Pending: No.
+edge_cases:
+  - "'Remapping Failure Occurred: Yes' (Xid 64) means the bank has run out of spare rows. A reset won't help. Keep the node drained, collect nvidia-bug-report.sh plus dcgmi diag -r 3, and RMA the GPU."
+  - "nvidia-smi -r fails with 'GPU is currently in use' while any process (a job, DCGM profiling, nvsm, a monitoring agent) holds the GPU. On DGX A100 (NVSwitch, Ampere) you can't reset a single GPU: all GPUs and NVSwitches are reset together, or you reboot."
+  - "A reboot also activates pending remaps. It's the right choice when several GPUs are affected or the reset is refused."
+  - "Correctable remaps (remapped_rows.correctable) are informational. An uncorrectable remap needs a reset. A growing count over time on the same GPU is a reason to open a support case before it fails."
+  - "Older GPUs (V100 and earlier) use page retirement (retired_pages.pending) instead of row remapping. The procedure is the same idea: reset to apply."
+  - "scontrol requeue only works for batch jobs that allow requeue (the default with JobRequeue=1, unless the job used --no-requeue). For an interactive srun, coordinate with the user or wait for the drain."

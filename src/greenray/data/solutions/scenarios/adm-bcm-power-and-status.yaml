@@ -1,0 +1,34 @@
+# Private solution for scenario adm-bcm-power-and-status
+solution:
+  - cmsh -c "device; status"
+  - ping -c 1 dgx-02
+  - cmsh -c "device; power status -n dgx-02"
+  - cmsh -c "device; use dgx-02; bmcsettings; show"
+  - cmsh -c "partition; use base; bmcsettings; show"
+  - cmsh -c "device; use dgx-02; bmcsettings; clear password; commit"
+  - cmsh -c "device; power status -n dgx-02"
+  - cmsh -c "device; power on -n dgx-02"
+  - cmsh -c "device; status -n dgx-02"
+  - ping -c 1 dgx-02
+explanation: |
+  BCM controls power out-of-band through each node's BMC, using IPMI (or
+  Redfish) at the node's BMC address. `power status|on|off|reset -n <nodes>`
+  in device mode runs the IPMI commands for you, so you never have to look up
+  BMC IPs or passwords by hand.
+
+  BMC credentials, like most BCM settings, are inherited:
+  partition `base` -> category -> node. The node had its own stale password
+  override, so IPMI session setup failed ("Unable to establish IPMI v2 /
+  RMCP+ session") even though every other node worked. Clearing the override,
+  rather than editing the cluster-wide setting, fixes this one node without
+  touching the others.
+
+  After power-on the node PXE boots and the node-installer syncs its software
+  image (install mode AUTO). It then reaches UP and CMDaemon on the node checks
+  in with the head node.
+edge_cases:
+  - "Slurm does not automatically return a node that was DOWN 'Not responding' unless ReturnToService is 1 or 2. With the default 0, resume it: scontrol update nodename=dgx-02 state=resume."
+  - "`power reset` is a hard reset with no clean OS shutdown. Prefer `reboot -n` (in-band) when the OS is reachable. Use power reset/cycle only for hung nodes."
+  - "Status values you will see: UP, DOWN, INSTALLING, INSTALLER_CALLINGINIT, CLOSED (an admin closed the node so BCM stops managing it), plus [ FAILED ] for power actions."
+  - "Changing the password in the partition's bmcsettings also makes BCM reconfigure BMC users on the nodes it manages. Doing that by mistake can lock you out of every BMC."
+  - "A node that powers on but never reaches UP usually has a PXE/provisioning problem (wrong MAC on the device, a DHCP conflict, or a node-installer stuck in MAIN install mode). Check the node console (SOL) and /var/log/node-installer."

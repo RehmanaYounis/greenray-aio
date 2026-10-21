@@ -1,0 +1,44 @@
+# Private solution for scenario ins-slurm-gres-config
+solution:
+  - sinfo -o "%N %G %t"
+  - srun --gres=gpu:1 nvidia-smi -L
+  - grep NodeName /etc/slurm/slurm.conf
+  - sed -i 's/RealMemory=2063000 State=UNKNOWN/RealMemory=2063000 Gres=gpu:h100:8 State=UNKNOWN/' /etc/slurm/slurm.conf
+  - scontrol reconfigure
+  - sinfo -R
+  - ssh dgx-03
+  - cat /etc/slurm/gres.conf
+  - sed -i 's/nvidia\[0-3\]/nvidia[0-7]/' /etc/slurm/gres.conf
+  - systemctl restart slurmd
+  - exit
+  - scontrol update nodename=dgx-03 state=resume
+  - srun -w dgx-03 --gres=gpu:8 nvidia-smi -L
+explanation: |
+  Two files have to agree before Slurm can schedule GPUs:
+
+  * slurm.conf (on the controller, the same copy on every node). It needs
+    GresTypes=gpu, and each NodeName= line needs Gres=gpu[:type]:count. That
+    count is what the scheduler promises to jobs. Without it, slurmctld treats
+    the node as having no GPUs, and any --gres=gpu request fails at submit time
+    with "Requested node configuration is not available".
+  * gres.conf (read by slurmd on each node). It maps the GRES to device files,
+    either explicitly (Name=gpu Type=h100 File=/dev/nvidia[0-7]) or through
+    AutoDetect=nvml. slurmd registers what it found with the controller.
+
+  Fixing slurm.conf and running scontrol reconfigure exposed the second fault.
+  dgx-03's slurmd registered only 4 GPUs against the 8 configured, so the
+  controller set the node to INVAL/DRAIN with the reason "gres/gpu count reported
+  lower than configured (4 < 8)". slurmd reads gres.conf only when it starts or
+  reconfigures, so you had to restart it after the edit. A node that was set to
+  DRAIN stays drained until an admin resumes it. Slurm will not put a node back
+  into service automatically after a configuration error.
+  The final srun --gres=gpu:8 proves the end-to-end path: the cgroup lets the job
+  see exactly the 8 GPUs it was allocated.
+edge_cases:
+  - "If slurm.conf promises fewer GPUs than the node has, the node registers fine and the extra GPUs are simply never scheduled. That fault is silent, so compare scontrol show node Gres= with nvidia-smi -L."
+  - "A Type= in gres.conf that differs from the type in slurm.conf (h100 vs a100) is also reported as a lower count for gres/gpu:<type>. Typed and untyped requests then behave differently."
+  - "A File= pattern that points at device files that don't exist (for example /dev/nvidia[0-15] on an 8-GPU node) makes slurmd exit with 'fatal: can't stat gres.conf file', and the node shows as not responding."
+  - "AutoDetect=nvml requires a slurmd built against NVML. With autodetection, a GPU that has fallen off the bus (XID 79) reduces the reported count, so a hardware fault can look like a configuration fault."
+  - "Changes to some slurm.conf parameters (plugins, authentication, adding nodes on older versions) need a slurmctld restart rather than a reconfigure. When in doubt, restart slurmctld and then the slurmds."
+  - "In BCM the slurm.conf, gres.conf and cgroup.conf files are generated from the wlm settings and the slurmclient role (cmsh -> wlm, configurationoverlay). A hand edit can be overwritten, so make the permanent change in BCM as well."
+  - "ConstrainDevices=yes in cgroup.conf is what limits a job to its allocated GPUs. Without it, CUDA_VISIBLE_DEVICES is only advisory."

@@ -1,0 +1,38 @@
+# Private solution for scenario tsh-xid79-drained-node
+solution:
+  - sinfo -R
+  - sacct -j 1500
+  - ssh dgx-02
+  - dmesg | grep -i xid
+  - nvidia-smi
+  - reboot
+  - ssh dgx-02
+  - nvidia-smi -L
+  - dcgmi diag -r 2
+  - exit
+  - scontrol update nodename=dgx-02 state=resume
+  - sinfo
+explanation: |
+  The health check drained dgx-02 for the right reason. dmesg shows
+  "Xid 79 ... GPU has fallen off the bus" for 0000:5d:00 (GPU 3), plus a PCIe AER
+  fatal error on the upstream port. nvidia-smi can't get a handle for that GPU,
+  and with AutoDetect=nvml slurmd would report only 7 GPUs. Any 8-GPU job sent
+  there would fail, which is what happened to job 1500.
+
+  A GPU that has fallen off the bus can't be reset in place. nvidia-smi -r needs
+  the driver to reach the device. The fix is a node reboot or a cold power cycle
+  through the BMC. Because dgx-02 was drained beforehand, the reboot did not
+  put it back into service: Slurm keeps DRAIN across slurmd restarts and reboots
+  until an admin runs `scontrol update ... state=resume`. That gap is where
+  validation belongs. dcgmi diag -r 2 exercises PCIe/NVLink and GPU memory on all
+  GPUs and only then should users get the node back.
+
+  A one-off Xid 79 that is cleared by a reboot and followed by a clean
+  diagnostic is usually treated as transient. If it happens again on the same GPU or
+  slot, open a hardware case with an nvidia-bug-report.sh log and keep the node drained.
+edge_cases:
+  - "If you resume before the reboot, the node either goes straight back to drain (the health check fires again) or takes jobs that crash. Don't resume a node only to see whether it is fine."
+  - "Rebooting a node that was not drained gets it marked DOWN with 'Node unexpectedly rebooted' (unless ReturnToService=2), and the running jobs fail with NODE_FAIL. Drain first; scontrol reboot ASAP nextstate=RESUME reason=... combines both safely."
+  - "DRAIN vs DOWN: DRAIN lets running jobs finish and blocks new ones (DRAINING -> DRAINED). DOWN kills running jobs immediately."
+  - "Repeated Xid 79 on the same GPU, or AER errors on its PCIe switch, points to hardware (GPU baseboard, riser, PSU). Collect nvidia-bug-report.sh and dcgmi diag -r 3 output and open an NVIDIA Enterprise Support case."
+  - "Related Xids: 48 = DBE ECC error, 63/64 = row remap event/failure, 74 = NVLink error, 92 = high SBE rate, 94/95 = contained/uncontained ECC error, 119/120 = GSP timeout/error. Know which ones need a reset and which need a reboot or RMA."

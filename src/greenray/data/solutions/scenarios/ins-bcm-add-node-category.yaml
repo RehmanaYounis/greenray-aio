@@ -1,0 +1,33 @@
+# Private solution for scenario ins-bcm-add-node-category
+solution:
+  - cmsh -c "device; list"
+  - cmsh -c "device; use dgx-04; show"
+  - cmsh -c "category; use dgx-h100; show"
+  - cmsh -c "device; use dgx-04; set category dgx-h100; commit"
+  - cmsh -c "device; reboot -n dgx-04"
+  - cmsh -c "device; use dgx-04; show"
+  - ssh dgx-04
+  - nvidia-smi -L
+  - systemctl status slurmd
+  - exit
+explanation: |
+  In BCM a node's configuration is layered. Most settings (software image,
+  roles such as slurmclient, install mode, disk setup) live on the *category*.
+  Nodes inherit from their category unless a node-level value overrides it.
+  To make a new node look like its peers, you move it into the right category.
+  You don't configure it by hand, and you don't edit the `default` category,
+  because that would change every future node that BCM discovers.
+
+  `set category dgx-h100` is only staged in cmsh. `commit` writes it to
+  CMDaemon. Even after the commit, the node is still running the files of the
+  old image. The software image is applied by the node-installer when the node
+  is provisioned, so you have to reboot it (or power-cycle it). The
+  node-installer then syncs the new image, and the node comes back with the
+  NVIDIA driver. The `slurmclient` role makes CMDaemon start slurmd and add the
+  node to the workload manager.
+edge_cases:
+  - "Forgetting `commit` is the most common cmsh mistake. The prompt shows `*` on the mode and object (e.g. [bcm-head->device*[dgx-04*]]). `refresh` throws the staged changes away."
+  - "A node-level `softwareimage` (or roles) value overrides the category. If a node ignores its category, check `show` for a node-level value and use `clear softwareimage`."
+  - "`imageupdate -w` can sync a running node without a reboot. For a whole different image (new driver/kernel) a reboot is the safe choice, because loaded modules and the running kernel do not change on a live sync."
+  - "In install mode AUTO the node-installer syncs only changed files and keeps local partitions. FULL re-partitions and wipes local disks (e.g. /raid). Use `nextinstallmode FULL` for a one-time full reinstall."
+  - "Using `set category` on several nodes at once: `foreach -n dgx-05..dgx-08 (set category dgx-h100)`. The same commit and reprovision rules apply."
