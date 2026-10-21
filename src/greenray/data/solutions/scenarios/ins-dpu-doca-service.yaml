@@ -1,0 +1,54 @@
+# Private solution for scenario ins-dpu-doca-service
+solution:
+  - ssh dpu-01
+  - ssh dgx-01
+  - systemctl status rshim
+  - mst start
+  - mst status -v
+  - mlxconfig -d /dev/mst/mt41692_pciconf0 q
+  - mlxconfig -d /dev/mst/mt41692_pciconf0 -y s INTERNAL_CPU_MODEL=1 INTERNAL_CPU_PAGE_SUPPLIER=0 INTERNAL_CPU_ESWITCH_MANAGER=0 INTERNAL_CPU_IB_VPORT0=0 INTERNAL_CPU_OFFLOAD_ENGINE=0
+  - mlxconfig -d /dev/mst/mt41692_pciconf0 -e q
+  - reboot
+  - ssh dgx-01
+  - mlxconfig -d c1:00.0 -e q INTERNAL_CPU_OFFLOAD_ENGINE
+  - systemctl enable --now rshim
+  - ls /dev/rshim0
+  - bfb-install --bfb /root/bfb/bf-bundle-2.7.0-33_24.04_ubuntu-22.04_prod.bfb --rshim rshim0
+  - scp /root/doca/doca_telemetry.yaml dpu-01:/etc/kubelet.d/
+  - exit
+  - ssh dpu-01
+  - cat /etc/mlnx-release
+  - crictl pods
+  - crictl ps
+  - crictl images
+explanation: |
+  A BlueField-3 can run in two main modes. In DPU mode (embedded CPU, the
+  default), the Arm cores run their own OS, own the embedded switch (ECPF), and
+  can host services such as DTS, HBN or OVS offload. In NIC mode, the card acts
+  like a plain ConnectX: the host owns the eswitch (EXT_HOST_PF) and the Arm
+  side doesn't run an OS. The integrator had left the card in NIC mode, so
+  there was nothing to ssh into and nowhere to install DOCA services.
+
+  `mlxconfig ... q` shows the Next Boot values, and `-e q` adds Default and
+  Current. Setting the INTERNAL_CPU_* parameters back to the DPU values only
+  takes effect after the device resets: a cold power cycle of the host on real
+  hardware, a reboot in the simulator. After the reboot, the host's rshim
+  driver (which wasn't enabled, so it wasn't running) exposes /dev/rshim0. That
+  device is the PCIe back door to the DPU's boot loader and console.
+  `bfb-install` pushes the BFB through /dev/rshim0/boot. The bundle contains
+  the boot firmware, UEFI, the Ubuntu-based Arm OS with DOCA, and NIC firmware.
+  The DPU then reinstalls itself and comes up as dpu-01.
+
+  On the DPU, DOCA services run as containers managed by a standalone kubelet
+  (no Kubernetes control plane needed). Any Pod manifest placed in
+  /etc/kubelet.d is started as a static pod, and its image is pulled from NGC
+  (nvcr.io/nvidia/doca/...). `crictl pods` / `crictl ps` on the DPU are the
+  way to verify. kubectl on the cluster does not see these pods.
+edge_cases:
+  - "Mode-switch parameter names differ between generations and firmware versions. BlueField-2 docs use the INTERNAL_CPU_MODEL / *_PAGE_SUPPLIER / *_ESWITCH_MANAGER / *_IB_VPORT0 / *_OFFLOAD_ENGINE set shown here. Some BlueField-3 docs switch NIC mode with INTERNAL_CPU_OFFLOAD_ENGINE alone, and newer releases can also set the mode from the DPU BMC or through bf.cfg. Check the BSP 'Modes of Operation' page for your firmware."
+  - "A mode change needs a full power cycle (cold boot) of the host on real hardware. A warm reboot or mlxfwreset is not always enough. If mlxconfig -e q shows Current different from Next Boot after your reboot, the device was not reset."
+  - "rshim can run on the host or on the DPU's BMC, but only one owner at a time. If the BMC holds it, the host's /dev/rshim0 doesn't appear (or vice versa). The rshim unit on the host must be running for bfb-install --rshim rshim0 to work."
+  - "bfb-install re-images the DPU's eMMC/NVMe and wipes anything previously on the Arm side, including /etc/kubelet.d. Deploy DOCA services after the BFB install. An optional bf.cfg (--config) can set the ubuntu password, hostname, and so on during install. The default login is ubuntu/ubuntu with a forced password change, not root."
+  - "Match DOCA service container tags to the DOCA version on the DPU (here *-doca2.7.0). The NGC 'DOCA Container Configs' resource provides per-release manifests. The DPU needs a route to nvcr.io (or a local mirror) for the kubelet to pull the image. Pre-pulling with crictl pull helps on slow links."
+  - "The simulator copies the manifest with scp to dpu-01. In real life you might reach the DPU through its OOB management port, or from the host over the rshim network interface (tmfifo_net0, default 192.168.100.2 on the DPU side)."
+  - "Removing a static pod means deleting (or moving) its manifest from /etc/kubelet.d. Static pods can't be deleted through the kubelet or crictl, because kubelet will just recreate them."

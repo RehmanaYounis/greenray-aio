@@ -1,0 +1,44 @@
+# Private solution for scenario ins-ngc-registry-auth
+solution:
+  - kubectl get pods -n llm
+  - kubectl describe pod nemo-finetune -n llm
+  - cat /root/ngc-api-key.txt
+  - |-
+    ngc config set <<EOF
+    nvapi-x7Lq2MZ9vT4pRk8sWc3NdY6hB1fJ0gKu5aVeXoQiHmPn
+    ascii
+    b7z2ajrtgcn5
+    llm-team
+    no-ace
+    EOF
+  - ngc registry image list 'b7z2ajrtgcn5/*'
+  - ssh dgx-01
+  - docker pull nvcr.io/b7z2ajrtgcn5/llm-team/nemo-finetune:24.05
+  - docker login nvcr.io -u '$oauthtoken' -p nvapi-x7Lq2MZ9vT4pRk8sWc3NdY6hB1fJ0gKu5aVeXoQiHmPn
+  - docker pull nvcr.io/b7z2ajrtgcn5/llm-team/nemo-finetune:24.05
+  - exit
+  - kubectl create secret docker-registry ngc-secret --docker-server=nvcr.io --docker-username='$oauthtoken' --docker-password=nvapi-x7Lq2MZ9vT4pRk8sWc3NdY6hB1fJ0gKu5aVeXoQiHmPn -n llm
+  - kubectl get pods -n llm
+explanation: |
+  NGC uses one credential everywhere: an API key. For anything that speaks the
+  registry protocol (docker, containerd, enroot, Kubernetes) the username is the
+  literal string "$oauthtoken" and the password is the key. Public NGC catalog
+  images (nvcr.io/nvidia/...) can be pulled anonymously. Private org/team
+  repositories (nvcr.io/<org>/<team>/...) answer 401 Unauthorized until you
+  authenticate.
+
+  Each consumer stores credentials separately:
+    - NGC CLI: `ngc config set` writes ~/.ngc/config (key, format, org, team, ace).
+    - docker: `docker login nvcr.io` writes ~/.docker/config.json on that host only.
+    - Kubernetes: kubelet pulls through containerd and ignores the node's docker
+      login. Pods need a kubernetes.io/dockerconfigjson secret in their own
+      namespace, referenced by imagePullSecrets (directly or via the ServiceAccount).
+  The pod already referenced ngc-secret, so creating that secret was enough.
+  kubelet's next pull retry succeeds and the pod starts.
+edge_cases:
+  - "Double-quoted \"$oauthtoken\" or an unquoted $oauthtoken is expanded by bash to an empty string. The login then fails or prompts for a username. Use single quotes or a backslash (\\$oauthtoken)."
+  - "Prefer `--password-stdin` (e.g. `cat key.txt | docker login nvcr.io -u '$oauthtoken' --password-stdin`) so the key does not end up in shell history and ps output."
+  - "Secrets are namespaced. A ngc-secret in 'default' does nothing for a pod in 'llm'."
+  - "Patching the ServiceAccount (`kubectl patch serviceaccount default -n llm -p '{\"imagePullSecrets\":[{\"name\":\"ngc-secret\"}]}'`) only affects pods created afterwards. The ServiceAccount admission controller copies the secret into the pod spec at creation time."
+  - "enroot reads its credentials from ~/.config/enroot/.credentials ('machine nvcr.io login $oauthtoken password <key>'), and its image URI separates the registry with '#': docker://nvcr.io#nvidia/pytorch:24.05-py3."
+  - "The GPU Operator and NIM Operator take the same kind of secret (e.g. driver.imagePullSecrets, or the NGC API key secret for NIM). The username is still $oauthtoken."

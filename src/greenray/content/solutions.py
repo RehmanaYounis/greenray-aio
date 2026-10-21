@@ -1,18 +1,15 @@
-"""Locate the private solutions repository.
+"""Where reference solutions and answer keys come from.
 
-Reference solutions, explanations and exam answer keys are kept out of the
-public repository. They live in a separate (private) checkout with this layout::
+Layout, both bundled and external::
 
     scenarios/<scenario-id>.yaml   solution, explanation, edge_cases
     questions/<bank-file>.yaml     {question-id: {answer: [...], explanation: ...}}
     labs/...                       SOLUTION.md files for the real-hardware labs
 
-The first existing directory wins:
-
-1. ``$GREENRAY_SOLUTIONS`` (legacy: ``$GREENRAY_SOLUTIONS``) (if set, nothing else is searched)
-2. ``<repo>/solutions/`` (git-ignored local copy)
-3. a sibling clone ``../greenray-aio-solutions`` (or the legacy ``../NVIDIA-NCP-AIO-Prep-solutions``)
-4. the same names in your home directory
+The package ships a complete set under ``data/solutions``. An external directory
+takes precedence so authors can work on unreleased content: ``$GREENRAY_SOLUTIONS``
+if set, else ``<repo>/solutions``, else a sibling or home-directory clone named
+``greenray-aio-solutions``.
 """
 
 from __future__ import annotations
@@ -26,34 +23,45 @@ from .. import config
 
 REPO_NAME = "greenray-aio-solutions"
 LEGACY_REPO_NAMES = ("NVIDIA-NCP-AIO-Prep-solutions", "nvidia-ncp-aio-prep-solutions")
-# src/greenray/content/solutions.py -> repository root
+BUNDLED = Path(__file__).resolve().parent.parent / "data" / "solutions"
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def candidates() -> list[Path]:
-    """Search order. An explicit ``$GREENRAY_SOLUTIONS`` (legacy: ``$GREENRAY_SOLUTIONS``) is the only place searched."""
+    """External locations in precedence order; the bundled copy is the fallback."""
     if explicit := config.env("SOLUTIONS"):
         return [Path(explicit).expanduser()]
     names = (REPO_NAME, *LEGACY_REPO_NAMES)
     return [_REPO_ROOT / "solutions", *(_REPO_ROOT.parent / n for n in names), *(Path.home() / n for n in names)]
 
 
+def _is_solutions_dir(path: Path) -> bool:
+    return (path / "scenarios").is_dir() or (path / "questions").is_dir()
+
+
 def solutions_dir() -> Path | None:
     for p in candidates():
-        if (p / "scenarios").is_dir() or (p / "questions").is_dir():
+        if _is_solutions_dir(p):
             return p
-    return None
+    return BUNDLED if _is_solutions_dir(BUNDLED) else None
 
 
 def available() -> bool:
     return solutions_dir() is not None
 
 
+def source() -> str:
+    """Human-readable origin for `greenray doctor`."""
+    found = solutions_dir()
+    if found is None:
+        return "none"
+    return "bundled" if found == BUNDLED else str(found)
+
+
 def missing_message() -> str:
     return (
-        "Solutions are not installed. Clone your private solutions repository next to this one:\n"
-        f"  git clone https://github.com/<you>/{REPO_NAME}.git\n"
-        "or point GREENRAY_SOLUTIONS at it. Searched:\n" + "\n".join(f"  {p}" for p in candidates())
+        "Solutions are not available. Reinstall the package, or point GREENRAY_SOLUTIONS at a solutions "
+        "directory. Searched:\n" + "\n".join(f"  {p}" for p in [*candidates(), BUNDLED])
     )
 
 

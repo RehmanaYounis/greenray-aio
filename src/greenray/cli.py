@@ -90,13 +90,42 @@ def start_incident(ui: UI, domain: str | None = None, tag: str | None = None, si
     return 0
 
 
+def doctor(ui: UI) -> int:
+    """Environment report to paste into bug reports."""
+    import platform
+    import shutil
+    import sys
+
+    from .commands.editor import _external_editor
+    from .content import scenarios as sc
+
+    editor = _external_editor("nano")
+    rows = [
+        ("GreenRay AIO", __version__),
+        ("Python", f"{platform.python_version()} ({sys.executable})"),
+        ("OS", platform.platform()),
+        (
+            "Terminal",
+            f"{'interactive' if ui.interactive else 'not a tty'}, colour {'on' if ui.color else 'off'}, "
+            f"{shutil.get_terminal_size((80, 24)).columns} columns",
+        ),
+        ("Editor", " ".join(editor) if editor else "none found (inline editor will be used)"),
+        ("Solutions", solutions.source()),
+        ("Progress", str(config.home() / "progress.json")),
+        ("Scenarios", str(len(sc.load_all()))),
+    ]
+    for k, v in rows:
+        ui.out(f"{k:<13} {v}")
+    return 0
+
+
 def validate(ui: UI) -> int:
     problems = structural_problems()
     for p in problems:
         ui.out(ui.red(f"BAD {p}"))
     if not solutions.available():
         ui.out(
-            ui.yellow("Solutions not installed: skipped replaying reference solutions.\n") + solutions.missing_message()
+            ui.yellow("Solutions not available: skipped replaying reference solutions.\n") + solutions.missing_message()
         )
     else:
         for s in sc.load_all():
@@ -127,6 +156,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("sandbox", help="healthy cluster, nothing graded")
     sub.add_parser("progress", help="your scores and weakest domain")
     sub.add_parser("validate", help="check scenarios and questions")
+    sub.add_parser("doctor", help="show version, environment and where solutions come from")
     return p
 
 
@@ -152,6 +182,8 @@ def main(argv: list[str] | None = None) -> int:
             show_progress(ui)
         elif args.cmd == "validate":
             return validate(ui)
+        elif args.cmd == "doctor":
+            return doctor(ui)
     except KeyError as e:
         ui.out(ui.red(f"Unknown scenario {e}. Run: greenray list"))
         return 1

@@ -1,0 +1,42 @@
+# Private solution for scenario wkl-slurm-multinode-sbatch
+solution:
+  - sacct -j 3001 --format=JobID,JobName,NNodes,NTasks,AllocTRES%45,NodeList
+  - cat /root/llama-2node-3001.out
+  - cat /root/llama-2node.sbatch
+  - squeue
+  - sed -i 's/^#SBATCH --ntasks-per-node=1/#SBATCH --ntasks-per-node=8/' /root/llama-2node.sbatch
+  - sed -i 's/^#SBATCH --gpus=8/#SBATCH --gpus-per-node=8\n#SBATCH --exclusive/' /root/llama-2node.sbatch
+  - cat /root/llama-2node.sbatch
+  - sbatch /root/llama-2node.sbatch
+  - squeue -o "%.6i %.12j %.8T %.4D %.6C %b %N"
+  - scontrol show job 3003
+  - sacct -j 3003 -X --format=JobID,JobName,NNodes,AllocTRES%45,NodeList,State
+  - cat /root/llama-2node-3003.out
+explanation: |
+  The script had two allocation mistakes. Both are accepted silently and only
+  show up as a smaller job than intended:
+
+  * --gpus=8 is a job-wide total. Slurm spreads it over the 2 nodes, so each node
+    got 4 GPUs. The DGX nodes have 8 GPUs each, so the per-node form is wanted:
+    --gpus-per-node=8 or --gres=gpu:8 (or --gpus=16 if you prefer a total).
+  * --ntasks-per-node=1 starts one process per node, so srun launched only 2 ranks.
+    A one-process-per-GPU launcher needs --ntasks-per-node=8 (16 tasks in total).
+    Each srun task inherits the job's GPU allocation on its node. The framework
+    then selects a GPU per rank from SLURM_LOCALID, or use --gpus-per-task=1 /
+    --gpu-bind if you want Slurm to do it.
+
+  --exclusive is the policy part. It gives the job whole nodes, so the
+  scheduler skips dgx-01, where bob's 4-GPU job runs. The job lands on two free
+  nodes without disturbing bob. Cancelling someone else's job to make room is
+  never part of the answer.
+
+  To verify, check the allocation: squeue/scontrol show NumNodes=2, NumTasks=16
+  and TresPerNode=gres/gpu:8, sacct AllocTRES shows gres/gpu=16 and node=2,
+  and in the output file each of the 16 ranks reports 8 local GPUs.
+edge_cases:
+  - "--gres=gpu:16 (per node) is rejected at submit time with 'Requested node configuration is not available', because no node has 16 GPUs. --gpus=8 is accepted, which makes it the quieter mistake."
+  - "--ntasks=16 with -N 2 also gives 8 tasks per node, but Slurm may place them unevenly if more nodes are allowed. --ntasks-per-node states the intent exactly."
+  - "torchrun-style launchers use the opposite pattern: --ntasks-per-node=1, and torchrun starts 8 local workers itself (--nproc_per_node=8). Know which launcher the job uses before you choose the task layout."
+  - "Without --exclusive, a job that asks for all 8 GPUs still leaves the node's remaining CPUs and memory schedulable for CPU-only jobs. With --exclusive, AllocTRES shows all 224 CPUs of each node."
+  - "Commands in a batch script without srun run only once, on the first node of the allocation (the batch host). Multi-node work needs srun (or mpirun with Slurm integration)."
+  - "With pyxis, put --container-image on the srun line inside the script. As an #SBATCH option it applies to the batch step only (pyxis 0.15+ supports it there), not automatically to every srun step on older versions."

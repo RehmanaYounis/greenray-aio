@@ -40,3 +40,17 @@ jobs:
       - run: uv run greenray validate
       - run: uv build
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: greenray-aio:ci
+      - run: docker run --rm greenray-aio:ci doctor
+      - run: docker run --rm greenray-aio:ci validate

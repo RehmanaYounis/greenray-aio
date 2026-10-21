@@ -1,0 +1,40 @@
+# Private solution for scenario wkl-runai-fractional-gpu
+solution:
+  - runai list jobs -A
+  - runai describe job jlab-b -p nlp
+  - runai list projects
+  - runai delete job embed-batch -p vision
+  - runai delete job jlab-a jlab-b -p nlp
+  - runai submit jlab-a -i nvcr.io/nvidia/pytorch:24.05-py3 -g 0.5 --interactive -p nlp
+  - runai submit jlab-b -i nvcr.io/nvidia/pytorch:24.05-py3 -g 0.5 --interactive -p nlp
+  - runai config project nlp
+  - runai submit embed-batch -i nvcr.io/nvidia/pytorch:24.05-py3 -g 0.5 --command -- python embed.py --shard all
+  - runai list jobs
+  - runai list nodes
+  - runai exec jlab-a -p nlp -- nvidia-smi --query-gpu=index,memory.total --format=csv
+explanation: |
+  jlab-b was Pending because of quota, not capacity. Interactive (workspace) workloads are
+  non-preemptible, and the Run:ai scheduler only runs non-preemptible workloads inside the
+  project's deserved quota. nlp deserves 1 GPU and jlab-a already held it, so jlab-b
+  (another full GPU) could never start, even with idle GPUs on dgx-04.
+
+  GPU fractions fix that. `-g 0.5` (v2: --gpu-portion-request 0.5, or --gpu-memory 40G) asks
+  for half a GPU. The scheduler bin-packs fractional workloads onto one physical GPU and
+  holds that GPU with a runai-reservation pod, so the Kubernetes device plugin can't give it
+  to anyone else. Inside the container Run:ai limits the framebuffer to the fraction
+  (nvidia-smi shows ~40 GB). Compute is time-shared. Both notebooks together use 1.0 GPU,
+  exactly nlp's quota, so both are in quota and safe from preemption.
+
+  embed-batch had been submitted to the wrong project (-p vision, or vision was alice's
+  default project), so it counted against vision. Workloads can't move between projects:
+  delete and resubmit with -p nlp (or `runai config project nlp` first). In nlp it is over
+  quota (1.5 > 1), which is allowed because training is preemptible. It runs on an idle GPU
+  and will be preempted first if another project reclaims its deserved GPUs.
+edge_cases:
+  - "Making the notebooks --preemptible also gets them scheduled over quota, but then they can be killed at any time when other projects reclaim GPUs. That's a bad trade for interactive sessions and not what was asked."
+  - "Fractions isolate memory in software only. There is no hardware isolation like MIG, and compute is shared by time-slicing, so a busy neighbour slows you down. For hard isolation use MIG profiles (whole MIG slices) instead."
+  - "Fractions above 1 are not allowed (no 1.5 GPUs). Use whole numbers of GPUs for >1. --gpu-memory requests memory and the fraction is derived from the GPU's size, which is handy with mixed GPU models."
+  - "v1 vs v2 CLI: `runai submit NAME -g 0.5 --interactive -p nlp` (v1) vs `runai workspace submit NAME --gpu-portion-request 0.5 -p nlp` (v2). Older flag names (-g) are still accepted by many v2 versions. Check `runai <cmd> --help` on the exam cluster."
+  - "`runai config project nlp` (v1) / `runai project set nlp` (v2) only sets the CLI's default project. It does not grant access. The project's access rules decide who may submit there."
+  - "Placement order matters. The scheduler bin-packs a new fraction onto a GPU that is already partly used. If embed-batch's half GPU is still allocated when jlab-a is submitted, jlab-a lands next to it and jlab-b ends up on another GPU. Clear embed-batch out of vision first, or delete and resubmit a notebook to repack. `runai list nodes` / `runai describe job` show the GPU index."
+  - "Deleting only jlab-a frees nlp's quota and the still-pending jlab-b (-g 1) is scheduled immediately, so the new jlab-a (0.5) would then be over quota and Pending. Delete both before resubmitting."

@@ -1,0 +1,48 @@
+# Private solution for scenario adm-runai-project-quota
+solution:
+  - runai list projects
+  - runai list jobs -A
+  - runai-ui department list
+  - runai-ui project create nlp --department research --gpu-quota 6 --over-quota enabled
+  - runai-ui project create vision --department research --gpu-quota 10 --over-quota disabled
+  - runai-ui access-rule create --user alice@corp.ai --project nlp --role "L1 researcher"
+  - runai-ui access-rule create --user bob@corp.ai --project vision --role "L1 researcher"
+  - runai-ui access-rule create --user carol@corp.ai --project nlp --role "Research manager"
+  - runai-ui access-rule create --user carol@corp.ai --project vision --role "Research manager"
+  - kubectl get projects
+  - kubectl get ns
+  - runai submit vision-smoke -i nvcr.io/nvidia/pytorch:24.05-py3 -g 8 -p vision
+  - runai list jobs -A
+  - runai describe job hpo-sweep-3 -p sandbox
+  - runai list projects
+explanation: |
+  Run:ai organizes GPUs as departments > projects. A project is the unit of quota and access.
+  Each project gets a Kubernetes namespace (runai-<project> by default), and its workloads run
+  as pods in that namespace, placed by the Run:ai scheduler instead of the default scheduler.
+
+  Quota terms the exam uses:
+    - Deserved (guaranteed) quota: GPUs the project is entitled to at any time. A department
+      quota caps the sum for its projects. Here 6 + 10 = 16 = the department quota, so a
+      larger vision quota is rejected.
+    - Over-quota: if GPUs are idle, a project may use more than its deserved quota, but only
+      with preemptible workloads (training by default). Those GPUs are lent, not given. When a
+      project asks for GPUs within its own deserved quota, the scheduler reclaims them by
+      preempting other projects' over-quota workloads. Preempted training workloads go back
+      to Pending and resume when GPUs are free again.
+    - Disabling over-quota (or setting a max GPU limit) keeps a project at or below its quota,
+      for teams that want predictable, non-bursting usage.
+  "sandbox" has 0 deserved GPUs, so all 16 of its GPUs were over quota. vision-smoke asked
+  for 8 GPUs, within vision's deserved 10. The scheduler preempted two 4-GPU sweeps on one
+  node to make room. The other sweeps keep running and the preempted ones wait in Pending.
+
+  Access is granted with access rules = subject (user/group/app) + role + scope
+  (project/department/cluster). "L1 researcher" can submit and manage workloads in its scope.
+  "Research manager" manages workloads of the projects in its scope.
+edge_cases:
+  - "Interactive workloads (runai submit --interactive, v2 `runai workspace submit`) and inference are non-preemptible by default, so they can only use in-quota GPUs. Training is preemptible. An interactive workload can opt in with --preemptible, but it may then be killed when another project reclaims its quota."
+  - "Over-quota GPUs are shared between projects that want them in proportion to their over-quota weight (by default derived from deserved quota). A project with 0 deserved GPUs lives entirely on borrowed GPUs."
+  - "The CLI changed: v1 uses `runai submit`, `runai list jobs`, `runai config project`. v2 uses `runai training submit`, `runai workspace submit`, `runai workload list`, `runai project set`. Exact output columns and some flags (e.g. preemptibility flags) depend on the Run:ai version."
+  - "Whether a department quota is a hard cap on the sum of project quotas is a setting in recent Run:ai versions (department over-subscription). Older versions always enforced it. The lab enforces it."
+  - "Projects and departments show up as Kubernetes custom resources (kubectl get projects / departments), but the Run:ai control plane owns them. Create and edit them through the UI/API. Editing the CRs by hand is overwritten or rejected."
+  - "Run:ai can also be set up to use an existing namespace for a project instead of creating runai-<project>. The default naming is the one to know."
+  - "Deleting the sandbox jobs would also free GPUs, but that is not the point. Preemption of over-quota work is exactly what lets a project's guaranteed quota be honored while idle GPUs are still lent out."

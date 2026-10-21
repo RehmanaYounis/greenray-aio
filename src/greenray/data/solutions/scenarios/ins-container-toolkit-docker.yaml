@@ -1,0 +1,44 @@
+# Private solution for scenario ins-container-toolkit-docker
+solution:
+  - ssh dgx-03
+  - nvidia-smi -L
+  - docker run --rm --gpus all nvcr.io/nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
+  - dpkg -l | grep nvidia-container
+  - cat /etc/apt/sources.list.d/nvidia-container-toolkit.list
+  - apt-get update
+  - apt-get install -y nvidia-container-toolkit
+  - nvidia-ctk --version
+  - nvidia-ctk runtime configure --runtime=docker
+  - cat /etc/docker/daemon.json
+  - systemctl restart docker
+  - docker info | grep -i runtime
+  - docker run --rm --gpus all nvcr.io/nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
+  - docker run --rm --runtime=nvidia -e NVIDIA_VISIBLE_DEVICES=0 nvcr.io/nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi -L
+explanation: |
+  A GPU container needs three layers: the host driver (present, since nvidia-smi worked), the
+  NVIDIA Container Toolkit (libnvidia-container + nvidia-container-runtime-hook + the
+  nvidia-container-runtime wrapper + nvidia-ctk), and a container engine that is configured
+  to use it. Stock Ubuntu + Docker CE has no toolkit. dockerd's built-in "nvidia" device
+  driver, which serves `--gpus`, is only registered if nvidia-container-runtime-hook exists
+  when the daemon starts. That is exactly what `could not select device driver "" with
+  capabilities: [[gpu]]` means.
+
+  Steps:
+    1. `apt-get update` so the NVIDIA repository (already in sources.list.d) is indexed, then
+       `apt-get install -y nvidia-container-toolkit`. That pulls nvidia-container-toolkit-base,
+       libnvidia-container-tools and libnvidia-container1.
+    2. `nvidia-ctk runtime configure --runtime=docker` adds
+       "runtimes": {"nvidia": {"path": "nvidia-container-runtime", "args": []}} to
+       /etc/docker/daemon.json, keeping existing keys. Add --set-as-default only if every
+       container should get GPUs through the nvidia runtime by default.
+    3. `systemctl restart docker`. dockerd reads daemon.json and probes for the hook only
+       at startup.
+  Then both styles work: `--gpus all` (device request, served by the hook) and
+  `--runtime=nvidia` / `runtime: nvidia` with NVIDIA_VISIBLE_DEVICES.
+edge_cases:
+  - "On a node with no repository configured, add it first. NVIDIA's documented commands are `curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg` and `curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | tee /etc/apt/sources.list.d/nvidia-container-toolkit.list`, then apt-get update. On RHEL use the .repo file and dnf/yum."
+  - "DGX OS already ships the toolkit (and Docker configured for it). This problem shows up on vendor-installed or plain-distro nodes. In BCM, fix the software image rather than the node, or the next reprovision removes your fix."
+  - "nvidia-docker2 / nvidia-docker are deprecated wrappers. On current systems install nvidia-container-toolkit and use `--gpus` or the nvidia runtime."
+  - "For containerd (Kubernetes) the equivalent is `nvidia-ctk runtime configure --runtime=containerd` + `systemctl restart containerd`. With the GPU Operator, the toolkit DaemonSet does this for you (toolkit.enabled=true)."
+  - "Forgetting the restart is the classic trap: daemon.json is edited but `docker info` still shows `Runtimes: io.containerd.runc.v2 runc` and --gpus still fails."
+  - "Newer toolkit versions can also generate CDI specs (`nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml`) for engines that support CDI (`--device nvidia.com/gpu=all` in Podman / recent Docker). It's another way to inject GPUs, not a replacement for installing the toolkit."

@@ -21,8 +21,8 @@ CI runs the same checks on Linux and Windows.
 ## Adding or changing a scenario
 
 1. Read [docs/SCENARIO_FORMAT.md](docs/SCENARIO_FORMAT.md).
-2. Put the public problem in `src/greenray/data/scenarios/<id>.yaml`: briefing, objectives, setup, checks and hints. Never put the answer there; the loader and a pre-commit hook reject `solution`, `explanation` and `edge_cases`.
-3. Put the reference solution in the **private** solutions repository at `scenarios/<id>.yaml`.
+2. Put the problem in `src/greenray/data/scenarios/<id>.yaml`: briefing, objectives, setup, checks and hints. Never put the answer there; the loader and a pre-commit hook reject `solution`, `explanation` and `edge_cases`.
+3. Put the reference solution in `src/greenray/data/solutions/scenarios/<id>.yaml`.
 4. Add the id to [docs/COVERAGE.md](docs/COVERAGE.md) under its blueprint topic.
 5. `uv run greenray validate` must show `ok`: the scenario starts broken and its solution fixes it.
 

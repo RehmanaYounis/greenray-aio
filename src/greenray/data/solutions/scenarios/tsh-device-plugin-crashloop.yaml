@@ -1,0 +1,42 @@
+# Private solution for scenario tsh-device-plugin-crashloop
+solution:
+  - kubectl get pods -n kube-system -o wide
+  - kubectl describe pod nccl-test
+  - kubectl get pods -n kube-system -l app=nvidia-device-plugin-daemonset -o wide
+  - kubectl logs -n kube-system -l app=nvidia-device-plugin-daemonset --tail=8
+  - ssh dgx-03
+  - nvidia-smi -L
+  - crictl info
+  - grep default_runtime_name /etc/containerd/config.toml
+  - nvidia-ctk runtime configure --runtime=containerd --set-as-default
+  - systemctl restart containerd
+  - exit
+  - ssh dgx-04
+  - nvidia-ctk runtime configure --runtime=containerd --set-as-default
+  - systemctl restart containerd
+  - exit
+  - kubectl get pods -n kube-system -o wide
+  - kubectl get pods -o wide
+explanation: |
+  The device plugin needs NVML (libnvidia-ml.so) inside its container. The library is
+  not in the image; the NVIDIA Container Runtime injects it from the host when it
+  starts the container. The static device plugin manifest has no runtimeClassName,
+  so containerd uses its default runtime. On dgx-01/02 that default is nvidia. The
+  re-imaged dgx-03/04 came back with the stock containerd config.toml (default runc),
+  so the plugin started without the NVIDIA hook, logged "could not load NVML library
+  ... Incompatible platform detected ... did you configure the NVIDIA Container
+  Toolkit?" and exited. Kubernetes restarted it in a back-off loop. Without a running
+  plugin, kubelet never got any nvidia.com/gpu on those nodes, so the pinned nccl-test
+  pod failed with "Insufficient nvidia.com/gpu".
+
+  `nvidia-ctk runtime configure --runtime=containerd --set-as-default` adds the nvidia
+  runtime and makes it the default. containerd only reads config.toml at start-up, so
+  it must be restarted. Restarting containerd does not kill running containers. The
+  crash-looping plugin succeeds on its next restart and registers 8 GPUs with kubelet.
+edge_cases:
+  - "Without --set-as-default, nvidia-ctk only *adds* an nvidia runtime handler. Pods that don't request it via a RuntimeClass (like this static DaemonSet) still use runc and keep crashing."
+  - "Editing config.toml without restarting containerd changes nothing. `crictl info` shows what the running daemon loaded."
+  - "The docker daemon.json on DGX OS already has the nvidia runtime, but kubelet talks to containerd through CRI, not to dockerd. 'docker run --gpus all works' proves nothing for Kubernetes."
+  - "The GPU Operator avoids this class of problem: its toolkit DaemonSet configures containerd on every node and its operands use runtimeClassName: nvidia. With toolkit.enabled=false you are back to configuring containerd yourself."
+  - "Making nvidia the default runtime also means every container whose image sets NVIDIA_VISIBLE_DEVICES=all (most NGC images) sees all GPUs, even without a GPU request. Use the device plugin's volume-mounts device list strategy or CDI to close that hole on shared clusters."
+  - "Fix the image (BCM software image / category) as well. Otherwise the next re-provision brings the stock config.toml back."

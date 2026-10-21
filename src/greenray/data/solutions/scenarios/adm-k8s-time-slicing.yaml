@@ -1,0 +1,64 @@
+# Private solution for scenario adm-k8s-time-slicing
+solution:
+  - kubectl get pods -n inference -o wide
+  - kubectl describe pod -n inference -l app=embedder
+  - kubectl get nodes -L nvidia.com/gpu.product,nvidia.com/gpu.replicas
+  - |
+    cat > /root/time-slicing-config.yaml <<EOF
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: time-slicing-config
+      namespace: gpu-operator
+    data:
+      h100-ts4: |-
+        version: v1
+        flags:
+          migStrategy: none
+        sharing:
+          timeSlicing:
+            renameByDefault: false
+            failRequestsGreaterThanOne: false
+            resources:
+            - name: nvidia.com/gpu
+              replicas: 4
+    EOF
+  - kubectl apply -f /root/time-slicing-config.yaml
+  - helm upgrade gpu-operator nvidia/gpu-operator -n gpu-operator --reuse-values --set devicePlugin.config.name=time-slicing-config
+  - kubectl get clusterpolicy cluster-policy -o jsonpath='{.spec.devicePlugin.config}'
+  - kubectl label node dgx-04 nvidia.com/device-plugin.config=h100-ts4
+  - kubectl get pods -n gpu-operator -l app=nvidia-device-plugin-daemonset -o wide
+  - kubectl describe node dgx-04 | grep nvidia.com/gpu
+  - kubectl get nodes -L nvidia.com/gpu.product,nvidia.com/gpu.replicas,nvidia.com/gpu.sharing-strategy
+  - kubectl get pods -n inference -o wide
+explanation: |
+  The embedder pods select nvidia.com/gpu.product=NVIDIA-H100-80GB-HBM3-SHARED. GPU Feature
+  Discovery only writes the -SHARED suffix on a node whose device plugin is running with a
+  sharing config, so no node matched and the scheduler reported "didn't match Pod's node
+  affinity/selector".
+
+  Time-slicing in the GPU Operator is a device-plugin config:
+    1. A ConfigMap in the operator namespace. Each data key is one complete config file
+       (version: v1, sharing.timeSlicing.resources[].{name, replicas}).
+    2. ClusterPolicy spec.devicePlugin.config.name = that ConfigMap (set through Helm with
+       devicePlugin.config.name so it survives upgrades). The operator rolls the device-plugin
+       and GFD pods when this changes.
+    3. Which key a node uses: the node label nvidia.com/device-plugin.config=<key>, or
+       devicePlugin.config.default for every unlabelled node. Here only dgx-04 is labelled
+       and no default is set, so dgx-01..03 keep the plugin's built-in exclusive config.
+  The device plugin then registers every GPU 4 times (dgx-04: nvidia.com/gpu 32), and GFD
+  adds nvidia.com/gpu.replicas=4, nvidia.com/gpu.sharing-strategy=time-slicing and
+  nvidia.com/gpu.product=...-SHARED. That label is what the Deployment selects on.
+
+  Time-slicing only interleaves CUDA contexts in time on the same GPU. There is no memory or
+  fault isolation: one replica can use the full 80 GB, an OOM or Xid in one process can hit
+  the others, and requesting nvidia.com/gpu: 2 does not give a pod twice the compute.
+edge_cases:
+  - "Setting devicePlugin.config.default=h100-ts4 instead of labelling the node turns on sharing on every GPU node, dgx-01..03 included. For per-node configs, leave default empty (or point it at an unshared key) and label nodes."
+  - "Not every version re-reads an edited ConfigMap key. The config-manager sidecar reacts to node-label changes, and a ClusterPolicy change rolls the pods. Editing the data of the key a node already uses may not be picked up until `kubectl rollout restart -n gpu-operator daemonset/nvidia-device-plugin-daemonset` (and gpu-feature-discovery). The lab behaves this way."
+  - "If the label names a key that does not exist in the ConfigMap, the config-manager init container fails and the device plugin pod sits in Init:CrashLoopBackOff, so the node stops advertising GPUs. If the ConfigMap itself is missing, the pod is stuck in ContainerCreating with a FailedMount event."
+  - "renameByDefault: true advertises the shared replicas as nvidia.com/gpu.shared (and leaves the product label without -SHARED). Pods must then request nvidia.com/gpu.shared. Pods asking for nvidia.com/gpu would stay Pending."
+  - "failRequestsGreaterThanOne: true makes requests for more than one shared replica fail at admission. The flag is there because 2 replicas of a time-sliced GPU are not 2 GPUs. Defaults differ between plugin versions, so set it explicitly."
+  - "Time-slicing vs MIG vs MPS: MIG gives hardware-isolated slices (memory, cache, SMs, faults) on A100/H100 only. MPS (sharing.mps in newer device plugins) runs clients concurrently with enforced memory limits but shares fault domains. Time-slicing works on any GPU and gives no isolation at all. Time-slicing can also be applied on top of MIG devices (resources name nvidia.com/mig-1g.10gb with the mixed strategy)."
+  - "Don't drop --reuse-values on the helm upgrade. On these DGX nodes that would reset driver.enabled=true and start a containerized driver."
+  - "A `kubectl patch clusterpolicy cluster-policy --type merge -p '{\"spec\":{\"devicePlugin\":{\"config\":{\"name\":\"time-slicing-config\"}}}}'` works immediately, but the next helm upgrade renders the ClusterPolicy from the release values again and removes it."

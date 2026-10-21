@@ -1,0 +1,46 @@
+# Private solution for scenario adm-bcm-grabimage-sync
+solution:
+  - cmsh -c "device; use dgx-01; get softwareimage"
+  - cmsh -c "device; grabimage dgx-01"
+  - cmsh -c "device; synclog dgx-01"
+  - cmsh -c "category; use dgx-h100; get excludelistgrab"
+  - cmsh -c "category; use dgx-h100; append excludelistgrab '- /root/.ssh/id_*'; commit"
+  - cmsh -c "device; grabimage dgx-01"
+  - cmsh -c "device; synclog dgx-01"
+  - cmsh -c "device; grabimage -w dgx-01"
+  - cat /cm/images/dgx-os-6.2-h100-image/etc/security/limits.d/99-memlock.conf
+  - chroot /cm/images/dgx-os-6.2-h100-image dpkg -l iperf3
+  - ls /cm/images/dgx-os-6.2-h100-image/root/.ssh
+  - cmsh -c "device; imageupdate -n dgx-02..dgx-04"
+  - cmsh -c "device; synclog dgx-02"
+  - cmsh -c "device; imageupdate -w -n dgx-02..dgx-04"
+  - ssh dgx-03 cat /etc/security/limits.d/99-memlock.conf
+explanation: |
+  BCM keeps every node's root filesystem in a software image on the head node,
+  and the two sync commands go in opposite directions:
+
+  * imageupdate (device mode): image -> running node. It brings nodes in line
+    with the image. Run on dgx-01 first, it would remove iperf3 and the fix.
+  * grabimage (device mode): running node -> image. It captures hand-made
+    changes back into the image so that provisioning and imageupdate spread them.
+
+  Both are dry runs without -w. synclog shows what would be sent. Here the
+  first dry run shows the limits file and the iperf3 package, which we want,
+  but also /root/.ssh/id_ed25519, which we don't: a private key in the image
+  ends up on every node provisioned from it. Files matching the category's
+  excludelistgrab are skipped (that is why /tmp and /proc never get in).
+  Appending "- /root/.ssh/id_*" and committing removes the key from the second
+  dry run. Deleting the key from dgx-01 first also works, but the exclude entry
+  protects later grabs too.
+
+  After grabimage -w the image matches dgx-01. imageupdate -w on dgx-02..04 then
+  rsyncs the image into the running nodes: the limits file and the package
+  arrive, no reboot needed. (New login sessions and newly started slurmd job
+  steps pick up the limits. Long-running processes keep their old ulimit.)
+edge_cases:
+  - "grabimage copies the whole node minus exclude lists: logs, caches, shell histories, keys, and any debug edits. Always dry-run and read synclog. For a change you can describe exactly, editing the image directly (chroot /cm/images/<img> or cm-chroot-sw-img) is cleaner than grabbing."
+  - "Exclude lists per direction: excludelistgrab (grab into an existing image), excludelistgrabnew (grab into a new image with -i), excludelistupdate (imageupdate), excludelistsyncinstall (AUTO install at boot) and excludelistfullinstall (FULL install). A path excluded from updates is never fixed by imageupdate either."
+  - "grabimage -i <other-image> grabs into a different (for example cloned) image, which keeps the production image as a rollback target. Clone first if change control asks for it."
+  - "Grabbing from a node whose category uses a shared image changes it for every node in every category that uses that image. Check softwareimage; usedby <image> first."
+  - "A kernel or driver change on the node needs more than grabimage. Set the image's kernelversion so BCM rebuilds the ramdisk, then reboot the nodes."
+  - "In real cmsh, set excludelistgrab without a value opens the list in $EDITOR. The lab also accepts append/removefrom with one entry."

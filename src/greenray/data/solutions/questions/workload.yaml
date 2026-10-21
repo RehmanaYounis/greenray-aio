@@ -1,0 +1,303 @@
+# Answer key for workload.yaml: answer = zero-based choice indexes
+wkl-001:
+  answer: [3]
+  explanation: |
+    Two nodes with 8 tasks and 8 GPUs per node gives 16 ranks, one per GPU.
+    --gres is per node, so gpu:16 asks for 16 GPUs on each node, which can't be
+    satisfied, and only 2 tasks would be started. --nodes=16 asks for 16 nodes.
+    --ntasks=8 --gpus=8 gives 8 ranks in total, not 16.
+
+wkl-002:
+  answer: [1]
+  explanation: |
+    --gres=gpu:N is a per-node request, so 2 nodes x 4 GPUs = 8 GPUs. Getting 4
+    would mean treating --gres as a job total, which it isn't (--gpus is the job
+    total option).
+
+wkl-003:
+  answer: [2]
+  explanation: |
+    --exclusive allocates whole nodes that no other job may share. --oversubscribe
+    allows more sharing. --hold submits the job held. --requeue controls
+    requeueing after node failure or preemption.
+
+wkl-004:
+  answer: [0]
+  explanation: |
+    A job array creates one task per shard. The %10 suffix limits how many array
+    tasks run at the same time. Each task reads SLURM_ARRAY_TASK_ID. A loop of
+    200 jobs has no concurrency limit and loads the scheduler more.
+    --ntasks=200 in one job needs all resources at once. --nodes=200 asks for 200
+    nodes.
+
+wkl-005:
+  answer: [1]
+  explanation: |
+    SLURM_ARRAY_TASK_ID holds the array index (for example, 0-199).
+    SLURM_JOB_ID is the job's unique ID. SLURM_PROCID is the global rank of a
+    task in a step, and SLURM_LOCALID is the task's rank on its node.
+
+wkl-006:
+  answer: [1]
+  explanation: |
+    "Resources" means the job is next in line but not enough resources are free
+    yet. "Priority" means other pending jobs with higher priority are ahead.
+    Invalid requests are rejected at submit or show reasons such as
+    PartitionConfig. QOS limits show QOS* reasons. Dependencies show
+    "Dependency".
+
+wkl-007:
+  answer: [3]
+  explanation: |
+    ReqNodeNotAvail means a node the job requires is unavailable (drained, down
+    or reserved). The job can't start until dgx-03 returns or the job no longer
+    needs it. Priority and time limits don't affect node availability.
+    --exclusive adds a constraint and doesn't make the node available.
+
+wkl-008:
+  answer: [2]
+  explanation: |
+    --dependency=afterok:<jobid> starts the job only if the other job ends with
+    exit code 0. While waiting, squeue shows "Dependency". --begin takes a time,
+    not a job ID. --after is not an sbatch option. --array creates an array.
+
+wkl-009:
+  answer: [1]
+  explanation: |
+    QOSMaxGRESPerUser means the job's QOS has a per-user GRES limit (for example,
+    MaxTRESPerUser=gres/gpu=8), and carol's running jobs plus this one would go
+    over it. It will start when her other jobs finish or the limit is raised.
+    Free GPUs exist, so it isn't Resources. A drained node gives ReqNodeNotAvail.
+    Low fair-share shows up as Priority.
+
+wkl-010:
+  answer: [1]
+  explanation: |
+    The job's time limit is above the partition maximum, so it can't run there.
+    Lower the limit (users can usually reduce, not raise, a pending job's time
+    limit) or choose another partition. Waiting doesn't help. --exclusive and
+    more GPUs don't change the time request.
+
+wkl-011:
+  answer: [0]
+  explanation: |
+    pyxis uses enroot's image syntax, where # separates the registry host from
+    the image path: nvcr.io#nvidia/pytorch:24.05-py3. "docker://pytorch:24.05"
+    names the wrong image from Docker Hub. --image and --docker are not pyxis
+    options.
+
+wkl-012:
+  answer: [0]
+  explanation: |
+    Containers only see host paths that are bind-mounted. pyxis
+    --container-mounts=SRC:DST mounts host directories into the container.
+    Lustre is not a GRES. --export only passes environment variables.
+    --container-workdir sets the starting directory but doesn't mount anything.
+
+wkl-013:
+  answer: [3]
+  explanation: |
+    With pyxis, srun starts each rank inside the container, and --mpi=pmix lets
+    the MPI library in the container wire up through Slurm's PMIx. Running
+    mpirun without srun bypasses pyxis's per-task container setup. Starting
+    docker by hand over SSH bypasses Slurm. --mpi=none gives MPI no way to
+    bootstrap.
+
+wkl-014:
+  answer: [2]
+  explanation: |
+    GPUs are extended resources advertised by the device plugin. A container asks
+    for them in resources.limits (requests default to the same value). Setting
+    NVIDIA_VISIBLE_DEVICES bypasses scheduling and accounting. Annotations
+    don't allocate devices. nodeSelector only chooses nodes; it doesn't allocate
+    GPUs.
+
+wkl-015:
+  answer: [0]
+  explanation: |
+    Kubernetes doesn't allow overcommitting extended resources: if both are
+    given, they must match. Usually only limits is set. GPUs belong in limits,
+    not only requests. MIG strategy is unrelated. Integer values are accepted.
+
+wkl-016:
+  answer: [2]
+  explanation: |
+    With the mixed strategy, each MIG profile is its own resource name, and the
+    pod asks for it directly. nvidia.com/gpu doesn't select MIG slices in mixed
+    mode. nvidia.com/mig isn't a resource name. Fractional values aren't allowed
+    for nvidia.com/gpu.
+
+wkl-017:
+  answer: [0]
+  explanation: |
+    A toleration that matches the taint lets the scheduler place the pod on GPU
+    nodes. The other 3 nodes have no GPUs. Setting nodeName skips the scheduler,
+    which is poor practice and ignores the reason the taint exists. Pod labels
+    don't affect taints. A system-critical priority
+    class is for cluster components and doesn't tolerate taints.
+
+wkl-018:
+  answer: [2]
+  explanation: |
+    GFD labels nodes with nvidia.com/gpu.product (e.g. NVIDIA-H100-80GB-HBM3).
+    A nodeSelector or node affinity on that label limits scheduling to matching
+    nodes. nvidia.com/h100 isn't a resource name. Environment variables don't
+    affect scheduling. Tainting the A100 nodes affects every other workload and
+    evicts running pods.
+
+wkl-019:
+  answer: [0]
+  explanation: |
+    A Job runs pods to completion and tracks success or failure with retries.
+    A Deployment keeps a set number of long-running replicas and handles rolling
+    updates. A DaemonSet runs one pod per node, for agents such as the device
+    plugin. A bare Pod has no controller to restart or retry it.
+
+wkl-020:
+  answer: [0, 3]
+  explanation: |
+    Job pods must use Never or OnFailure so that a pod can reach completion.
+    Always is for Deployments and similar controllers and is rejected for Jobs.
+    IfNotPresent is an imagePullPolicy value. Retry is not valid; Job retries
+    are controlled by backoffLimit.
+
+wkl-021:
+  answer: [3]
+  explanation: |
+    Each node has 8 - 6 = 2 GPUs free. The cluster has 6 free in total, but a
+    pod's containers must all run on one node, so the 4-GPU pod doesn't fit.
+    Allocatable is 8, so the device plugin works. Image pull problems happen
+    after scheduling. A taint problem would show "untolerated taint" in the
+    event.
+
+wkl-022:
+  answer: [0]
+  explanation: |
+    The Triton model repository layout is <repo>/<model-name>/<version>/<model
+    file>, with config.pbtxt in the model directory. Without a version directory
+    there is nothing to load. The config file is config.pbtxt. TensorRT plans are
+    a supported backend. Any mounted filesystem works.
+
+wkl-023:
+  answer: [1]
+  explanation: |
+    Triton serves HTTP/REST on port 8000 by default, and /v2/health/ready
+    reports readiness (KServe v2 protocol). 8001 is gRPC, not HTTP. 8002 serves
+    Prometheus metrics. 9400 is the DCGM exporter's default port.
+
+wkl-024:
+  answer: [1, 3]
+  explanation: |
+    NIM containers download optimized model files from NGC at startup, so they
+    need the NGC API key, and they need GPUs. A local cache volume is
+    recommended so models aren't downloaded again. Privileged mode and host
+    networking aren't required (publish the API port instead). Slurm and MIG
+    are not prerequisites.
+
+wkl-025:
+  answer: [0, 4]
+  explanation: |
+    NCCL_IB_HCA picks the RDMA devices used for inter-node data. NCCL_SOCKET_IFNAME
+    picks the IP interface for bootstrap and socket traffic. CUDA_LAUNCH_BLOCKING
+    is for debugging and slows everything down. NCCL_IB_DISABLE=1 forces TCP
+    sockets, which is much slower. NCCL_P2P_DISABLE turns off intra-node GPU
+    peer-to-peer (NVLink/PCIe), hurting performance.
+
+wkl-026:
+  answer: [2]
+  explanation: |
+    NCCL_DEBUG=INFO prints init details, including the network ("Using network
+    IB" or "Socket") and per-channel transports (for example, GDRDMA). NCCL_ALGO
+    forces an algorithm but doesn't report anything. CUDA_VISIBLE_DEVICES limits
+    GPUs. OMP_NUM_THREADS controls CPU threading.
+
+wkl-027:
+  answer: [1]
+  explanation: |
+    srun --mpi=list prints the MPI plugin types Slurm was built with (for
+    example, pmix, pmi2, none). sinfo and scontrol have no such option.
+    mpirun --version shows the MPI library's version, not Slurm's plugins.
+
+wkl-028:
+  answer: [3]
+  explanation: |
+    SLURM_LOCALID is the task's index on its node (0-7 here), so it fits as a
+    local rank for picking a GPU. SLURM_NODEID is the node's index in the
+    allocation. SLURM_NTASKS is the total number of tasks. SLURM_JOB_NUM_NODES is
+    the node count.
+
+wkl-029:
+  answer: [3]
+  explanation: |
+    Run:ai workloads belong to a project, which has a GPU quota. Work within the
+    quota is guaranteed. Work beyond it uses idle capacity and can be preempted
+    (training workloads are typically preemptible). Image name and node don't
+    set quotas. Run:ai doesn't use Slurm accounts.
+
+wkl-030:
+  answer: [3]
+  explanation: |
+    Using 4 GPUs with a 2-GPU quota means it was running over quota on idle
+    capacity. Such workloads are preemptible when a project in deficit needs its
+    quota. Checkpointing lets the job resume. ECC errors would show in GPU
+    health, not as preemption. Run:ai supports multi-GPU workloads. Slurm is not
+    involved.
+
+wkl-031:
+  answer: [2, 3]
+  explanation: |
+    NGC containers bundle a CUDA version that needs a minimum host driver (data
+    center GPUs can use the CUDA forward compatibility package in some cases),
+    and each release lists supported GPU architectures. Both are in NVIDIA's
+    support matrix. Images are hosted on nvcr.io, not Docker Hub. Removing NVIDIA
+    libraries defeats the purpose. ECC doesn't affect container size.
+
+wkl-032:
+  answer: [1]
+  explanation: |
+    --gpus device=2,3 (quoted so the comma survives the shell) exposes exactly
+    those GPUs. --gpus 2 means "any two GPUs", which may not be 2 and 3. Without
+    --gpus (or the NVIDIA runtime), no GPUs are injected, so CUDA_VISIBLE_DEVICES
+    has nothing to filter. "/dev/nvidia2-3" is not a valid device path, and
+    passing device nodes alone misses the driver libraries.
+
+wkl-033:
+  answer: [3]
+  explanation: |
+    Slurm limits the job to its allocated devices (cgroup) and sets
+    CUDA_VISIBLE_DEVICES, so CUDA numbers the visible GPUs from 0. The
+    application sees two devices, 0 and 1. It doesn't see all eight, CUDA doesn't
+    need physical index 0, and the user doesn't need to set the variable.
+
+wkl-034:
+  answer: [2]
+  explanation: |
+    srun --pty starts an interactive pseudo-terminal in a new allocation with the
+    requested GPU. sbatch submits a batch script and doesn't give a terminal. SSH
+    to a node without an allocation is usually blocked and bypasses accounting.
+    scontrol run doesn't exist.
+
+wkl-035:
+  answer: [1, 4]
+  explanation: |
+    DataLoader workers pass tensors through shared memory. Docker's default
+    /dev/shm is very small (64 MB). Either share the host's IPC namespace or make
+    /dev/shm bigger. NVIDIA's NGC docs recommend this. Limiting CPUs doesn't fix
+    shared memory. --gpus 0 means no GPUs. --read-only makes the filesystem
+    read-only.
+
+wkl-036:
+  answer: [0]
+  explanation: |
+    Kubernetes doesn't have a --shm-size option. A memory-backed emptyDir mounted
+    at /dev/shm gives the container a larger shared memory area; the memory
+    counts against the pod's memory. hostPID shares the process namespace, not
+    shm. More GPUs don't help. No standard annotation sets shm size.
+
+wkl-037:
+  answer: [2]
+  explanation: |
+    sacct reads the accounting database, so it reports finished jobs, including
+    state, exit code and elapsed time. squeue only shows jobs still known to the
+    controller (completed jobs drop off quickly). sinfo shows partitions and
+    nodes. scontrol show node takes a node name.

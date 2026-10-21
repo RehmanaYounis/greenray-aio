@@ -1,0 +1,38 @@
+# Private solution for scenario ins-network-operator-rdma
+solution:
+  - kubectl describe pod rdma-test
+  - kubectl get pods -A -o wide | grep feature-discovery
+  - helm search repo nvidia/network-operator --versions
+  - helm show values nvidia/network-operator
+  - helm install network-operator nvidia/network-operator -n nvidia-network-operator --create-namespace --version 24.4.1 --set nfd.enabled=false --set deployCR=true --set ofedDriver.deploy=false --set rdmaSharedDevicePlugin.deploy=true --wait
+  - kubectl get nicclusterpolicy
+  - kubectl get pods -n nvidia-network-operator -o wide
+  - kubectl describe node dgx-01 | grep rdma
+  - kubectl get pod rdma-test -o wide
+  - kubectl exec rdma-test -- ibv_devices
+explanation: |
+  The Network Operator is to NICs what the GPU Operator is to GPUs. The operator
+  watches a NicClusterPolicy CR and deploys the requested components:
+  MOFED/DOCA driver container, RDMA shared device plugin, SR-IOV device plugin,
+  Multus/IPAM for secondary networks, and nv-peer-mem. The RDMA shared device plugin
+  advertises a pool such as rdma/rdma_shared_device_a (rdmaHcaMax slots per node) and
+  mounts the /dev/infiniband devices of the selected HCAs into pods that request it.
+  Those pods also need IPC_LOCK to pin memory.
+
+  Three chart values decide whether it works on a DGX cluster that already runs the
+  GPU Operator:
+    - nfd.enabled=false: NFD is already deployed by the GPU Operator. A second
+      NFD master/worker set competes for the same feature labels.
+    - deployCR=true (or applying your own NicClusterPolicy): otherwise the operator
+      runs but deploys nothing.
+    - ofedDriver.deploy=false: DGX OS ships the host DOCA/MLNX_OFED stack. A driver
+      container would try to unload mlx5_core while the host stack (and
+      nvidia_peermem) are using it.
+  Once the rdma-shared-dp pods run, every DGX node advertises
+  rdma/rdma_shared_device_a: 63 and the test pod schedules with its 8 GPUs.
+edge_cases:
+  - "If you forgot deployCR, `kubectl apply` a NicClusterPolicy (apiVersion mellanox.com/v1alpha1) with spec.rdmaSharedDevicePlugin.config listing resourceName/rdmaHcaMax/selectors. Newer chart versions expect this route instead of deployCR."
+  - "The pod also needs IPC_LOCK (or privileged) to register memory, and for GPUDirect RDMA the nvidia_peermem module on the host (DGX OS loads it; with the GPU Operator driver container use driver.rdma.enabled=true)."
+  - "Shared vs SR-IOV: the shared device plugin lets many pods share an HCA (no isolation). The SR-IOV device plugin hands out VFs with their own PCI functions, which needs SR-IOV enabled in firmware and the BIOS."
+  - "On InfiniBand, pods typically also need a secondary network (Multus + ipoib CNI or a host-device network) to get an IPoIB address for NCCL bootstrap. NCCL itself only needs the verbs devices."
+  - "Install into a dedicated namespace (nvidia-network-operator). The chart and CRDs assume that name in several docs examples."

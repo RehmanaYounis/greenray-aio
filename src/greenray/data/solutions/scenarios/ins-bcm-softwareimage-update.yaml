@@ -1,0 +1,39 @@
+# Private solution for scenario ins-bcm-softwareimage-update
+solution:
+  - cmsh -c "softwareimage; list"
+  - cmsh -c "softwareimage; clone dgx-os-6.2-h100-image dgx-os-6.2-h100-ctk1162; commit"
+  - chroot /cm/images/dgx-os-6.2-h100-ctk1162 apt-get install -y nvidia-container-toolkit=1.16.2-1
+  - chroot /cm/images/dgx-os-6.2-h100-ctk1162 dpkg -l nvidia-container-toolkit
+  - cmsh -c "category; use dgx-h100; set softwareimage dgx-os-6.2-h100-ctk1162; commit"
+  - cmsh -c "device; imageupdate -c dgx-h100"
+  - cmsh -c "device; synclog dgx-02"
+  - cmsh -c "softwareimage; usedby dgx-os-6.2-h100-image"
+  - cmsh -c "device; use dgx-02; clear softwareimage; commit"
+  - cmsh -c "device; imageupdate -w -c dgx-h100"
+explanation: |
+  This is the standard BCM image lifecycle: clone, modify, assign, then deploy.
+  1. `clone` + `commit` copies /cm/images/<src> to a new directory, which keeps
+     the known-good image as a rollback target. Never patch the only
+     production image in place.
+  2. Packages are installed *inside* the image with chroot (or
+     cm-chroot-sw-img, which also bind-mounts /proc, /sys and /dev). Nothing is
+     installed on the nodes themselves, because a node's root filesystem is
+     re-synced from its image at every provisioning.
+  3. Pointing the category at the new image is just configuration. Running
+     nodes keep their current files.
+  4. `imageupdate` (device mode) rsyncs the image onto running nodes. Without
+     `-w` it is a dry run: review the result with `synclog`. Add `-w` to make
+     the change and wait for it. This avoids a reboot, which is why it fits a
+     user-space package like the container toolkit.
+
+  The trap: dgx-02 had a node-level `softwareimage` value. Node values
+  override the category, so the dry run showed dgx-02 receiving the *old*
+  image. `clear softwareimage` removes the override, and the node inherits
+  from its category again.
+edge_cases:
+  - "`imageupdate` without -w is a dry run, and nothing changes on the node. Only `imageupdate -w` updates it. The exam likes to test this."
+  - "A new kernel or driver needs a reboot even after imageupdate. Set `kernelversion` on the image (BCM rebuilds the ramdisk) and reboot. imageupdate cannot replace the running kernel."
+  - "Install modes: AUTO (sync changed files at boot and keep partitions), FULL (repartition and reinstall, wiping local data such as /raid), MAIN (stop for manual action), NOSYNC (boot without syncing). `nextinstallmode FULL` applies once."
+  - "Files listed in the category's exclude lists (excludelistupdate / excludelistsyncinstall) are never overwritten by imageupdate. Local node changes in those paths survive, and so do mistakes there."
+  - "`uname -r` inside a chroot shows the head node's running kernel, not the image's. Check `ls /lib/modules` in the image instead."
+  - "The reverse direction, copying a node's live filesystem into an image, is `grabimage -w`. It is useful but easy to misuse, because it captures local junk."

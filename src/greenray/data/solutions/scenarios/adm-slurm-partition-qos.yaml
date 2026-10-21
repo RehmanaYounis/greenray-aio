@@ -1,0 +1,39 @@
+# Private solution for scenario adm-slurm-partition-qos
+solution:
+  - sacctmgr show qos
+  - sacctmgr -i add qos interactive
+  - sacctmgr -i modify qos interactive set MaxTRESPerUser=gres/gpu=8
+  - scontrol show config | grep -i AccountingStorageEnforce
+  - echo "AccountingStorageEnforce=associations,limits,qos" >> /etc/slurm/slurm.conf
+  - echo "PartitionName=interactive Nodes=dgx-[03-04] MaxTime=04:00:00 QOS=interactive State=UP" >> /etc/slurm/slurm.conf
+  - systemctl restart slurmctld
+  - scontrol show partition interactive
+  - sacctmgr show qos interactive format=Name,MaxTRESPU
+  - sbatch -p interactive -N 2 --gres=gpu:8 --wrap="sleep 600"
+  - squeue -p interactive
+explanation: |
+  This policy touches three layers, and each one can quietly do nothing:
+
+  1. The QOS (slurmdbd / sacctmgr) holds the limit: MaxTRESPerUser=gres/gpu=8
+     counts GPUs across all running jobs of one user in that QOS.
+  2. The partition attaches the QOS (QOS=interactive on the PartitionName line).
+     A partition QOS applies to every job in the partition, whatever QOS the job
+     itself requested, so users can't get around it with --qos. Putting the line
+     in slurm.conf, rather than only running scontrol create partition, is what
+     makes it survive a restart.
+  3. Enforcement. slurmctld applies association and QOS limits only when
+     AccountingStorageEnforce contains limits (or safe). The default config had
+     no AccountingStorageEnforce at all, so a QOS created there is decorative.
+     That is exactly what went wrong last quarter.
+
+  The test job asks for 2 x 8 GPUs and stays PENDING with reason
+  QOSMaxGRESPerUser. That shows the limit is enforced per user. A limit that is
+  enforced shows up as a pending reason, not as a submit error, unless the QOS
+  has Flags=DenyOnLimit.
+edge_cases:
+  - "MaxTRESPerUser vs MaxTRESPerJob vs GrpTRES: per user across their running jobs, per single job, and the total for everyone in the QOS. Exam questions like to swap these."
+  - "Partition QOS limits override job QOS limits for the same TRES by default. A job QOS with Flags=OverPartQOS reverses that."
+  - "With AccountingStorageEnforce=qos, every user's association must be allowed to use the job's QOS (sacctmgr modify user X set qos+=Y), or submission fails with 'Invalid qos specification'."
+  - "Changing AccountingStorageEnforce or adding a partition needs the controller to re-read slurm.conf (scontrol reconfigure, or restart slurmctld for parameters that require it)."
+  - "Flags=DenyOnLimit makes over-limit jobs fail at submit time instead of waiting in the queue with a QOS* reason."
+  - "Overlapping partitions (dgx-03/04 in both defq and interactive) are legal. Use PriorityTier or preemption if the interactive partition should go first."

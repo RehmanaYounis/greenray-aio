@@ -256,13 +256,13 @@ def test_progress_file_contains_no_solution_text():
     assert not any(step in blob for step in s.solution if len(step) > 15)
 
 
-def test_public_works_without_solutions(monkeypatch, tmp_path):
+def test_bundled_solutions_back_the_debrief(monkeypatch, tmp_path):
     monkeypatch.setenv("GREENRAY_SOLUTIONS", str(tmp_path / "nowhere"))
+    monkeypatch.setattr(solutions, "_REPO_ROOT", tmp_path)
     solutions.clear_cache()
     try:
         ui = play([*DIAGNOSE, *FIX, "check"], incident=True, hide_identity=True)
         assert "All objectives met" in ui.text
-        assert "Solutions are not installed" in ui.text
+        assert "Why" in ui.text and "Solutions are not available" not in ui.text
     finally:
-        monkeypatch.delenv("GREENRAY_SOLUTIONS")
         solutions.clear_cache()

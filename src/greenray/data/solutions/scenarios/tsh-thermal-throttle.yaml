@@ -1,0 +1,34 @@
+# Private solution for scenario tsh-thermal-throttle
+solution:
+  - ssh dgx-02
+  - nvidia-smi
+  - nvidia-smi -q -d PERFORMANCE,TEMPERATURE -i 5
+  - ipmitool sel list
+  - nvidia-bug-report.sh
+  - exit
+  - hwticket create --node dgx-02 --component fan --summary "FAN6_R failed (SEL 0 RPM), GPU5 at 88C with HW Thermal Slowdown; bug report attached"
+  - cmsh -c "device; drain -n dgx-02 --reason 'HW-1041 fan FAN6_R failed, GPU5 thermal slowdown'"
+explanation: |
+  Clock event reasons tell you *who* lowered the clocks:
+    * SW Power Cap: the software power limit. Raising -pl helps if it was set
+      too low.
+    * HW Slowdown / HW Thermal Slowdown / HW Power Brake: the hardware is
+      protecting itself (over temperature, PSU or power-brake signal). No
+      software setting fixes the cause.
+  Under the same burn-in load, GPU 5 was at 88 °C, above its 87 °C slowdown
+  threshold, and clocked at 1110 MHz. Its neighbours ran at about 67 °C at 1980 MHz. The BMC's SEL explains why: FAN6_R dropped to 0 RPM, and
+  that fan cools the GPU5 zone. Raising the power limit would make the GPU
+  hotter. On H100 SXM it is already at the 700 W maximum anyway.
+
+  In a synchronous data-parallel job, one throttled GPU slows down all 16
+  ranks, which is why the whole run was 35% slower. The right response is
+  operational: drain the node (running work finishes, nothing new lands),
+  capture nvidia-bug-report.log.gz (NVIDIA Enterprise Support asks for it on
+  every hardware case), open the RMA for the fan, and resume the node only
+  after the repair and a health check (e.g. dcgmi diag -r 3).
+edge_cases:
+  - "Don't 'fix' thermal slowdown with nvidia-smi -pl, -lgc or by disabling HW slowdown. Power/clock tweaks do not remove the cause, and on SXM parts they are capped anyway."
+  - "Thermal slowdown on ALL GPUs of a node usually points to the room or rack (inlet temperature, blocked airflow, CDU/chilled water on liquid-cooled racks), not to one fan. Check the ipmitool sdr inlet temperature."
+  - "'SW Thermal Slowdown' means the driver is lowering clocks because of the memory/GPU temperature target, before the HW threshold. That is still a cooling issue."
+  - "Drain, don't down: `scontrol update nodename=dgx-02 state=drain reason=...` (or cmsh drain) lets running jobs finish. state=down kills them."
+  - "DCGM health watches (dcgmi health -s a) and DCGM policies can raise thermal violations automatically. Use them instead of waiting for users to notice slow jobs."

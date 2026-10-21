@@ -3,7 +3,7 @@ import pytest
 from greenray.app.ui import UI
 from greenray.content import solutions
 
-requires_solutions = pytest.mark.skipif(not solutions.available(), reason="private solutions repository not installed")
+requires_solutions = pytest.mark.skipif(not solutions.available(), reason="no solutions available")
 
 
 @pytest.fixture(autouse=True)

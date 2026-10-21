@@ -1,0 +1,32 @@
+# Private solution for scenario wkl-k8s-pod-pending-gpu
+solution:
+  - kubectl get pods -o wide
+  - kubectl describe pod bert-pretrain
+  - kubectl get nodes
+  - kubectl describe node dgx-03 | grep -A 12 "Allocated resources"
+  - "sed -i 's#nvidia.com/gpu: 10#nvidia.com/gpu: 8#' /root/bert-pretrain.yaml"
+  - kubectl uncordon dgx-01 dgx-02
+  - kubectl delete pod bert-pretrain
+  - kubectl apply -f /root/bert-pretrain.yaml
+  - kubectl get pods -o wide
+explanation: |
+  The scheduler's message lists one reason per node:
+  "0/5 nodes are available: 1 node(s) had untolerated taint
+  {node-role.kubernetes.io/control-plane: }, 2 Insufficient nvidia.com/gpu,
+  2 node(s) were unschedulable".
+  There were two problems at once:
+    1. The pod asked for 10 GPUs. Extended resources such as nvidia.com/gpu can't
+       span nodes, and an H100 DGX advertises at most 8, so no node could ever fit
+       it. torchrun --nproc_per_node=8 shows the intent was 8.
+    2. Even with 8, dgx-03 and dgx-04 each have 4 GPUs allocated to inference
+       replicas. The only empty nodes were still cordoned after the firmware work.
+  After fixing the request and uncordoning, the scheduler picks an empty node
+  (dgx-01/dgx-02) and the pod starts. Most pod spec fields, including resources, are
+  immutable. That is why the edited manifest has to be re-created rather than re-applied.
+edge_cases:
+  - "Extended resources are whole integers: nvidia.com/gpu: 0.5 is rejected by validation. Use MIG or time-slicing for GPU sharing."
+  - "For extended resources, requests must equal limits. If you set only limits, Kubernetes copies them to requests. If you set only requests, the pod is rejected."
+  - "The control-plane taint on bcm-head is expected and always shows up in the message. Don't remove it to 'free' a node; that node has no GPUs anyway."
+  - "Deleting the inference pods would also have freed GPUs, but their Deployment would just recreate them. In the exam, read the constraints in the task."
+  - "`kubectl drain` cordons the node too. Forgetting `kubectl uncordon` after maintenance is a classic cause of 'unschedulable' capacity."
+  - "A pod that only ever fits after preemption needs a PriorityClass. The 'preemption: ... No preemption victims found' part of the message tells you preemption could not help here."

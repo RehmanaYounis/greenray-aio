@@ -1,0 +1,59 @@
+# Private solution for scenario tsh-numa-affinity
+solution:
+  - cat /root/resnet-dali-5000.out
+  - cat /root/resnet-dali-4990.out
+  - ssh dgx-03
+  - nvidia-smi topo -m
+  - numactl -H
+  - lscpu
+  - slurmd -G
+  - cat /etc/slurm/gres.conf
+  - |
+    cat > /etc/slurm/gres.conf <<EOF
+    # dgx-03 - restored to NVML autodetection (CHG-2291 follow-up)
+    AutoDetect=nvml
+    Name=gpu Type=h100 File=/dev/nvidia[0-3] Cores=0-55
+    Name=gpu Type=h100 File=/dev/nvidia[4-7] Cores=56-111
+    EOF
+  - systemctl restart slurmd
+  - slurmd -G
+  - exit
+  - sed -i 's/^#SBATCH --cpus-per-task=16/#SBATCH --cpus-per-task=16\n#SBATCH --gres-flags=enforce-binding/' /root/resnet-dali.sbatch
+  - cat /root/resnet-dali.sbatch
+  - sbatch /root/resnet-dali.sbatch
+  - scontrol -d show job 5002
+  - cat /root/resnet-dali-5002.out
+  - squeue
+explanation: |
+  On a DGX H100, GPUs 0-3 (and NICs mlx5_0-3) are attached to CPU socket 0 / NUMA
+  node 0, and GPUs 4-7 to socket 1 / NUMA node 1 (nvidia-smi topo -m: CPU
+  Affinity 0-55,112-167 vs 56-111,168-223). A data-loader thread that runs on the
+  other socket pulls every batch across the inter-socket link (UPI), and its
+  pinned host buffers live in remote memory, so it is slower to feed the
+  GPU. The cost here is roughly 35%.
+
+  Slurm decides which cores a GPU job gets from the GPU-to-core map that slurmd
+  reports at registration. With AutoDetect=nvml it comes from NVML (always
+  right). With hand-written gres.conf lines it comes from Cores=. After the
+  motherboard swap someone wrote dgx-03's gres.conf by hand with the two ranges
+  swapped, so Slurm "correctly" gave GPUs 4-7 cores 0-55 (socket 0), as the
+  5000 output shows (cpubind: 0 for SLURM_JOB_GPUS=4,5,6,7). slurmd -G
+  shows the bad Cores= mapping directly.
+
+  Fix the source: correct Cores= (Slurm core IDs 0-55 / 56-111, not Linux CPU
+  numbers) or go back to AutoDetect=nvml, then restart slurmd so it registers the
+  new map (scontrol reconfigure also works). --gres-flags=enforce-binding
+  then makes the scheduler allocate only GPU-local cores, and a job waits
+  instead of starting with remote ones. The new run gets GPUs 4-7, because bob
+  holds 0-3, with cores on socket 1, so numactl --show reports cpubind: 1.
+
+  Task binding inside the job (TaskPlugin=task/affinity, --cpu-bind=cores, or
+  numactl --cpunodebind) cannot fix this alone. The cgroup only contains the
+  cores Slurm allocated, and those were the wrong ones.
+edge_cases:
+  - "gres.conf Cores= uses Slurm's core numbering (cores 0..N-1 across all sockets), not Linux CPU IDs. Writing Cores=0-55,112-167 (Linux numbers) is invalid on a 112-core node and slurmd drops the affinity. lscpu -p (Core column) shows the mapping."
+  - "scontrol -d show job prints CPU_IDs in Slurm's abstract CPU numbering (core-major, both hyperthreads of a core next to each other). That is not the Linux numbering numactl and taskset use. Compare NUMA nodes, not raw numbers."
+  - "Without enforce-binding, Slurm prefers GPU-local cores but will hand out remote ones when local cores are busy. With it, the job waits (Resources) until local cores are free. That is the trade-off between throughput and queue time."
+  - "Slurm 24.11 and later add more --gres-flags options (one-task-per-sharing, multiple-tasks-per-sharing), and --gpu-bind=closest binds each task to its nearest GPU. Check the man page for your version."
+  - "NIC locality matters for the same reason. NCCL/UCX pick the HCA closest to each GPU (topo -m PXB vs SYS). A wrong NCCL_IB_HCA list or a cross-socket NIC shows up as low busbw in nccl-tests."
+  - "A BIOS change after a board swap (sub-NUMA clustering on, hyperthreading off) changes the NUMA layout. Always re-check numactl -H and nvidia-smi topo -m after hardware work instead of copying an old gres.conf."

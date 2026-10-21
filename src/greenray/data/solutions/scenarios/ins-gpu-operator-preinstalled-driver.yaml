@@ -1,0 +1,38 @@
+# Private solution for scenario ins-gpu-operator-preinstalled-driver
+solution:
+  - kubectl get pods -n gpu-operator
+  - kubectl logs -n gpu-operator ds/nvidia-driver-daemonset
+  - helm list -A
+  - helm get values gpu-operator -n gpu-operator
+  - ssh dgx-01 nvidia-smi -L
+  - helm repo add nvidia https://helm.ngc.nvidia.com/nvidia
+  - helm repo update
+  - helm upgrade gpu-operator nvidia/gpu-operator -n gpu-operator --reuse-values --set driver.enabled=false --wait
+  - kubectl get pods -n gpu-operator
+  - kubectl get clusterpolicy
+  - kubectl describe node dgx-01 | grep nvidia.com/gpu
+explanation: |
+  The values file set driver.enabled=true, so the operator rolled out the
+  nvidia-driver-daemonset. Before it installs, that container tries to unload the
+  nvidia kernel modules. On DGX OS those modules are held by nvidia-persistenced,
+  Fabric Manager, DCGM and nvidia_peermem, so the unload fails with "Could not unload
+  NVIDIA driver kernel modules, driver is in use" and the pod goes into CrashLoopBackOff.
+  Every other operand (toolkit, validator, device plugin, GFD, DCGM exporter) has an init
+  container that waits for driver validation. They sit in Init:0/1 and no node ever
+  advertises nvidia.com/gpu.
+
+  On nodes with a pre-installed driver, deploy the operator with driver.enabled=false.
+  An in-place `helm upgrade --reuse-values --set driver.enabled=false` updates the
+  ClusterPolicy, the operator deletes the driver DaemonSet, the validator passes
+  against the host driver, and the device plugin registers 8 GPUs per node.
+  Uninstalling and reinstalling the release works just as well.
+  The container toolkit can stay enabled. Its job is to configure containerd (the
+  Kubernetes runtime) with the nvidia runtime, which the DGX OS image does not do for
+  you. The docker configuration in DGX OS does not help kubelet.
+edge_cases:
+  - "`helm upgrade` with new --set values but WITHOUT --reuse-values resets every other value to the chart default. Here that is harmless, but in general it silently drops customisations (mig.strategy, tolerations, toolkit settings)."
+  - "Re-using the colleague's -f gpu-operator-values.yaml on reinstall brings driver.enabled=true back. The last -f/--set wins, and --set beats -f."
+  - "`helm install --wait` does not prove the GPU stack works. It only waits for the objects the chart itself creates (operator, NFD). The operands are created later by the operator. Check the pods, the ClusterPolicy state and node allocatable."
+  - "toolkit.enabled=false is only correct if containerd on every node is already configured with the nvidia runtime (nvidia-ctk runtime configure --runtime=containerd, then restart containerd). Otherwise the operand pods stay in ContainerCreating with 'no runtime for \"nvidia\" is configured'."
+  - "Newer operator releases can detect a pre-installed driver and skip the driver pod on that node. Don't rely on that: set driver.enabled=false explicitly for DGX/DGX OS nodes."
+  - "`helm uninstall` without -n looks in the default namespace and fails with 'release: not found'."

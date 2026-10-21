@@ -1,0 +1,40 @@
+# Private solution for scenario tsh-ib-port-down
+solution:
+  - ssh dgx-03
+  - ibstat
+  - ibstatus mlx5_3
+  - mlxlink -d mlx5_3 -m
+  - mlxlink -d mlx5_3 --port_state TG
+  - ibstat mlx5_3
+  - exit
+  - reseat-cable dgx-03 mlx5_3
+  - ssh dgx-03
+  - ibstat mlx5_3
+  - ibdiagnet
+  - exit
+  - mpirun --allow-run-as-root -np 16 -H dgx-01:8,dgx-03:8 all_reduce_perf -b 1G -e 8G -f 2 -g 1
+explanation: |
+  Read IB port states in two layers:
+    * Physical state: LinkUp, Polling, Disabled. Polling = the port is trying
+      to train but sees no partner (cable unplugged or damaged, dirty fiber,
+      dead transceiver, or the switch port is down). Disabled = administratively
+      shut.
+    * Logical state: Down, Initializing, Armed, Active. With LinkUp +
+      Initializing the physical link is fine but no Subnet Manager has
+      configured the port. That is an SM/UFM problem, not a cable.
+  mlx5_3 showed Down/Polling, "Rate: 10" (what ibstat prints when there is no
+  link), and -40 dBm RX power on every lane in `mlxlink -m`, meaning no light
+  is arriving. A software toggle cannot fix that. Reseating the transceiver
+  and fiber restored the link, and the port trained at 4X NDR (400 Gb/s).
+
+  Why only about 12% slower and not broken? DGX H100 nodes use 8 rail-aligned
+  NDR HCAs. NCCL simply skips a port that is not ACTIVE and runs on the
+  remaining 7 rails, so bandwidth drops to about 7/8 instead of the job
+  failing. A full-size all_reduce_perf run is the proof that the fabric is
+  back to normal.
+edge_cases:
+  - "Active but at 200 Gb/s (2X or HDR) is a degraded link: a bad lane or the wrong cable type. ibdiagnet reports it under 'Speed / Width checks', and mlxlink shows Width/Speed. Treat it as a cable/transceiver RMA."
+  - "Rising SymbolErrorCounter/LinkDownedCounter in perfquery (or ibdiagnet --pc) on an Active port means a marginal link. Clear the counters (perfquery -R) and watch whether they keep increasing before you replace anything."
+  - "`mlxlink --port_state DN` disables a port until you run UP, restart openibd or reboot. It's useful for isolating a flapping link, and a classic way to leave a port down by accident."
+  - "All ports Initializing on every node means the SM is missing (UFM/opensm down). Check `sminfo`. Only one master SM should exist, and the head node's opensm is normally disabled when UFM manages the fabric."
+  - "ibdiagnet only discovers what it can reach. A dead HCA port shows up as a missing CA or a Polling switch port, not as an error on the host side."

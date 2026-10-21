@@ -1,0 +1,55 @@
+# Private solution for scenario tsh-slurm-node-down-munge
+solution:
+  - sinfo -R
+  - scontrol show node dgx-02
+  - journalctl -u slurmctld
+  - ssh dgx-02
+  - systemctl status slurmd
+  - journalctl -u slurmd
+  - munge -n | unmunge
+  - cat /var/log/apt/history.log
+  - md5sum /etc/munge/munge.key
+  - exit
+  - ssh dgx-02 munge -n | unmunge
+  - md5sum /etc/munge/munge.key
+  - scp /etc/munge/munge.key dgx-02:/etc/munge/munge.key
+  - ssh dgx-02 md5sum /etc/munge/munge.key
+  - ssh dgx-02 systemctl restart munge
+  - ssh dgx-02 systemctl restart slurmd
+  - ssh dgx-02 munge -n | unmunge
+  - scontrol update nodename=dgx-02 state=resume
+  - sinfo -N -n dgx-02
+explanation: |
+  Slurm authenticates every RPC between slurmctld, slurmd and the client
+  commands with MUNGE (AuthType=auth/munge). MUNGE credentials are encrypted and
+  signed with a symmetric key, /etc/munge/munge.key, and that key must be the same
+  on every host. When the technician reinstalled munge on the new disk, the
+  package post-install generated a new random key (/var/log/apt/history.log
+  shows munge being installed on 2026-10-18, right before the errors start).
+  From then on:
+
+  * slurmd on dgx-02 starts and looks healthy locally (systemctl says running),
+  * but slurmctld cannot decode its registration ("Munge decode failed: Invalid
+    credential ... Protocol authentication error"), and slurmd cannot decode the
+    controller's pings either,
+  * after SlurmdTimeout slurmctld marks the node DOWN with reason "Not
+    responding", and its running job ends with NODE_FAIL.
+
+  munge -n | unmunge on dgx-02 alone succeeds, because the node agrees with
+  itself. The test that proves the problem crosses hosts:
+  ssh dgx-02 munge -n | unmunge (encode on dgx-02, decode on the head) gives
+  "Invalid credential". md5sum of the key on both hosts confirms it.
+
+  The fix is to bring the cluster key to dgx-02 (scp from the head node, or
+  imageupdate from the BCM software image, which already holds the right key),
+  restart munged so it loads the key (munged reads it only at start-up), and then
+  restart slurmd so it registers again. ReturnToService=0 (the default)
+  keeps a node that went DOWN for not responding in DOWN until an admin resumes
+  it, so the last step is scontrol update ... state=resume.
+edge_cases:
+  - "Never 'fix' this by generating a new key on the head node (mungekey/create-munge-key). Every other node would immediately fail the same way, and the whole cluster would go DOWN."
+  - "munged refuses to start if the key file is not owned by the munge user or is readable by others. After copying a key as root, run chown munge:munge /etc/munge/munge.key and chmod 0400 on it. The lab does not model file ownership, but real clusters fail here."
+  - "Clock skew also breaks MUNGE: a credential is valid for 300 s by default, and a node whose clock is several minutes off gets 'Expired credential' / 'Rewound credential'. Check chronyd/timedatectl when the keys match."
+  - "munged stopped or crashed shows up as 'Munge encode failed: Failed to access /run/munge/munge.socket.2' in slurmd and in client commands on that host."
+  - "ReturnToService=1 would have brought the node back automatically once it responded again (only for nodes that went DOWN because they were not responding). ReturnToService=2 also returns nodes that were DOWN for other reasons once they register with a valid configuration."
+  - "On a BCM cluster the key lives in the software image too. If you only fix the node by hand and the image holds a different key, the next reprovision (AUTO install) brings the problem back. Check /cm/images/<image>/etc/munge/munge.key."

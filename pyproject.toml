@@ -1,10 +1,12 @@
 [project]
 name = "greenray-aio"
-version = "0.4.0"
+version = "0.5.0"
 description = "GreenRay AIO: hands-on lab simulator and mock exam for the NVIDIA NCP-AIO (AI Operations) certification"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Rehmana Younis" }]
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 keywords = [
     "ncp-aio", "nvidia-certification", "ai-infrastructure", "ai-operations", "exam-prep",
     "slurm", "kubernetes", "gpu-operator", "base-command-manager", "dgx", "hpc", "simulator",
@@ -14,6 +16,7 @@ classifiers = [
     "Environment :: Console",
     "Intended Audience :: Education",
     "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
