@@ -1,0 +1,67 @@
+id: wkl-k8s-pod-pending-nodeselector
+title: The cuda-test pod has been Pending for twenty minutes
+domain: Workload Management
+difficulty: easy
+time_limit_min: 10
+tags: [kubernetes, scheduling, nodeselector, labels, gpu-operator, on-ramp]
+briefing: |
+  dana (data scientist) on chat:
+
+    "I applied /root/cuda-test.yaml on the head node to check that GPUs work in
+    Kubernetes. The pod has said Pending for twenty minutes. The nodes are all
+    Ready and nobody else is using the cluster. Can you have a look?"
+
+  The pod must land on an H100 node. Keep a node selector on it, so that it can
+  never be scheduled onto a node without H100 GPUs, and make it run.
+objectives:
+  - Find in the pod's events which scheduling rule excludes the GPU nodes
+  - Compare the manifest's node selector with the labels the GPU nodes really carry
+  - /root/cuda-test.yaml keeps a nodeSelector that matches the H100 nodes
+  - The cuda-test pod is scheduled on a DGX node and runs to completion
+setup:
+  - python: |
+      from greenray.commands import helm, kubectl as kc
+      helm.preinstall(state, "nvidia/gpu-operator", values={"driver": {"enabled": False}}, settle=86400 * 7)
+      kc.reconcile(state)
+  - file: /root/cuda-test.yaml
+    host: bcm-head
+    content: |
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: cuda-test
+      spec:
+        restartPolicy: Never
+        nodeSelector:
+          nvidia.com/gpu.product: NVIDIA-H100-80GB
+        containers:
+        - name: cuda
+          image: nvcr.io/nvidia/cuda:12.4.1-base-ubuntu22.04
+          command: ["nvidia-smi", "-L"]
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+  - python: |
+      from greenray.commands import kubectl as kc
+      kc.apply_yaml(state, state.nodes["bcm-head"].files["/root/cuda-test.yaml"])
+      kc.advance(state, 1200)
+      kc.reconcile(state)
+checks:
+  - desc: you read the pod's events (kubectl describe pod or kubectl get events)
+    expr: "ran(r'kubectl describe (pod|pods|po)\\b') or ran(r'kubectl get (events|ev)\\b')"
+  - desc: you looked at the node labels (kubectl get nodes -L/--show-labels or describe node)
+    expr: "ran(r'kubectl get (nodes|node|no)\\b.*(-L|--show-labels|-l )') or ran(r'kubectl describe (node|nodes|no)\\b')"
+  - desc: /root/cuda-test.yaml still has a nodeSelector, now matching the H100 product label
+    expr: "re.search(r'nodeSelector:\\s*\\n\\s*nvidia\\.com/gpu\\.product:\\s*[\"\\']?NVIDIA-H100-80GB-HBM3[\"\\']?\\s*$', file('bcm-head', '/root/cuda-test.yaml'), re.M) is not None"
+  - desc: the cuda-test pod runs on a DGX node (Running or Completed)
+    expr: "any(p.name == 'cuda-test' and p.status in ('Running', 'Completed', 'Succeeded') and (p.node or '').startswith('dgx-') for p in pods('default'))"
+  - desc: no cuda-test pod is left Pending
+    expr: "not [p for p in pods('default', 'cuda-test') if p.status == 'Pending']"
+hints:
+  - "kubectl describe pod cuda-test: the FailedScheduling event at the bottom says how many nodes were excluded and by which rule (taint, affinity/selector, or insufficient resources)."
+  - "A nodeSelector must match a label exactly, character for character. The GPU Operator's feature discovery labels every GPU node; see them with kubectl get nodes -L nvidia.com/gpu.product or --show-labels, and compare with the manifest."
+  - "A pod's nodeSelector cannot be changed in place; kubectl apply refuses it. Fix the manifest, delete the stuck pod, then apply the manifest again and watch kubectl get pods -o wide."
+references:
+  - Kubernetes docs - Assigning Pods to Nodes (nodeSelector)
+  - NVIDIA GPU Operator - GPU Feature Discovery labels
+  - kubectl describe and kubectl get events

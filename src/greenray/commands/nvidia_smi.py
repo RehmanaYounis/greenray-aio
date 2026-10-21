@@ -168,6 +168,9 @@ def _query_full(ctx, gpus, sections):
         out.append(f"    Serial Number                         : {g.serial}")
         out.append(f"    GPU UUID                              : {g.uuid}")
         out.append(f"    VBIOS Version                         : {g.vbios}")
+        out.append(f"    Minor Number                          : {g.index}")
+        if want("PCI"):
+            out.append(f"    PCI\n        Bus Id                            : {g.bus_id}")
         out.append("    MIG Mode")
         out.append(f"        Current                           : {'Enabled' if g.mig_mode else 'Disabled'}")
         pend = g.mig_mode if g.mig_pending is None else g.mig_pending

@@ -1,0 +1,30 @@
+# Private solution for scenario wkl-k8s-pod-pending-nodeselector
+solution:
+  - kubectl get pods -o wide
+  - kubectl describe pod cuda-test
+  - kubectl get nodes -L nvidia.com/gpu.product
+  - cat /root/cuda-test.yaml
+  - sed -i 's/NVIDIA-H100-80GB$/NVIDIA-H100-80GB-HBM3/' /root/cuda-test.yaml
+  - kubectl delete pod cuda-test
+  - kubectl apply -f /root/cuda-test.yaml
+  - kubectl get pods -o wide
+  - kubectl logs cuda-test
+explanation: |
+  The scheduler explained itself in the pod's events: "4 node(s) didn't match
+  Pod's node affinity/selector" (plus the control-plane node, excluded by its
+  taint). A nodeSelector is an exact match on a label value. The manifest asked
+  for nvidia.com/gpu.product=NVIDIA-H100-80GB, but GPU Feature Discovery labels
+  the DGX nodes NVIDIA-H100-80GB-HBM3, so no node qualified and the pod stayed
+  Pending with nothing else wrong.
+
+  Most of a Pod's spec is immutable once created, nodeSelector included, so
+  kubectl apply on the corrected manifest is rejected. The way out is to delete
+  the pod and create it again from the fixed manifest. With a matching selector the
+  scheduler binds it to a DGX node, the device plugin hands it one GPU, and
+  nvidia-smi -L inside the container prints that GPU.
+edge_cases:
+  - "Removing the nodeSelector would also schedule the pod, because the GPU request alone (nvidia.com/gpu: 1) already limits it to nodes that advertise GPUs. The task asked to keep a selector; in real life a selector or affinity is how you pin a workload to one GPU model in a mixed cluster."
+  - "Label values are strings; a selector written as a YAML number or with a stray space fails silently with the same 'didn't match' message. kubectl get nodes --show-labels prints the exact value to copy."
+  - "For 'this model or that one' use node affinity with the In operator instead of nodeSelector, which only supports a single exact value per key."
+  - "A Deployment's pod template can be edited in place: the Deployment rolls out new pods. Only bare Pods must be deleted and recreated."
+  - "If the events said 'Insufficient nvidia.com/gpu' instead, the selector was fine and the nodes were full, or the device plugin was not advertising GPUs (kubectl describe node shows nvidia.com/gpu under Allocatable)."

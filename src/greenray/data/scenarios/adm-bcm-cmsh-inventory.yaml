@@ -1,0 +1,43 @@
+id: adm-bcm-cmsh-inventory
+title: Fill in the CMDB record for dgx-03 from cmsh
+domain: Administration
+difficulty: easy
+time_limit_min: 10
+tags: [bcm, cmsh, inventory, softwareimage, on-ramp]
+briefing: |
+  Asset management is reconciling the CMDB with Base Command Manager and the
+  record for dgx-03 is incomplete. They need four facts, as BCM knows them:
+
+    1. the MAC address BCM uses to identify the node
+    2. the node's category
+    3. the software image the node is provisioned from
+    4. the kernel version of that image
+
+  Collect them with cmsh on the head node (this lab supports one-shot mode,
+  cmsh -c "..."), and write them to /root/cmdb-dgx-03.txt, one per line.
+  Read only: nothing on the cluster should change.
+objectives:
+  - You used cmsh to read the device, category and software image settings
+  - /root/cmdb-dgx-03.txt holds the MAC address, category, software image and image kernel version of dgx-03
+  - Nothing in BCM was modified
+setup: []
+checks:
+  - desc: you used cmsh
+    expr: ran(r'^cmsh')
+  - desc: the record holds the MAC address of dgx-03
+    expr: "re.search(r'7c:c2:55:1a:00:03', file('bcm-head', '/root/cmdb-dgx-03.txt'), re.I) is not None"
+  - desc: the record names the category dgx-h100
+    expr: "'dgx-h100' in file('bcm-head', '/root/cmdb-dgx-03.txt')"
+  - desc: the record names the software image dgx-os-6.2-h100-image
+    expr: "'dgx-os-6.2-h100-image' in file('bcm-head', '/root/cmdb-dgx-03.txt')"
+  - desc: the record holds the image's kernel version
+    expr: "'5.15.0-1042-nvidia' in file('bcm-head', '/root/cmdb-dgx-03.txt')"
+  - desc: BCM has no uncommitted or changed settings
+    expr: "not bcm.uncommitted and bcm.devices['dgx-03'].category == 'dgx-h100' and bcm.categories['dgx-h100'].softwareimage == 'dgx-os-6.2-h100-image'"
+hints:
+  - "cmsh is organised in modes: device, category, softwareimage, partition, user. In one-shot form you chain commands with semicolons, e.g. cmsh -c \"device; list\". Inside a mode, use <name> selects an object and show prints all its settings."
+  - "The device's show output says where each inherited value comes from ('from category dgx-h100'). The software image is a category setting, and softwareimage mode's list shows the kernel each image carries."
+  - "Writing the four lines: echo with >> appends one line at a time, or a cat heredoc writes them all at once."
+references:
+  - BCM Administrator Manual, cmsh basics (modes, use, show, list)
+  - BCM Administrator Manual, categories and software images

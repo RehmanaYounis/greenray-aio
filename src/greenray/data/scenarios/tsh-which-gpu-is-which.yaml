@@ -1,0 +1,55 @@
+id: tsh-which-gpu-is-which
+title: The BMC reports PCIe errors on 5D:00.0 of dgx-03. Which GPU is that?
+domain: Troubleshooting and Optimization
+difficulty: easy
+time_limit_min: 10
+tags: [nvidia-smi, pci, gpu, inventory, bmc, on-ramp]
+briefing: |
+  Alert from the BMC monitoring of dgx-03:
+
+    "PCIe correctable error, bus 0000:5d:00.0, asserted 3 times in 24 h."
+
+  Nothing is failing yet: no job has died, Slurm shows the node idle, and the
+  users have not noticed. Hardware support wants to schedule a swap in the next
+  maintenance window and needs the part identified. Write to
+  /root/gpu-report-dgx-03.txt the GPU index as nvidia-smi numbers it, its UUID
+  and its serial number.
+
+  Do not reset, drain or reboot anything: the node is in service.
+objectives:
+  - Map PCI bus id 0000:5d:00.0 on dgx-03 to a GPU index with nvidia-smi
+  - /root/gpu-report-dgx-03.txt holds that GPU's index, UUID and serial number
+  - dgx-03 is untouched (still IDLE in Slurm, no GPU reset)
+setup:
+  - python: |
+      d = state.nodes['dgx-03']
+      d['sel'] = [
+          "   1 | 10/20/2026 | 22:41:08 | OEM record c0 | PCIe correctable error, bus 5d:00.0 | Asserted",
+          "   2 | 10/21/2026 | 04:12:51 | OEM record c0 | PCIe correctable error, bus 5d:00.0 | Asserted",
+          "   3 | 10/21/2026 | 09:03:17 | OEM record c0 | PCIe correctable error, bus 5d:00.0 | Asserted",
+      ]
+      d.dmesg.extend([
+          "[81668.204417] pcieport 0000:5c:00.0: AER: Corrected error received: 0000:5d:00.0",
+          "[81668.204431] nvidia 0000:5d:00.0: PCIe Bus Error: severity=Corrected, type=Physical Layer, (Receiver ID)",
+          "[81668.204438] nvidia 0000:5d:00.0:   device [10de:2330] error status/mask=00000001/0000e000",
+          "[81668.204441] nvidia 0000:5d:00.0:    [ 0] RxErr                  ",
+      ])
+checks:
+  - desc: you queried nvidia-smi on dgx-03
+    expr: ran(r'^nvidia-smi', 'dgx-03')
+  - desc: the report holds the UUID of the GPU at 5D:00.0
+    expr: "'GPU-7f3a0303-1c2e-4b5a-9d0e-0303a1b2c3d4' in file('bcm-head', '/root/gpu-report-dgx-03.txt')"
+  - desc: the report holds that GPU's serial number
+    expr: "'1652303003417' in file('bcm-head', '/root/gpu-report-dgx-03.txt')"
+  - desc: the report gives its nvidia-smi index (3)
+    expr: "re.search(r'(gpu|index)\\D{0,4}3\\b', file('bcm-head', '/root/gpu-report-dgx-03.txt'), re.I) is not None"
+  - desc: dgx-03 is still IDLE and no GPU was reset
+    expr: "slurm.nodes['dgx-03'].state == 'IDLE' and not ran(r'^nvidia-smi .*(-r\\b|--gpu-reset)', 'dgx-03') and not ran(r'^(reboot|scontrol update .*drain)')"
+hints:
+  - "The index nvidia-smi prints (GPU 0..7) is not in the BMC alert; the PCI bus id is. nvidia-smi can print both side by side: --query-gpu=index,pci.bus_id,uuid,serial --format=csv. Note that nvidia-smi writes the bus id as 00000000:5D:00.0."
+  - "nvidia-smi -q groups all details per GPU under a header that is its bus id, so -q -i <index> with grep for Serial, UUID and Bus Id confirms the mapping. dmesg and ipmitool sel list on the node show the errors the BMC is talking about."
+  - "Write the three facts to the report file with echo and >>, a cat heredoc, or nano. The mapping between bus id and index is fixed for a node, so hardware support can act on it."
+references:
+  - nvidia-smi man page (--query-gpu, -q, -i)
+  - NVIDIA DGX H100 User Guide (GPU slot and PCI bus layout)
+  - ipmitool sel list
