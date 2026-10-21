@@ -2,7 +2,12 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
-## [0.5.0] - unreleased
+## [0.5.1] - 2026-10-21
+
+### Fixed
+- The release workflow pushed the Docker image under a mixed-case name, which GHCR rejects.
+
+## [0.5.0] - 2026-10-21
 
 Installs anywhere and ships complete.
 
