@@ -8,7 +8,7 @@ Releases are stored in ``state.k8s.helm_releases`` as::
      computed (chart defaults merged with user values), status, revision, updated, history}
 
 Installing ``nvidia/gpu-operator`` creates the operator Deployment, NFD and the
-``cluster-policy`` ClusterPolicy; the operator controller in kubectl.py then creates the
+``cluster-policy`` ClusterPolicy; the operator controller in the kubectl package then creates the
 operand DaemonSets (driver, toolkit, device plugin, ...). Installing
 ``nvidia/network-operator`` creates the operator, NFD and (with deployCR=true) a NicClusterPolicy.
 """
