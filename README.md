@@ -85,6 +85,7 @@ Installed with uv tool, pipx or Docker, the command is `greenray …`. From a so
 | `greenray lab <id>` | Start a hands-on scenario in guided mode (title, objectives and hints visible) |
 | `greenray sandbox` | A healthy cluster to explore freely |
 | `greenray mock` | **Full mock exam:** 30 questions + 3 labs (one Slurm, one Kubernetes, one BCM) in 120 minutes, with no hints. Graded at the end |
+| `greenray mock --labs-only` | The 3 labs alone in 40 minutes, for exam-day pacing. Every mock ends with a report card: per-domain bars over questions and labs, and what to practise next |
 | `greenray exam` | Question drill: 60 questions in 120 minutes, weighted 31/23/23/23 like the blueprint |
 | `greenray exam -n 20 -m 40 -d "Administration"` | Domain drill |
 | `greenray progress` | Passed labs, exam history, weakest domain |

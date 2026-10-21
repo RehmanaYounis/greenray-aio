@@ -3,7 +3,7 @@
 greenray                     interactive menu
 greenray list                scenarios by domain, with your status
 greenray lab <id>            hands-on scenario (practice mode)
-greenray mock                full mock exam: 30 questions + 3 labs, 120 minutes
+greenray mock [--labs-only]  full mock exam: 30 questions + 3 labs, 120 minutes
 greenray exam [-n] [-m] [-d] question drill
 greenray sandbox             healthy cluster, free practice
 greenray progress            scores and weakest domain
@@ -157,7 +157,8 @@ def build_parser() -> argparse.ArgumentParser:
     inc.add_argument("-d", "--domain", choices=DOMAINS)
     inc.add_argument("-t", "--topic", help="scenario tag, e.g. slurm, kubernetes, bcm, mig, infiniband")
     inc.add_argument("--id", help="retry a specific scenario as an incident (its id is known, objectives stay hidden)")
-    sub.add_parser("mock", help="full mock exam: 30 questions + 3 labs in 120 minutes")
+    mock = sub.add_parser("mock", help="full mock exam: 30 questions + 3 labs in 120 minutes")
+    mock.add_argument("--labs-only", action="store_true", help="the 3 labs alone in 40 minutes (exam-day pacing)")
     ex = sub.add_parser("exam", help="timed question drill")
     ex.add_argument("-n", type=int, default=60, help="number of questions (default 60)")
     ex.add_argument("-m", type=int, default=120, help="minutes (default 120)")
@@ -184,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.cmd == "lab":
             run_lab(ui, sc.find(args.id))
         elif args.cmd == "mock":
-            run_mock(ui)
+            run_mock(ui, labs_only=args.labs_only)
         elif args.cmd == "exam":
             run_exam(ui, n=args.n, minutes=args.m, domain=args.domain)
         elif args.cmd == "sandbox":
