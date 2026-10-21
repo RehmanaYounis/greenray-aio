@@ -53,7 +53,7 @@ hints:
   - "Rerun the reference test with -x NCCL_DEBUG=INFO. The NET/IB lines tell you more than \"Using network IB\": check whether GPU Direct RDMA is used, and the Channel ... via NET/IB/0 lines."
   - "\"GPU Direct RDMA Disabled for HCA ... (no module)\", and channels that say via NET/IB/0 without /GDRDMA, mean NCCL has to copy every message through host memory. Which kernel module lets the IB HCA read and write GPU memory directly?"
   - "On dgx-01 and dgx-02, run lsmod | grep -i peer. The nvidia-peermem module comes with the GPU driver, but nothing loads it automatically after a reinstall and reboot."
-  - "modprobe nvidia-peermem fixes the running node. echo nvidia-peermem > /etc/modules-load.d/nvidia-peermem.conf makes it load at every boot. Do both on both nodes, then rerun the test."
+  - "Loading the nvidia-peermem module with modprobe fixes the running node. A file under /etc/modules-load.d/ naming the module makes it load at every boot. Do both on both nodes, then rerun the test."
 references:
   - NVIDIA GPUDirect RDMA documentation (nvidia-peermem)
   - NCCL User Guide - Troubleshooting (GPU Direct RDMA, NCCL_NET_GDR_LEVEL)

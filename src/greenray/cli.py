@@ -27,7 +27,7 @@ from .app.ui import UI
 from .content import scenarios as sc
 from .content import solutions
 from .content.domains import DOMAINS
-from .content.validate import check_scenario, structural_problems
+from .content.validate import check_scenario, hint_leaks, structural_problems
 
 MENU = """\
 0  Incident        investigate a random problem; root cause hidden
@@ -141,6 +141,9 @@ def validate(ui: UI) -> int:
             err = check_scenario(s) if s.has_solution else "no reference solution in the solutions repo"
             ui.out(f"{ui.red('BAD') if err else ui.green('ok ')} {s.id}" + (f": {err}" if err else ""))
             problems += [err] if err else []
+        for leak in hint_leaks():
+            ui.out(ui.red(f"BAD {leak}"))
+            problems.append(leak)
     ui.out(f"\n{len(sc.load_all())} scenarios, {'no' if not problems else len(problems)} problems")
     return 1 if problems else 0
 

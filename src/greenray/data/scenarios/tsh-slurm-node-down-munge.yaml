@@ -80,7 +80,7 @@ hints:
   - "sinfo -R gives the reason, and the * after the state means slurmctld cannot reach slurmd. ssh works, so look at the conversation between the two daemons: journalctl -u slurmd on dgx-02 and journalctl -u slurmctld on the head node."
   - "'Invalid credential' and 'Protocol authentication error' come from MUNGE. munge -n | unmunge on one host only proves that host agrees with itself. Encode on dgx-02 and decode on the head: ssh dgx-02 munge -n | unmunge."
   - "Every host in a Slurm cluster must share the same /etc/munge/munge.key. Compare checksums (md5sum) on the head and on dgx-02. Installing the munge package creates a fresh random key."
-  - "Copy the head node's key to dgx-02 (scp, or imageupdate from the software image that already contains it), restart munge, then slurmd, on dgx-02. A node that went DOWN stays DOWN until you run scontrol update nodename=dgx-02 state=resume."
+  - "Copy the head node's key to dgx-02 (scp, or imageupdate from the software image that already contains it), restart munge, then slurmd, on dgx-02. A node that went DOWN stays DOWN until you resume it with scontrol update (nodename=dgx-02, state=resume)."
 references:
   - Slurm Quick Start Administrator Guide (MUNGE authentication)
   - MUNGE Installation Guide (munge.key distribution, munge -n | unmunge)

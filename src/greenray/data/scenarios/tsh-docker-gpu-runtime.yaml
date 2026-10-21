@@ -82,7 +82,7 @@ hints:
   - "Start with the daemon itself: `systemctl status docker` and `journalctl -u docker` on dgx-02. Docker prints exactly what it doesn't like about daemon.json."
   - "Once dockerd starts, look at `docker ps -a` and the journal again. The containers were created with a runtime name stored in their config (`docker inspect -f '{{.HostConfig.Runtime}}' infer-triton-a-1`). Does the new daemon.json still define that runtime?"
   - "`nvidia-ctk runtime configure --runtime=docker --set-as-default` merges the nvidia runtime (and default-runtime) back into daemon.json and keeps the other keys. Restart Docker afterwards."
-  - "For triton-b, compare `docker exec infer-triton-b-1 nvidia-smi -L` with its environment. CUDA_VISIBLE_DEVICES only filters inside CUDA. Which GPUs a container *sees* is decided by the runtime through NVIDIA_VISIBLE_DEVICES (or a GPU device request). Fix the compose file and `docker compose -f /opt/infer/compose.yaml up -d`."
+  - "For triton-b, compare `docker exec infer-triton-b-1 nvidia-smi -L` with its environment. CUDA_VISIBLE_DEVICES only filters inside CUDA. Which GPUs a container *sees* is decided by the runtime through NVIDIA_VISIBLE_DEVICES (or a GPU device request). Fix the compose file (/opt/infer/compose.yaml) and bring the stack up again with docker compose up -d."
 references:
   - NVIDIA Container Toolkit - Configuring Docker / Specialized configurations (NVIDIA_VISIBLE_DEVICES)
   - Docker documentation - daemon.json configuration file, Compose GPU support (deploy.resources.reservations.devices)

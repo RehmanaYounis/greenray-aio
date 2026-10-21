@@ -51,8 +51,8 @@ checks:
 hints:
   - "Ask Slurm what it thinks each node has: sinfo -o '%N %G %t' or scontrol show node dgx-01 (look at Gres=)."
   - "Gres=(null) means slurmctld has no GPUs configured for the node. Check the NodeName= line in /etc/slurm/slurm.conf on the head node. GresTypes=gpu alone is not enough."
-  - "After you edit slurm.conf, run scontrol reconfigure. Then sinfo -R: if one node's slurmd reports fewer GPUs than slurm.conf promises, the node goes INVAL/DRAIN with 'gres/gpu count reported lower than configured'."
-  - "On that node, fix File=/dev/nvidia[0-7] in /etc/slurm/gres.conf, then systemctl restart slurmd. The node stays drained until you run scontrol update nodename=<node> state=resume."
+  - "After you edit slurm.conf, make slurmctld re-read it (scontrol has a subcommand for that). Then sinfo -R: if one node's slurmd reports fewer GPUs than slurm.conf promises, the node goes INVAL/DRAIN with 'gres/gpu count reported lower than configured'."
+  - "On that node, fix File=/dev/nvidia[0-7] in /etc/slurm/gres.conf, then restart the slurmd service so it re-reads gres.conf. The node stays drained until you resume it with scontrol update (state=resume)."
 references:
   - Slurm gres.conf and slurm.conf man pages (GresTypes, Gres=, AutoDetect)
   - NVIDIA Base Command Manager Administrator Manual - Workload Management (Slurm GPU configuration)

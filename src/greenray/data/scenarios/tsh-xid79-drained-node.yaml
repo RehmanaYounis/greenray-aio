@@ -65,7 +65,7 @@ hints:
   - "sinfo -R shows why a node is drained and who drained it. sacct -j 1500 shows how the job ended."
   - "Log in to dgx-02 and check the kernel ring buffer for NVRM Xid messages: dmesg | grep -i xid. Then compare with what nvidia-smi can still see."
   - "Xid 79 means the GPU fell off the bus. The driver can't talk to it, so nvidia-smi -r won't work. Only a reboot or power cycle brings it back. The drain was correct."
-  - "After the reboot, run dcgmi diag -r 2 (or -r 3) on dgx-02. The node stays DRAIN until you run scontrol update nodename=dgx-02 state=resume, and you should only do that after the diag passes."
+  - "After the reboot, run a DCGM diagnostic on dgx-02 (dcgmi diag at level 2 or 3). The node stays DRAIN until you resume it with scontrol update, and you should only do that after the diag passes."
 references:
   - NVIDIA GPU Xid Errors documentation (Xid 79)
   - NVIDIA DCGM User Guide - Diagnostics (run levels)

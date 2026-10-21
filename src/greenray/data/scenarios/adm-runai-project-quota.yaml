@@ -68,7 +68,7 @@ hints:
   - "Look around first: `runai list projects`, `runai list jobs -A`, `runai-ui department list`. Who uses the GPUs today, and is that in quota or over quota?"
   - "Create each project with its department and deserved GPUs, e.g. `runai-ui project create nlp --department research --gpu-quota 6`. The vision rule is set at creation (or update) with --over-quota disabled (or a --max-gpus limit)."
   - "Access is given with access rules (subject + role + scope): `runai-ui access-rule create --user alice@corp.ai --project nlp --role 'L1 researcher'`. Repeat for bob and for carol's Research manager role on both projects."
-  - "Then submit as a researcher: `runai submit vision-smoke -i nvcr.io/nvidia/pytorch:24.05-py3 -g 8 -p vision` and watch `runai list jobs -A`. The request is within vision's deserved quota, so the scheduler reclaims GPUs from over-quota workloads."
+  - "Then submit as a researcher with runai submit: a workload in project vision asking for 8 GPUs (-g 8 -p vision), and watch `runai list jobs -A`. The request is within vision's deserved quota, so the scheduler reclaims GPUs from over-quota workloads."
 references:
   - NVIDIA Run:ai documentation - Departments, Projects
   - NVIDIA Run:ai documentation - The Run:ai Scheduler (quota, over-quota, fairness, preemption)

@@ -84,8 +84,8 @@ checks:
 hints:
   - "Start on dgx-01: is the rshim driver running (systemctl status rshim)? Then mst start and mlxconfig -d /dev/mst/mt41692_pciconf0 q. Which INTERNAL_CPU_* values say whether the Arm cores or the host own the card?"
   - "INTERNAL_CPU_OFFLOAD_ENGINE DISABLED(1) and the EXT_HOST_PF values mean NIC mode: the Arm cores don't run an OS, so there is no dpu-01 to install onto or ssh into. mlxconfig only changes the Next Boot value. Use mlxconfig -e q to compare Current and Next Boot."
-  - "DPU mode: mlxconfig -d <dev> -y s INTERNAL_CPU_MODEL=1 INTERNAL_CPU_PAGE_SUPPLIER=0 INTERNAL_CPU_ESWITCH_MANAGER=0 INTERNAL_CPU_IB_VPORT0=0 INTERNAL_CPU_OFFLOAD_ENGINE=0, then reboot dgx-01 (a cold power cycle on real hardware). Afterwards systemctl enable --now rshim and check /dev/rshim0."
-  - "bfb-install --bfb /root/bfb/<file>.bfb --rshim rshim0 re-images the DPU. Then copy the manifest into the kubelet's static pod directory on the DPU: scp /root/doca/doca_telemetry.yaml dpu-01:/etc/kubelet.d/. Verify with ssh dpu-01 and crictl pods / crictl ps."
+  - "DPU mode: mlxconfig -d <dev> -y s INTERNAL_CPU_MODEL=1 INTERNAL_CPU_PAGE_SUPPLIER=0 INTERNAL_CPU_ESWITCH_MANAGER=0 INTERNAL_CPU_IB_VPORT0=0 INTERNAL_CPU_OFFLOAD_ENGINE=0, then reboot dgx-01 (a cold power cycle on real hardware). Afterwards enable and start the rshim service (systemctl enable --now) and check /dev/rshim0."
+  - "bfb-install --bfb /root/bfb/<file>.bfb --rshim rshim0 re-images the DPU. Then copy the manifest /root/doca/doca_telemetry.yaml into the kubelet's static pod directory on the DPU, /etc/kubelet.d/ (scp to dpu-01). Verify from dpu-01 with crictl (pods, then ps)."
 references:
   - NVIDIA BlueField DPU BSP documentation - Modes of Operation (DPU mode / NIC mode)
   - NVIDIA BlueField DPU BSP documentation - Deploying BlueField Software Using BFB from Host (rshim, bfb-install)

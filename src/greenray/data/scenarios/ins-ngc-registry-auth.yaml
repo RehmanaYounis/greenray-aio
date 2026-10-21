@@ -72,7 +72,7 @@ checks:
 hints:
   - "`kubectl describe pod nemo-finetune -n llm` shows two separate problems in the Events: a missing pull secret, and a 401 from nvcr.io."
   - "For nvcr.io the username is always the literal string $oauthtoken and the password is the API key. In bash put it in single quotes ('$oauthtoken'), otherwise the shell expands it to an empty string."
-  - "`ngc config set` asks for API key, output format, org, team and ace. In the lab, feed the answers with a heredoc: ngc config set <<EOF ... EOF."
+  - "`ngc config set` asks for API key, output format, org, team and ace. In the lab, feed the answers with a heredoc (<<EOF ... EOF) instead of typing them interactively."
   - "docker login on dgx-01 only helps docker on dgx-01. kubelet pulls through containerd and only uses credentials from an imagePullSecret: kubectl create secret docker-registry ngc-secret --docker-server=nvcr.io --docker-username='$oauthtoken' --docker-password=<key> -n llm"
 references:
   - NGC User Guide - Generating your NGC API key / Accessing the NGC container registry

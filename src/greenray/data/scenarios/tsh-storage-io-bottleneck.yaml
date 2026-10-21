@@ -88,7 +88,7 @@ hints:
   - "Start with what the GPUs see: nvidia-smi dmon -c 10 on dgx-02. Short bursts of ~97% SM between near-idle samples is the classic sign of an input-bound job. Then run dataloader-bench once to see which limit it hits."
   - "Where does DATA_DIR live? Look at /proc/mounts and nfsiostat. iostat -x only shows local block devices. How large are the NFS read ops (kB/op, rsize), and which server is behind /home? Is there a faster filesystem on this node with the same dataset?"
   - "The job asks for GDS (USE_GDS=1), but cuFile silently falls back to compatibility mode when it can't do GPUDirect Storage. Run /usr/local/cuda/gds/tools/gdscheck -p and lsmod | grep nvidia_fs. NFS over TCP can never use GDS."
-  - "Fix: point DATA_DIR at /lustre/datasets/imagenet-npy, modprobe nvidia-fs, and raise NUM_WORKERS (2 per GPU can't keep up; try 8 or more out of 28 cores per GPU). Then run dataloader-bench with no overrides."
+  - "Fix: point DATA_DIR at /lustre/datasets/imagenet-npy, load the nvidia-fs module (GDS needs it), and raise NUM_WORKERS (2 per GPU can't keep up; try 8 or more out of 28 cores per GPU). Then run dataloader-bench with no overrides."
 references:
   - NVIDIA Magnum IO GPUDirect Storage - Installation and Troubleshooting Guide (gdscheck, cufile.json, compatibility mode)
   - NVIDIA DGX BasePOD / SuperPOD reference architecture - storage

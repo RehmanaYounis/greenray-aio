@@ -50,7 +50,7 @@ hints:
   - "Start with `kubectl get pods -n gpu-operator`. Which pod crashes, and which pods are only waiting in Init because of it?"
   - "Read the crashing container's output: `kubectl logs -n gpu-operator ds/nvidia-driver-daemonset`. What does it try to unload, and why does that fail on a DGX?"
   - "Compare `helm get values` with the file the colleague used. To keep the host driver, the operator has to be told not to deploy its own driver (driver.enabled)."
-  - "Helm can only resolve nvidia/gpu-operator after `helm repo add nvidia https://helm.ngc.nvidia.com/nvidia`. Then either `helm upgrade ... --reuse-values --set driver.enabled=false`, or uninstall and reinstall with that value."
+  - "Helm can only resolve nvidia/gpu-operator after the NVIDIA chart repository (https://helm.ngc.nvidia.com/nvidia) has been added with helm repo add under the name nvidia. Then either `helm upgrade ... --reuse-values --set driver.enabled=false`, or uninstall and reinstall with that value."
 references:
   - NVIDIA GPU Operator documentation - Getting Started / Pre-installed drivers
   - DGX OS User Guide - Kubernetes

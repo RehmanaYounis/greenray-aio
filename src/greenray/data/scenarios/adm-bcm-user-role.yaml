@@ -62,7 +62,7 @@ hints:
   - "cmsh -c \"user; list\", \"group; list\" and \"profile; list\" show what exists. BCM users live in the cluster's LDAP directory, so id maria works on every node once the user is committed."
   - "In user mode: add <name>, then set id / set password / set profile, then commit. Nothing reaches LDAP until commit."
   - "Group membership is a list property of the group: group; use mlteam; append members maria; commit. The readonly profile allows viewing but no changes. admin would be far too much."
-  - "BCM users are not Slurm users. Slurm needs its own association: sacctmgr -i add user maria account=vision. Then test with su - maria -c \"sbatch --wrap=hostname\"."
+  - "BCM users are not Slurm users. Slurm needs its own association for maria in the vision account, created with sacctmgr add user (-i skips the confirmation). Then prove it by submitting a trivial job as maria, with su - maria and sbatch --wrap."
 references:
   - NVIDIA Base Command Manager 10 Administrator Manual (user management, profiles and certificates)
   - Slurm Accounting documentation (sacctmgr add user, AccountingStorageEnforce)

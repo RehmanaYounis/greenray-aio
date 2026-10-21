@@ -49,7 +49,7 @@ checks:
     expr: (lambda h:h.get('overall') == 'Failure' and 3 in h.get('gpus', []) and 'Memory' in h.get('systems', []))(dcgm.get('last_health', {}).get('dgx-04', {}))
 hints:
   - "Every dcgmi command talks to the host engine. If it can't connect, check the nvidia-dcgm unit on dgx-04, and remember the runbook wants it to start at boot as well."
-  - "Order of work: dcgmi group -c prod-gpus --default (note the group ID it prints), then dcgmi health -g <id> -s a, then dcgmi policy -g <id> --set <action>,<validation> with the condition flags."
+  - "Order of work: create a DCGM group for the GPUs with dcgmi group -c (note the group ID it prints), then dcgmi health -g <id> -s a, then dcgmi policy -g <id> --set <action>,<validation> with the condition flags."
   - "Policy flags: -e double-bit ECC, -x XID, -T <max temp C>, -P <max power W>. --set 0,0 means action None, validation None. 1,x would reset the GPU. Check what you set with dcgmi policy -g <id> --get, then register with --reg."
   - "After the injection, run dcgmi health -g <id> -c. Compare with nvidia-smi -q -d ECC: the injection lives only in DCGM's cache. Don't restart nvidia-dcgm now, because groups, watches, policies and listeners are not persistent."
 references:

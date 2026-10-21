@@ -35,8 +35,8 @@ hints:
   - "On dgx-03, `ibstat` (or `ibstatus`) lists all eight HCAs. Compare State, Physical state and Rate across them."
   - "State Down with Physical state Polling means the HCA is sending training signals but no link partner answers. That points to cable, transceiver or switch port, not to the Subnet Manager. (SM problems look like Initializing or Armed.)"
   - "mlxlink -d mlx5_3 -m shows the module data. What is the RX optical power on each lane?"
-  - "Toggling the port in software (mlxlink --port_state TG) won't bring a link up when no light is received. The physical action here is reseat-cable dgx-03 mlx5_3."
-  - "Prove it with traffic: mpirun --allow-run-as-root -np 16 -H dgx-01:8,dgx-03:8 all_reduce_perf -b 1G -e 8G -f 2 -g 1"
+  - "Toggling the port in software (mlxlink --port_state TG) won't bring a link up when no light is received. The physical action here is to reseat the cable of port mlx5_3 on dgx-03; this lab has a reseat-cable command for it."
+  - "Prove it with traffic: an NCCL all_reduce_perf across dgx-01 and dgx-03 through mpirun (16 processes, 8 per host, one GPU each, 1G to 8G)."
 references:
   - NVIDIA MLNX_OFED / DOCA infiniband-diags (ibstat, ibstatus, perfquery, ibdiagnet)
   - NVIDIA Firmware Tools (MFT) mlxlink user guide
