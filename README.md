@@ -1,5 +1,10 @@
 # GreenRay AIO
 
+[![CI](https://github.com/RehmanaYounis/greenray-aio/actions/workflows/ci.yml/badge.svg)](https://github.com/RehmanaYounis/greenray-aio/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/greenray-aio)](https://pypi.org/project/greenray-aio/)
+[![Python](https://img.shields.io/pypi/pyversions/greenray-aio)](https://pypi.org/project/greenray-aio/)
+[![Licence](https://img.shields.io/badge/licence-Apache--2.0-blue)](LICENSE)
+
 **Hands-on lab simulator and mock exam for the NVIDIA-Certified Professional: AI Operations (NCP-AIO) exam.**
 
 GreenRay AIO drops you into a broken or half-configured **4-node DGX H100 cluster managed by Base Command Manager (BCM)**. You investigate and fix it with the same commands you'd use on real systems:
@@ -12,7 +17,8 @@ GreenRay AIO drops you into a broken or half-configured **4-node DGX H100 cluste
 
 `check` grades the end state of the cluster, not whether you typed a particular command.
 
-- **39 incident and task scenarios** covering every topic of the exam blueprint ([docs/COVERAGE.md](docs/COVERAGE.md))
+- **45 incident and task scenarios** covering every topic of the exam blueprint ([docs/COVERAGE.md](docs/COVERAGE.md)), starting with a six-lab **on-ramp** for the basics
+- **`greenray next`** tells you what to practise, **`greenray plan`** lays out four weeks, and every mock ends with a **report card**
 - **Incident mode**: only the incident report is shown, and the root cause stays hidden until the debrief
 - **`explain <command>`** for learning tools as you need them, plus progressive hints and a debrief after every lab
 - **Feels like a real node**: `--help` and `man` pages, `nano`/`vim` (your real editor), `cd` with tab completion of paths, command history, `watch`, live `dmon` samples, a coloured prompt and real-tool colours
@@ -60,6 +66,8 @@ cd greenray-aio && uv sync && uv run greenray
 ```
 
 Use WSL rather than PowerShell on Windows for the best terminal experience. `greenray doctor` prints your environment when something looks wrong.
+
+New here? Run `greenray next`. It starts you on the on-ramp labs and keeps pointing at the right next step as your progress grows; `greenray plan` shows the whole four-week route.
 
 Developer commands (see [CONTRIBUTING.md](CONTRIBUTING.md)):
 
@@ -168,13 +176,13 @@ src/greenray/
   core/             cluster state model, bash-like shell, errors
   commands/         one module per tool family (nvidia_smi, slurm, kubectl, cmsh, ib, ...)
   content/          loaders: scenarios, questions, solutions, command guides, validation, domains
-  app/              interactive layer: lab runner, question drill, mock exam, progress, UI
+  app/              interactive layer: lab runner, question drill, mock exam, progress, study plan, UI
   data/scenarios/   scenario files (problem only)
   data/questions/   question bank (questions only)
   data/solutions/   reference solutions, answer keys and lab solutions
   data/command_guides.yaml   scenario-agnostic guides for `explain`
 tests/              pytest suite, including a replay of every reference solution
-docs/               SCENARIO_FORMAT.md, COVERAGE.md
+docs/               SCENARIO_FORMAT.md, COVERAGE.md, demo/ (recording kit for the README demo)
 ```
 
 ## Adding scenarios and questions

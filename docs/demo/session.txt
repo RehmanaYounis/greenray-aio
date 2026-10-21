@@ -1,0 +1,8 @@
+sinfo -R
+ssh dgx-02
+dmesg | grep -i xid
+nvidia-smi
+exit
+check
+hint
+quit
