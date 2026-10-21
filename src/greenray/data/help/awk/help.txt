@@ -1,0 +1,17 @@
+Usage: mawk [Options] [Program] [file ...]
+
+Program:
+    The program text is the first non-option argument. It consists of
+    pattern { action } statements; this lab supports printing fields.
+
+    Fields of each input line are split on blanks and numbered from 1;
+    $0 is the whole line.
+
+Options:
+    --help          show this usage message and exit
+
+Example:
+    ps aux | awk '{print $2}'          print the second column
+    ls | awk '{print $1, $1}'          print the first column twice
+
+(GreenRay AIO simulates the options listed above.)

@@ -1,0 +1,12 @@
+Usage: sha256sum [OPTION]... [FILE]...
+Print SHA256 (256-bit) checksums.
+
+With no FILE, or when FILE is -, read standard input.
+
+      --help     display this help and exit
+
+Each output line is the checksum, two spaces, and the file name. Identical
+files give identical checksums, which makes this a quick way to compare a
+file across hosts.
+
+(GreenRay AIO simulates the options listed above.)

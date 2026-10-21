@@ -1,0 +1,8 @@
+Usage: touch [OPTION]... FILE...
+Update the access and modification times of each FILE to the current time.
+
+A FILE argument that does not exist is created empty.
+
+      --help     display this help and exit
+
+(GreenRay AIO simulates the options listed above.)

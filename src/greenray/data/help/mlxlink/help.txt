@@ -1,0 +1,27 @@
+
+    NAME
+        mlxlink
+
+    SYNOPSIS
+        mlxlink [OPTIONS]
+
+    DESCRIPTION
+        Reports the state of a NVIDIA/Mellanox network port and helps debug
+        link problems: operational speed and width, FEC, cable/module data,
+        physical-layer counters and a troubleshooting recommendation.
+
+    OPTIONS
+        -h       |--help                              : Show this help message and exit
+        -d       |--device <device>                   : MST device, RDMA device name (mlx5_N) or PCI address
+        -m       |--show_module                       : Also print transceiver/cable module information
+        -c       |--show_counters                     : Also print physical counters and BER information
+        -a       |--port_state <port_state>           : Change the port state: UP (enable), DN (disable),
+                                                        TG (toggle: down, then up)
+
+    EXAMPLES
+        Show link status                              : mlxlink -d mlx5_0
+        Show link status with cable information       : mlxlink -d mlx5_0 -m
+        Show physical counters                        : mlxlink -d /dev/mst/mt4129_pciconf0 -c
+        Toggle the port                               : mlxlink -d mlx5_0 -a TG
+
+    (GreenRay AIO simulates the options listed above.)

@@ -1,0 +1,14 @@
+NVIDIA Fabric Manager
+Runs as a background service to configure the NVSwitches so that the GPUs
+can form a single memory fabric over NVLink.
+
+Usage: nv-fabricmanager [options]
+
+Options include:
+[-h | --help]: Displays help information
+[-v | --version]: Displays the Fabric Manager version and exits
+
+Normally started by systemd as the nvidia-fabricmanager service; its
+configuration file is /usr/share/nvidia/nvswitch/fabricmanager.cfg.
+
+(GreenRay AIO simulates the options listed above.)

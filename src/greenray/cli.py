@@ -26,16 +26,22 @@ from .content import solutions
 from .content.domains import DOMAINS
 from .content.validate import check_scenario, structural_problems
 
+MENU = """\
+0  Incident        investigate a random problem; root cause hidden
+1  Labs            pick a hands-on scenario (guided)
+2  Mock exam       30 questions + 3 labs in 120 minutes
+3  Question drill  60 questions, weighted like the blueprint
+4  Domain drill    20 questions from one domain
+5  Sandbox         a healthy cluster to explore
+6  Progress        what you have passed and your weakest domain
+q  Quit"""
+
 
 def menu(ui: UI) -> None:
+    ui.out(ui.banner(__version__, "Hands-on labs for AI infrastructure operations · NCP-AIO exam prep"))
     while True:
-        ui.out(ui.bold("\nNCP-AIO Practice Lab"))
-        ui.out(
-            "  0) Incident: investigate a random problem (root cause hidden)\n"
-            "  1) Hands-on scenarios\n  2) Full mock exam (30 questions + 3 labs, 120 min)\n"
-            "  3) Question drill (60 questions, blueprint-weighted)\n  4) Domain drill (20 questions)\n"
-            "  5) Sandbox (healthy cluster)\n  6) Progress\n  q) Quit"
-        )
+        ui.out("")
+        ui.out(ui.panel(MENU, title="Main menu"))
         choice = ui.ask("> ").strip().lower()
         if choice == "0":
             for i, d in enumerate(DOMAINS, 1):

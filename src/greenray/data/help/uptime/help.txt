@@ -1,0 +1,11 @@
+
+Usage:
+ uptime [options]
+
+Shows the current time, how long the system has been running, the number
+of logged-in users and the 1, 5 and 15 minute load averages.
+
+Options:
+ -h, --help     display this help and exit
+
+(GreenRay AIO simulates the options listed above.)

@@ -1,0 +1,6 @@
+Usage: whoami [OPTION]...
+Print the user name associated with the current effective user ID.
+
+      --help        display this help and exit
+
+(GreenRay AIO simulates the options listed above.)

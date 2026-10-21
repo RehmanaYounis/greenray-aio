@@ -1,0 +1,14 @@
+Usage:
+    mst <command> [switches...]
+
+Commands:
+    start              Load the MST kernel modules and create device files
+                       under /dev/mst
+    stop               Unload the MST kernel modules
+    status             Show whether the MST modules are loaded and list the
+                       available MST devices
+           -v          Verbose: one table row per device with its PCI
+                       address, RDMA device, network interface and NUMA node
+    help               Print this message
+
+(GreenRay AIO simulates the commands listed above.)

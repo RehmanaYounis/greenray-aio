@@ -1,0 +1,98 @@
+SINFO(1)                        Slurm Commands                        SINFO(1)
+
+NAME
+       sinfo - View information about Slurm nodes and partitions.
+
+SYNOPSIS
+       sinfo [OPTIONS...]
+
+DESCRIPTION
+       sinfo reports the state of partitions and nodes managed by Slurm.
+       By default each output line describes a group of nodes in one
+       partition that share the same state; nodes are shown as a
+       compressed hostlist such as node[01-04].  The default partition is
+       marked with an asterisk.
+
+OPTIONS
+       -h, --noheader
+              Do not print the header line.
+
+       -l, --long
+              Print more detail, below a timestamp line.
+
+       -N, --Node
+              Print one line per node (per partition the node is in).
+
+       -n, --nodes=<nodes>
+              Report only on these nodes; hostlist expressions are
+              accepted.
+
+       -o, --format=<output_format>
+              Choose the columns.  Each field is written %[.][size]type; a
+              "." right-justifies the value and size sets the width.
+              Useful types include:
+
+              %P  partition (with * on the default)   %R  partition name
+              %a  availability (up/down)              %l  time limit
+              %D  number of nodes                     %N  node list
+              %t  state, short form                   %T  state, long form
+              %c  CPUs per node                       %C  CPUs A/I/O/T
+              %m  memory per node (MB)                %G  generic resources
+              %E  reason                              %u  user of reason
+              %H  reason timestamp                    %f  features
+              %F  nodes A/I/O/T                       %z  sockets:cores:threads
+
+              The default is "%9P %.5a %.10l %.6D %.6t %N".
+
+       -p, --partition=<partition>
+              Report only on these partitions.
+
+       -R, --list-reasons
+              List nodes that are down, drained or not responding together
+              with the reason, the user who set it and when.
+
+       -s, --summarize
+              One line per partition with node counts in the form
+              allocated/idle/other/total.
+
+       -t, --states=<states>
+              Report only nodes in these states (comma list), for example
+              idle, alloc, mix, drain, down.
+
+       -V, --version
+              Print the Slurm version.
+
+NODE STATE CODES
+       Short forms as printed by %t (long forms by %T); a trailing *
+       means the node is not responding to the controller.
+
+       alloc    all CPUs are in use by jobs              (allocated)
+       mix      some CPUs are in use                     (mixed)
+       idle     no jobs are running                      (idle)
+       drng     draining: no new jobs, current ones run  (draining)
+       drain    drained: no jobs, none will start        (drained)
+       down     unavailable for use                      (down)
+       inval    registered with an invalid configuration (inval)
+
+EXAMPLES
+       Show every node on its own line:
+
+              $ sinfo -N -l
+
+       List nodes that are out of service and why:
+
+              $ sinfo -R
+
+       Show partition, node list, state and GPUs per node without a
+       header:
+
+              $ sinfo -h -o "%P %N %t %G"
+
+       Show only idle nodes in one partition:
+
+              $ sinfo -p batch -t idle
+
+SEE ALSO
+       squeue(1), scontrol(1), sacct(1)
+
+Slurm                             GreenRay AIO                        SINFO(1)

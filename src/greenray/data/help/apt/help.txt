@@ -1,0 +1,30 @@
+apt 2.4.12 (amd64)
+Usage: apt [options] command
+
+apt is a command-line package manager. It offers the everyday commands for
+finding, installing and removing packages, with friendlier output than the
+older apt-get and apt-cache tools it is built on.
+
+Most used commands:
+  list - list packages by name (--installed shows only installed ones)
+  show - show details about a package
+  policy - show the installed and candidate version of a package
+  install - install packages
+  remove - remove packages
+  purge - remove packages together with their configuration files
+  autoremove - automatically remove all unused packages
+  update - refresh the list of available packages from the repositories
+  upgrade - upgrade the system by installing/upgrading packages
+  full-upgrade - upgrade the system by removing/installing/upgrading packages
+
+Options:
+  -y, --yes, --assume-yes   answer "yes" to the confirmation prompt
+  --installed               (list) show only installed packages
+
+Package names given to "list" may contain shell-style wildcards ('docker*').
+After adding a new repository under /etc/apt/sources.list.d/, run "apt update"
+before installing from it.
+
+See apt(8) for more information about the available commands.
+Configuration options and syntax is detailed in apt.conf(5).
+(GreenRay AIO simulates the commands and options listed above.)

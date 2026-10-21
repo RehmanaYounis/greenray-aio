@@ -1,0 +1,17 @@
+Usage: vi [OPTIONS] [[+LINE[,COLUMN]] FILE]...
+
+Edit FILE. On a real terminal GreenRay AIO opens your own vi (or $EDITOR)
+on a copy of the simulated file and writes the result back when you save
+and exit (:w to write, :q to quit, :wq for both).
+
+Without a terminal, a line editor is used instead:
+  type the complete new content, then
+  .          on a line by itself   save and exit
+  :wq        save and exit
+  :q!        exit without saving
+
+ Option                 Meaning
+ +LINE[,COLUMN]         accepted and ignored
+ -h, --help             show this help text and exit
+
+(GreenRay AIO simulates the options listed above.)

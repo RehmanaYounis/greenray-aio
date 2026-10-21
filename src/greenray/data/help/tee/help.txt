@@ -1,0 +1,7 @@
+Usage: tee [OPTION]... [FILE]...
+Copy standard input to each FILE, and also to standard output.
+
+  -a                        append to the given FILEs, do not overwrite
+      --help        display this help and exit
+
+(GreenRay AIO simulates the options listed above.)

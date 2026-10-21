@@ -1,0 +1,10 @@
+Usage:  sshare [OPTION]
+  Valid OPTIONs are:
+    -a or --all            list every user, not only the caller
+    -A or --accounts=      show only these accounts (comma separated list)
+    -l or --long           add the LevelFS column
+    -u or --users=         show only these users (comma separated list)
+
+    --help                 display this usage information
+
+(GreenRay AIO simulates the options listed above.)

@@ -1,0 +1,130 @@
+SACCTMGR(1)                     Slurm Commands                     SACCTMGR(1)
+
+NAME
+       sacctmgr - Used to view and modify Slurm account information.
+
+SYNOPSIS
+       sacctmgr [OPTIONS...] [COMMAND...]
+
+DESCRIPTION
+       sacctmgr manages the records kept by the Slurm database daemon
+       (slurmdbd): accounts, users, the associations between them, and
+       Quality of Service (QOS) definitions.  Limits and fair-share values
+       stored here are enforced by slurmctld when AccountingStorageEnforce
+       in slurm.conf asks for it.
+
+       Changes that add, modify or delete records ask for confirmation
+       unless -i is given.
+
+OPTIONS
+       -i, --immediate
+              Commit changes without asking for confirmation.
+
+       -n, --noheader
+              Do not print the header line.
+
+       -p, --parsable
+              Separate fields with '|' and end each line with '|'.
+
+       -P, --parsable2
+              Separate fields with '|' with no trailing '|'.
+
+       -V, --version
+              Print the Slurm version.
+
+COMMANDS
+       add <ENTITY> <SPECS>  (also: create)
+              Add one or more records.
+
+       delete <ENTITY> where <SPECS>  (also: remove)
+              Remove the matching records.  A QOS used by pending or
+              running jobs cannot be deleted.
+
+       list <ENTITY> [<SPECS>]  (also: show)
+              Display records, optionally limited and with format=.
+
+       modify <ENTITY> where <SPECS> set <SPECS>  (also: update)
+              Change the matching records.
+
+ENTITIES
+       account
+              A node in the fair-share hierarchy.  Every account has a
+              parent; the top is root.
+
+       association
+              The tuple of cluster, account and user (and optionally
+              partition) that limits and shares apply to.  "list assoc
+              tree" indents children under their parent.
+
+       qos
+              A named set of priority and limits that jobs request with
+              --qos.
+
+       user
+              A login name, the accounts it may charge and its default
+              account and QOS.
+
+SPECIFICATIONS FOR QOS
+       Priority=<number>
+              Added to the priority of jobs that use this QOS.
+
+       MaxTRESPerUser=<tres>  (MaxTRESPU)
+              Most TRES one user may have in running jobs at a time, for
+              example gres/gpu=16.
+
+       MaxTRESPerJob=<tres>  (MaxTRES)
+              Most TRES a single job may request.
+
+       GrpTRES=<tres>
+              Most TRES all jobs in the QOS together may use.
+
+       MaxJobsPerUser=<number>  (MaxJobsPU)
+              Most running jobs per user.
+
+       MaxSubmitJobsPerUser=<number>  (MaxSubmitPU)
+              Most pending plus running jobs per user.
+
+       MaxWall=<time>
+              Longest time limit a job may have.
+
+       Preempt=<qos list>, PreemptMode=<mode>, GraceTime=<seconds>
+              Which QOS this one can preempt, and how.
+
+       Flags=<flags>, UsageFactor=<float>, Description=<text>
+
+       A value of -1 clears a limit.
+
+SPECIFICATIONS FOR ACCOUNTS AND USERS
+       Parent=<account>        parent of a new or moved account
+       FairShare=<number>      shares of the association
+       Description=, Organization=
+       Account=<account>       account(s) a user belongs to
+       DefaultAccount=<acct>   account charged when none is given
+       QOS=<qos list>          QOS a user may request (QOS+= / QOS-=)
+       DefaultQOS=<qos>        QOS used when none is requested
+
+EXAMPLES
+       Create an account below root and add a user to it:
+
+              $ sacctmgr -i add account research Description="Research" \
+                    Organization=lab Parent=root
+              $ sacctmgr -i add user jdoe Account=research
+
+       Create a QOS that limits each user to eight GPUs:
+
+              $ sacctmgr -i add qos small Priority=10 \
+                    MaxTRESPerUser=gres/gpu=8
+
+       Allow a user to use that QOS:
+
+              $ sacctmgr -i modify user where name=jdoe set QOS+=small
+
+       Show the association tree and selected QOS columns:
+
+              $ sacctmgr show assoc tree format=Account,User,Share,QOS
+              $ sacctmgr show qos format=Name,Priority,MaxTRESPU,MaxWall
+
+SEE ALSO
+       sshare(1), sprio(1), sacct(1), slurm.conf(5), slurmdbd(8)
+
+Slurm                             GreenRay AIO                     SACCTMGR(1)

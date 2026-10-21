@@ -1,0 +1,11 @@
+Usage: wc [OPTION]... [FILE]...
+Print newline, word, and byte counts for each FILE.
+A word is a non-empty sequence of characters delimited by white space.
+
+With no FILE, read standard input.
+
+The options below may be used to select which counts are printed.
+  -l                     print the newline counts
+      --help        display this help and exit
+
+(GreenRay AIO simulates the options listed above.)

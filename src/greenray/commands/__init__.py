@@ -59,6 +59,11 @@ def dispatch(ctx, argv: list[str]) -> str:
         raise CommandError(f"bash: {name}: command not found", 127)
     if not ctx.node.up and name not in ("exit", "logout"):
         raise CommandError(f"ssh: connect to host {ctx.host}: No route to host", 255)
+    from ..content import helppages
+
+    page = helppages.help_request(argv)
+    if page is not None:
+        return page
     return fn(ctx, argv[1:])
 
 

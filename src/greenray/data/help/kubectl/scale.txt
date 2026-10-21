@@ -1,0 +1,21 @@
+Set a new size for a deployment.
+
+ Changes the desired number of replicas. The deployment controller then creates
+or removes pods until the count matches.
+
+Examples:
+  # Run three replicas of a deployment
+  kubectl scale deployment web --replicas=3 -n demo
+
+  # Scale a deployment to zero using TYPE/NAME
+  kubectl scale deployment/web --replicas=0 -n demo
+
+Options:
+    -n, --namespace='':
+        Namespace of the deployment (default "default").
+
+    --replicas=0:
+        The new desired number of replicas. Required.
+
+Usage:
+  kubectl scale --replicas=COUNT (TYPE NAME | TYPE/NAME) [options]

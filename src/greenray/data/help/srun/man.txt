@@ -1,0 +1,130 @@
+SRUN(1)                         Slurm Commands                         SRUN(1)
+
+NAME
+       srun - Run parallel jobs
+
+SYNOPSIS
+       srun [OPTIONS(0)... [executable(0) [args(0)...]]] [ : [OPTIONS(N)...]]
+       executable(N) [args(N)...]
+
+DESCRIPTION
+       srun launches tasks under Slurm.  Run outside an allocation, it
+       first requests resources (like salloc), runs the given program as a
+       single job step and releases the resources when the step ends.  Run
+       inside an existing allocation (a batch script, an salloc session or
+       a shell started with srun --pty), it starts a new job step on the
+       resources already granted, and SLURM_JOB_ID tells it which job to
+       use.
+
+       The number of tasks is taken from --ntasks, or from --nodes times
+       --ntasks-per-node.  Each task runs the same program; standard
+       output of all tasks is forwarded to srun.
+
+OPTIONS
+       -c, --cpus-per-task=<ncpus>
+              CPUs needed by each task.
+
+       --cpu-bind=[{quiet|verbose},]<type>
+              Bind tasks to CPUs, for example cores, sockets or
+              map_cpu:<list>.
+
+       -D, --chdir=<path>
+              Working directory for the tasks.
+
+       --exclusive
+              For a new allocation, do not share the nodes with other jobs.
+
+       -G, --gpus=[type:]<number>
+              Total number of GPUs for the job.
+
+       --gpus-per-node=[type:]<number>
+              GPUs required on each node.  Inside an existing allocation a
+              step cannot ask for more GPUs than the job holds.
+
+       --gres=<list>
+              Generic resources per node, for example gpu:8.
+
+       -J, --job-name=<jobname>
+              Name of the job; defaults to the program name.
+
+       -K, --kill-on-bad-exit
+              Terminate the step if any task exits with a non-zero code.
+
+       -l, --label
+              Prefix each line of output with the number of the task that
+              wrote it.
+
+       --mpi=<mpi_type>
+              PMI implementation used to start MPI programs (pmix, pmi2,
+              none).
+
+       -N, --nodes=<minnodes>[-maxnodes]
+              Number of nodes for the job or step.
+
+       -n, --ntasks=<number>
+              Number of tasks to run.
+
+       --ntasks-per-node=<ntasks>
+              Tasks to start on each node.
+
+       --overlap
+              Allow the step to share CPUs and GPUs with steps that are
+              already running.
+
+       -p, --partition=<partition_names>
+              Partition to allocate from.
+
+       --pty
+              Run task 0 attached to a pseudo-terminal; used to open an
+              interactive shell on a compute node (srun --pty bash).
+
+       -t, --time=<time>
+              Wall-clock limit of the job.
+
+       -w, --nodelist=<node_name_list>
+              Use (at least) the listed nodes.
+
+       -x, --exclude=<node_name_list>
+              Never use the listed nodes.
+
+       --container-image=<image>
+              (pyxis plugin) Run the tasks inside this container image,
+              given as [USER@][REGISTRY#]IMAGE[:TAG] or a squashfs path.
+              The image is imported on each node before the step starts.
+              Related options are --container-mounts, --container-workdir,
+              --container-name, --container-env and
+              --container-remap-root.
+
+       Run "srun --help" for the complete list of options accepted here.
+
+ENVIRONMENT
+       SLURM_JOB_ID
+              When set (as it is inside a batch script or salloc), srun
+              starts a step of that job instead of a new allocation.
+
+       Each task receives SLURM_JOB_ID, SLURM_JOB_NODELIST, SLURM_NTASKS,
+       SLURMD_NODENAME and CUDA_VISIBLE_DEVICES among others.
+
+EXAMPLES
+       Print the host name of four nodes, labelling each line:
+
+              $ srun -N4 -l hostname
+
+       Run one task per GPU on a single eight-GPU node:
+
+              $ srun -N1 --ntasks-per-node=8 --gpus-per-node=8 ./app
+
+       Open an interactive shell on a compute node:
+
+              $ srun -N1 --gres=gpu:1 --pty bash
+
+       Run a command inside a container image from a registry:
+
+              $ srun -N1 --gpus-per-node=8 \
+                     --container-image=nvcr.io#nvidia/pytorch:24.05-py3 \
+                     nvidia-smi -L
+
+SEE ALSO
+       sbatch(1), salloc(1), squeue(1), scancel(1), scontrol(1)
+
+Slurm                             GreenRay AIO                         SRUN(1)

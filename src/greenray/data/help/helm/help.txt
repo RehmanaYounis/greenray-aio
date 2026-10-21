@@ -1,0 +1,38 @@
+The Kubernetes package manager
+
+Common actions for Helm:
+
+- helm search:    look for charts in the repositories you have added
+- helm install:   deploy a chart to Kubernetes as a new release
+- helm upgrade:   change the chart version or values of a release
+- helm list:      show the releases in a namespace
+
+Charts are referenced as REPO/CHART after "helm repo add REPO URL". Values are
+supplied with --set key=value or -f values.yaml and are merged over the chart's
+defaults (see "helm show values").
+
+Usage:
+  helm [command]
+
+Available Commands:
+  get         download extended information of a named release
+  help        help about any command
+  history     fetch release history
+  install     install a chart
+  list        list releases
+  repo        add, list, remove and update chart repositories
+  rollback    roll back a release to a previous revision
+  search      search repositories for a keyword in charts (helm search repo)
+  show        show information of a chart
+  status      display the status of the named release
+  uninstall   uninstall a release
+  upgrade     upgrade a release
+  version     print the client version information
+
+Flags:
+  -h, --help                  help for helm
+      --kube-context string   name of the kubeconfig context to use
+  -n, --namespace string      namespace scope for this request
+
+Use "helm [command] --help" for more information about a command.
+(GreenRay AIO simulates the commands and options listed above.)

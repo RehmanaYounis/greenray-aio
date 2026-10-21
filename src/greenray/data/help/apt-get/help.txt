@@ -1,0 +1,30 @@
+apt 2.4.12 (amd64)
+Usage: apt-get [options] command
+       apt-get [options] install|remove pkg1 [pkg2 ...]
+
+apt-get is a command line interface for retrieving packages and information
+about them from authenticated sources and for installing, upgrading and
+removing packages together with their dependencies. Its output is stable,
+which makes it the usual choice in scripts.
+
+Most used commands:
+  update - Retrieve new lists of packages
+  upgrade - Perform an upgrade
+  install - Install new packages (pkg is libc6 not libc6.deb)
+  remove - Remove packages
+  purge - Remove packages and config files
+  autoremove - Remove automatically all unused packages
+  dist-upgrade - Distribution upgrade, see apt-get(8)
+
+Options:
+  -h  This help text.
+  -y  Assume Yes to all queries and do not prompt
+  --purge  Remove configuration files too when removing packages
+
+A specific version can be requested with pkg=version; the simulator installs
+the version its repository offers.
+
+See the apt-get(8), sources.list(5) and apt.conf(5) manual
+pages for more information and options.
+                                        This APT has Super Cow Powers.
+(GreenRay AIO simulates the commands and options listed above.)

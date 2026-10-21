@@ -1,0 +1,8 @@
+Usage: sync [OPTION] [FILE]...
+Flush cached writes to persistent storage.
+
+If one or more files are given, only they are synchronised.
+
+      --help     display this help and exit
+
+(GreenRay AIO simulates the options listed above.)

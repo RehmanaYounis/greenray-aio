@@ -1,0 +1,12 @@
+Usage: cat [OPTION]... [FILE]...
+Concatenate FILE(s) to standard output.
+
+With no FILE, read standard input.
+
+      --help        display this help and exit
+
+Examples:
+  cat f g  Output the contents of f, then the contents of g.
+  cat      Copy standard input to standard output.
+
+(GreenRay AIO simulates the options listed above.)

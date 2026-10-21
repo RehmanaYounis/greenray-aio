@@ -1,0 +1,5 @@
+logout: logout [n]
+    Exit a login shell.
+    
+    Ends a login shell with status N. In a shell opened with ssh this
+    closes the connection and returns to the previous host.

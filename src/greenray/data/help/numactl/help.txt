@@ -1,0 +1,22 @@
+usage: numactl [--all | -a] [--interleave= | -i <nodes>] [--preferred= | -p <node>]
+               [--physcpubind= | -C <cpus>] [--cpunodebind= | -N <nodes>]
+               [--membind= | -m <nodes>] [--localalloc | -l] command args ...
+       numactl [--show | -s]
+       numactl [--hardware | -H]
+
+Memory policies: --interleave, --preferred, --membind, --localalloc.
+<nodes> and <cpus> take numbers, A-B ranges, comma lists, or "all".
+
+  --hardware, -H        show the NUMA nodes, their CPUs, memory sizes and
+                        the node distance table
+  --show, -s            show the NUMA policy and CPU/memory binding of the
+                        current shell
+  --cpunodebind=, -N    run the command only on the CPUs of these nodes
+  --membind=, -m        allocate memory only from these nodes
+  --physcpubind=, -C    run the command only on these CPUs
+  --interleave=, -i     interleave memory allocations across these nodes
+  --preferred=, -p      prefer allocating memory from this node
+  --localalloc, -l      always allocate on the node the task runs on
+  --all, -a             ignore cpuset restrictions when binding
+
+(GreenRay AIO simulates the options listed above.)

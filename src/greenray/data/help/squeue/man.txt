@@ -1,0 +1,102 @@
+SQUEUE(1)                       Slurm Commands                       SQUEUE(1)
+
+NAME
+       squeue - view information about jobs located in the Slurm
+       scheduling queue.
+
+SYNOPSIS
+       squeue [OPTIONS...]
+
+DESCRIPTION
+       squeue reports the jobs the controller knows about.  By default it
+       shows pending, running, completing and suspended jobs of all users,
+       pending jobs first in priority order.  For a pending job the last
+       column shows, in parentheses, why it is not running yet; for a
+       running job it shows the allocated nodes.
+
+OPTIONS
+       -h, --noheader
+              Do not print the header line.
+
+       -j, --jobs=<job_id_list>
+              Show only these jobs (comma separated), in any state.
+
+       -l, --long
+              Show more information, including the full job state and the
+              time limit, below a timestamp line.
+
+       --me   Show only the caller's jobs.
+
+       -o, --format=<output_format>
+              Choose the columns.  Each field is written %[.][size]type; a
+              "." right-justifies the value and size sets the width.
+              Useful types include:
+
+              %i  job ID                    %P  partition
+              %j  job name                  %u  user
+              %t  state, short code         %T  state, full name
+              %M  time used                 %l  time limit
+              %D  number of nodes           %R  nodes or (reason)
+              %r  reason only               %b  TRES per node (GPUs)
+              %q  QOS                       %a  account
+              %Q  priority                  %S  (expected) start time
+              %V  submit time               %E  dependency
+              %C  CPUs                      %y  nice value
+
+              The default is "%.18i %.9P %.8j %.8u %.2t %.10M %.6D %R".
+
+       -p, --partition=<part_list>
+              Show only jobs in these partitions.
+
+       --start
+              Show pending jobs with their expected start time.
+
+       -t, --states=<state_list>
+              Show only jobs in these states, given as short codes or full
+              names (PD, R, CG, CD, F, CA, ...), or "all".
+
+       -u, --user=<user_list>
+              Show only jobs of these users.
+
+       -w, --nodelist=<hostlist>
+              Show only jobs that use any of these nodes.
+
+       -V, --version
+              Print the Slurm version.
+
+JOB STATE CODES
+       PD PENDING    R RUNNING     CG COMPLETING   CD COMPLETED
+       F  FAILED     CA CANCELLED  TO TIMEOUT      S  SUSPENDED
+
+JOB REASON CODES
+       Priority          Higher-priority jobs are ahead of this one.
+       Resources         Waiting for resources to become free.
+       Dependency        Waiting for a job it depends on.
+       DependencyNeverSatisfied
+                         The dependency can no longer be met.
+       JobHeldUser       Held by its owner (scontrol release to free it).
+       JobHeldAdmin      Held by an administrator.
+       QOS...            A limit of the job's QOS would be exceeded
+                         (QOSMaxJobsPerUserLimit, QOSGrpGRES, ...).
+       ReqNodeNotAvail   A required node is down, drained or reserved.
+       PartitionDown     The partition is not accepting new starts.
+       PartitionTimeLimit
+                         The time limit exceeds the partition's MaxTime.
+
+EXAMPLES
+       List pending jobs with the reason they are waiting:
+
+              $ squeue -t PD -o "%.10i %.9P %.10u %.8Q %R"
+
+       Show your own jobs:
+
+              $ squeue --me
+
+       Show jobs running on two particular nodes, without a header:
+
+              $ squeue -h -w node[01-02]
+
+SEE ALSO
+       sinfo(1), sbatch(1), scancel(1), sprio(1), scontrol(1)
+
+Slurm                             GreenRay AIO                       SQUEUE(1)

@@ -1,0 +1,154 @@
+SBATCH(1)                       Slurm Commands                       SBATCH(1)
+
+NAME
+       sbatch - Submit a batch script to Slurm.
+
+SYNOPSIS
+       sbatch [OPTIONS(0)...] [ : [OPTIONS(N)...]] script(0) [args(0)...]
+
+DESCRIPTION
+       sbatch hands a batch script to the Slurm controller and returns as
+       soon as the controller has accepted it and assigned a job ID.  The
+       script usually does not start right away: it waits in the queue
+       until the requested resources are free, then runs once, on the
+       first node of the allocation.  Job steps inside the script are
+       started with srun.
+
+       The script may come from a file named on the command line, or the
+       command given with --wrap is turned into a small sh script.  Lines
+       at the top of the script that begin with #SBATCH are read as
+       options until the first line that is neither a comment nor blank.
+       Options on the command line override #SBATCH lines.
+
+       By default standard output and standard error are written to
+       slurm-%j.out in the submission directory, where %j is the job ID.
+
+OPTIONS
+       -A, --account=<account>
+              Charge the job's resource use to this account.
+
+       -c, --cpus-per-task=<ncpus>
+              Number of CPUs each task needs.  The default is one.
+
+       -D, --chdir=<directory>
+              Run the script from this directory.
+
+       -d, --dependency=<dependency_list>
+              Do not start the job before the dependency is met.  Common
+              forms are after:<jobid>, afterok:<jobid>, afterany:<jobid>
+              and afternotok:<jobid>; several clauses are separated by
+              commas.
+
+       -e, --error=<filename_pattern>
+              Write standard error to this file instead of the output file.
+
+       --exclusive
+              Do not share the allocated nodes with other running jobs.
+
+       -G, --gpus=[type:]<number>
+              Total number of GPUs for the whole job.
+
+       --gpus-per-node=[type:]<number>
+              GPUs required on every allocated node.
+
+       --gres=<list>
+              Generic resources per node, for example gpu:8 or gpu:h100:4.
+
+       -H, --hold
+              Submit the job held (priority 0).  Release it with
+              "scontrol release <jobid>".
+
+       -J, --job-name=<jobname>
+              Name for the job.  Defaults to the script's file name.
+
+       --mem=<size>[units]
+              Real memory per node.
+
+       -N, --nodes=<minnodes>[-maxnodes]
+              Number of nodes to allocate.
+
+       -n, --ntasks=<number>
+              Number of tasks the job will run.
+
+       --ntasks-per-node=<ntasks>
+              Tasks to start on each node.
+
+       -o, --output=<filename_pattern>
+              File for standard output.  %j expands to the job ID, %x to
+              the job name, %u to the user and %N to the first node name.
+
+       -p, --partition=<partition_names>
+              Partition to submit to.  The default partition is used when
+              this is not given.
+
+       --parsable
+              Print only the job ID, which is convenient in scripts.
+
+       -q, --qos=<qos>
+              Quality of service for the job.
+
+       -t, --time=<time>
+              Wall-clock limit.  Accepted forms include minutes, MM:SS,
+              HH:MM:SS, D-HH and D-HH:MM:SS.
+
+       -w, --nodelist=<node_name_list>
+              Run on (at least) the listed nodes.
+
+       --wrap=<command_string>
+              Wrap the command in an sh script and submit that.
+
+       -x, --exclude=<node_name_list>
+              Never use the listed nodes.
+
+       --container-image=<image>
+              (pyxis plugin) Run the job's steps inside this container
+              image, given as [USER@][REGISTRY#]IMAGE[:TAG] or a squashfs
+              path.  Related options are --container-mounts,
+              --container-workdir, --container-name and
+              --container-remap-root.
+
+       Run "sbatch --help" for the complete list of options accepted here.
+
+OUTPUT ENVIRONMENT VARIABLES
+       Slurm sets these in the environment of the batch script:
+
+       SLURM_JOB_ID          The job ID.
+       SLURM_JOB_NAME        The job name.
+       SLURM_JOB_NODELIST    Hostlist expression of the allocated nodes.
+       SLURM_JOB_NUM_NODES   Number of allocated nodes.
+       SLURM_NTASKS          Number of tasks requested.
+       SLURM_SUBMIT_DIR      Directory sbatch was run from.
+       CUDA_VISIBLE_DEVICES  GPUs assigned on the node.
+
+EXAMPLES
+       Submit a script that asks for two nodes with eight GPUs each:
+
+              $ cat train.sh
+              #!/bin/bash
+              #SBATCH --job-name=train
+              #SBATCH --nodes=2
+              #SBATCH --gpus-per-node=8
+              #SBATCH --time=02:00:00
+              #SBATCH --output=train-%j.out
+              srun python train.py
+
+              $ sbatch train.sh
+              Submitted batch job 1234
+
+       Submit a single command without writing a script:
+
+              $ sbatch -p batch -N1 --wrap="hostname"
+
+       Chain two jobs so the second starts only if the first succeeds:
+
+              $ jid=$(sbatch --parsable prep.sh)
+              $ sbatch --dependency=afterok:$jid main.sh
+
+       Restrict a job to particular nodes:
+
+              $ sbatch -w node[01-02] job.sh
+
+SEE ALSO
+       srun(1), salloc(1), squeue(1), scancel(1), sacct(1), scontrol(1)
+
+Slurm                             GreenRay AIO                       SBATCH(1)

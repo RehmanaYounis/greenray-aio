@@ -1,0 +1,62 @@
+GREP(1)                          User Commands                          GREP(1)
+
+NAME
+       grep, egrep - print lines that match a pattern
+
+SYNOPSIS
+       grep [OPTION...] PATTERN [FILE...]
+       egrep [OPTION...] PATTERN [FILE...]
+
+DESCRIPTION
+       grep reads each FILE, or standard input when no FILE is given, and
+       prints every line that contains a match for PATTERN. It is most
+       often used at the end of a pipeline to pick lines out of another
+       command's output.
+
+       egrep behaves like grep -E.
+
+OPTIONS
+   Pattern syntax
+       -E     Interpret PATTERN as an extended regular expression, so that
+              |, +, ? and () work without backslashes.
+
+   Matching control
+       -i     Ignore case distinctions in both PATTERN and the input.
+
+       -v     Invert the sense of matching: print the lines that do not
+              match.
+
+   Output control
+       -c     Instead of the lines themselves, print how many lines were
+              selected.
+
+   Context line control
+       -A NUM, --after-context=NUM
+              Print NUM lines of trailing context after each match.
+
+       -B NUM, --before-context=NUM
+              Print NUM lines of leading context before each match.
+
+       -C NUM, --context=NUM
+              Print NUM lines of context before and after each match.
+
+       Single-letter options may be grouped: -iv is the same as -i -v.
+
+EXIT STATUS
+       0 when at least one line is selected, 1 when no line is selected,
+       2 when an error occurs.
+
+EXAMPLES
+       Lines mentioning NVIDIA devices, in any case:
+              lspci | grep -i nvidia
+
+       Kernel messages with GPU Xid errors and the two lines after each:
+              dmesg | grep -A2 Xid
+
+       Count the lines that are not comments:
+              grep -vc '^#' /etc/fstab
+
+SEE ALSO
+       sed(1), awk(1)
+
+GreenRay AIO                          lab manual                          GREP(1)

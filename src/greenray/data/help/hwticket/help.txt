@@ -1,0 +1,23 @@
+GreenRay AIO lab helper — stands in for a physical/UI action, not a real tool
+
+Usage: hwticket create --node <node> --component <component> --summary "<text>" [--severity 1-4]
+       hwticket list
+       hwticket show <ID>
+
+Open and review hardware support cases, as you would in the vendor's
+support portal.
+
+Commands:
+  create        open a new ticket
+  list          list all tickets (default when no command is given)
+  show <ID>     print every field of one ticket
+
+Options for create:
+  --node <node>              affected cluster node
+  --component <component>    gpu, fan, psu, cable, hca, nvswitch, memory or other
+  --summary "<text>"         symptom and supporting evidence (at least 10 characters)
+  --severity <1-4>           1 (most urgent) to 4 (least urgent); default 2
+  --help                     show this help and exit
+
+Options also accept the --option=value form. Support will normally ask for
+an nvidia-bug-report.log.gz collected on the affected node.

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import random
 import time
+import zlib
 from dataclasses import dataclass, field
 
 from .. import config
@@ -74,6 +75,7 @@ class LabSession:
     """One attempt at a scenario; keeps the shell so an exam can resume it."""
 
     scenario: Scenario | None
+    color: bool = False
     shell: Shell = field(init=False)
     hints_used: int = 0
     objectives_revealed: bool = False
@@ -86,7 +88,7 @@ class LabSession:
     def reset(self) -> None:
         """Rebuild the broken cluster. Same attempt: hints, objectives and timer carry over."""
         state = self.scenario.build_state() if self.scenario else make_cluster()
-        self.shell = Shell(state)
+        self.shell = Shell(state, color=self.color)
 
     def new_attempt(self) -> None:
         """Fresh attempt: cluster, timer and guidance counters all start over."""
@@ -95,6 +97,13 @@ class LabSession:
         self.objectives_revealed = False
         self.attempt += 1
         self.started = time.time()
+
+    @property
+    def scenario_required(self) -> Scenario:
+        """The scenario of a graded attempt (only the sandbox has none)."""
+        if self.scenario is None:
+            raise ValueError("this lab session has no scenario (sandbox)")
+        return self.scenario
 
     @property
     def guided(self) -> bool:
@@ -117,65 +126,81 @@ def read_line(ui: UI, prompt: str) -> str:
         return ""
 
 
+SEVERITY = {"easy": "Sev 4", "medium": "Sev 3", "hard": "Sev 2"}
+
+
+def ticket_number(s: Scenario) -> str:
+    """A stable, realistic-looking ticket number that does not reveal the scenario id."""
+    return f"INC{zlib.crc32(s.id.encode()) % 900000 + 100000}"
+
+
 def show_briefing(
     ui: UI, s: Scenario | None, exam: bool = False, incident: bool = False, objectives_revealed: bool = False
 ) -> None:
     if not s:
-        ui.out(ui.bold("\nSandbox: a healthy 4-node DGX H100 cluster managed by BCM. Nothing is graded.\n"))
+        ui.out(ui.panel("A healthy 4-node DGX H100 cluster managed by BCM. Nothing is graded.", title="Sandbox"))
         return
-    if incident:
-        ui.out(ui.bold("\n=== Incident report ===") + ui.dim(f"   [{s.domain}]"))
-    else:
-        meta = f"   [{s.domain}]" if exam else f"   [{s.domain} | {s.difficulty} | ~{s.time_limit_min} min]"
-        ui.out(ui.bold(f"\n=== {s.title} ===") + ui.dim(meta))
-    ui.out(s.briefing.rstrip())
+    body = [s.briefing.rstrip()]
     if s.objectives and (not incident or objectives_revealed):
-        ui.out(ui.bold("\nObjectives:"))
-        for o in s.objectives:
-            ui.out(f"  • {o}")
+        body += ["", ui.bold("Objectives:"), *(f"  • {o}" for o in s.objectives)]
     if incident:
-        ui.out("\n" + INCIDENT_GOAL)
+        body += ["", INCIDENT_GOAL]
         if not objectives_revealed:
-            ui.out(
+            body.append(
                 ui.dim(
                     "The success criteria are hidden because they would point at the cause. "
                     "`objectives` reveals them (this attempt then counts as guided)."
                 )
             )
-    ui.out(ui.dim("\nType 'help' for lab commands, 'explain <command>' to learn a command.\n"))
+        title = f"Incident report {ticket_number(s)} · {SEVERITY.get(s.difficulty, 'Sev 3')}"
+        subtitle = f"{s.domain} · reported via monitoring and user tickets"
+    else:
+        title = s.title
+        subtitle = s.domain if exam else f"{s.domain} · {s.difficulty} · ~{s.time_limit_min} min"
+    ui.out("")
+    ui.out(ui.panel("\n".join(body), title=title, subtitle=subtitle, style="yellow" if incident else "green"))
+    ui.out(ui.dim("Type 'help' for lab commands, 'explain <command>' to learn a command.\n"))
 
 
 def show_results(ui: UI, results: list[tuple[str, bool, str]], hide_unmet: bool = False) -> None:
     """Print check results. ``hide_unmet`` keeps unmet criteria secret (incident mode)."""
     debug = config.debug()
-    unmet = 0
+    rows, styles, unmet = [], [], 0
     for desc, ok, err in results:
         if hide_unmet and not ok:
             unmet += 1
             continue
-        detail = ui.dim(f"  ({err})") if err and debug else ""
-        ui.out(f"  {ui.green('PASS') if ok else ui.red('FAIL')}  {desc}{detail}")
+        detail = f"  ({err})" if err and debug else ""
+        if ui.color:
+            rows.append(["✓" if ok else "✗", desc + detail])
+            styles.append("green" if ok else "red")
+        else:
+            ui.out(f"  {'PASS' if ok else 'FAIL'}  {desc}{detail}")
     if unmet:
         noun = "criterion" if unmet == 1 else "criteria"
-        ui.out(f"  {ui.red('....')}  {unmet} more success {noun} not met yet")
+        line = f"{unmet} more success {noun} not met yet"
+        if ui.color:
+            rows.append(["…", line])
+            styles.append("dim")
+        else:
+            ui.out(f"  ....  {line}")
+    if rows:
+        ui.out(ui.table(["", "Success criteria"], rows, styles))
 
 
 def show_solution(ui: UI, s: Scenario, title: str = "Reference solution") -> None:
     if not s.has_solution:
         ui.out(ui.yellow("\n" + solutions.missing_message()))
         return
-    ui.out(ui.bold(f"\n--- {title} ---"))
-    for step in s.solution:
-        ui.out(ui.cyan("  $ " + step.rstrip("\n").replace("\n", "\n    ")))
+    steps = "\n".join("$ " + step.rstrip("\n").replace("\n", "\n  ") for step in s.solution)
+    ui.out("")
+    ui.out(ui.panel(steps, title=title, style="cyan"))
     if s.explanation:
-        ui.out(ui.bold("\nWhy:"))
-        ui.out(s.explanation.rstrip())
+        ui.out(ui.panel(s.explanation.rstrip(), title="Why", style="green"))
     if s.edge_cases:
-        ui.out(ui.bold("\nEdge cases / exam traps:"))
-        for e in s.edge_cases:
-            ui.out(f"  • {e}")
+        ui.out(ui.panel("\n".join(f"• {e}" for e in s.edge_cases), title="Edge cases / exam traps", style="yellow"))
     if s.references:
-        ui.out(ui.dim("\nReferences: " + "; ".join(s.references)))
+        ui.out(ui.dim("References: " + "; ".join(s.references)))
 
 
 def your_commands(session: LabSession, limit: int = 15) -> list[str]:
@@ -188,15 +213,19 @@ def your_commands(session: LabSession, limit: int = 15) -> list[str]:
 
 
 def show_debrief(ui: UI, session: LabSession, passed: bool, identity_hidden: bool) -> None:
-    s = session.scenario
+    s = session.scenario_required
     if identity_hidden:
-        ui.out(ui.bold(f"\nThis incident was: {s.title}") + ui.dim(f"  ({s.id})"))
+        ui.out(ui.bold(f"\nThis incident was: {s.title}") + ui.dim(f"  ({s.id}, ticket {ticket_number(s)})"))
     show_solution(ui, s, title="Debrief: reference solution and edge cases" if passed else "Reference solution")
     mine = your_commands(session)
     if mine:
-        ui.out(ui.bold("\nYour commands (compare them with the reference):"))
-        for line in mine:
-            ui.out(f"  $ {line}")
+        ui.out(
+            ui.panel(
+                "\n".join(f"$ {line}" for line in mine),
+                title="Your commands (compare them with the reference)",
+                style="blue",
+            )
+        )
     ui.out(
         ui.dim(
             "Note: the grader checks that your diagnostic commands were run, "
@@ -211,6 +240,10 @@ def show_debrief(ui: UI, session: LabSession, passed: bool, identity_hidden: boo
                 f"\nPractise next: greenray incident --id {nxt.id}   (a related problem: {', '.join(sorted(set(nxt.tags) & set(s.tags))) or nxt.domain})"
             )
         )
+
+
+def prompt(ui: UI, session: LabSession) -> str:
+    return session.shell.styled_prompt() if ui.color else session.shell.prompt
 
 
 def run_shell_line(ui: UI, session: LabSession, line: str) -> None:
@@ -245,7 +278,7 @@ def _completion_words() -> list[str]:
 
 def _record(session: LabSession, passed: bool, gave_up: bool, incident: bool) -> None:
     progress.record_scenario(
-        session.scenario.id,
+        session.scenario_required.id,
         passed,
         time.time() - session.started,
         session.hints_used,
@@ -258,12 +291,12 @@ def _record(session: LabSession, passed: bool, gave_up: bool, incident: bool) ->
 def run_lab(ui: UI, s: Scenario | None, incident: bool = False, hide_identity: bool = False) -> None:
     """Practice a scenario (guided by default, or as an incident); the result is saved to progress."""
     enable_line_editing(_completion_words())
-    session = LabSession(s)
+    session = LabSession(s, color=ui.color)
     incident = incident and s is not None
     gave_up = passed = False
     show_briefing(ui, s, incident=incident)
     while True:
-        line = read_line(ui, ui.green(session.shell.prompt))
+        line = read_line(ui, prompt(ui, session))
         cmd = line.strip()
         verb, _, rest = cmd.partition(" ")
         if cmd in ("quit", "q"):
@@ -359,7 +392,7 @@ def run_exam_lab(ui: UI, session: LabSession, deadline: float) -> None:
     show_briefing(ui, session.scenario, exam=True)
     while time.time() < deadline:
         left = int((deadline - time.time()) // 60)
-        line = read_line(ui, ui.dim(f"[{left}m] ") + ui.green(session.shell.prompt))
+        line = read_line(ui, ui.dim(f"[{left}m] ") + prompt(ui, session))
         cmd = line.strip()
         if cmd in ("back", "quit", "q"):
             return

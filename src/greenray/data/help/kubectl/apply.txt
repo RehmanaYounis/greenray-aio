@@ -1,0 +1,38 @@
+Apply a configuration to a resource by file name or stdin.
+
+ Creates the objects described in a manifest, or updates them if they already
+exist. Manifests are YAML or JSON; a file may hold several documents separated
+by '---'. Use '-f -' to read the manifest from standard input, for example from
+a here-document.
+
+Examples:
+  # Create or update the resources in a file
+  kubectl apply -f my-pod.yaml
+
+  # Apply several files
+  kubectl apply -f namespace.yaml -f deployment.yaml
+
+  # Apply a manifest typed on stdin
+  kubectl apply -f - <<EOF
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    name: my-pod
+  spec:
+    containers:
+    - name: main
+      image: busybox
+  EOF
+
+  # Apply into a particular namespace
+  kubectl apply -f my-pod.yaml -n demo
+
+Options:
+    -f, --filename=[]:
+        File, URL or '-' (stdin) containing the manifest. May be repeated.
+
+    -n, --namespace='':
+        Namespace for objects whose manifest does not set one.
+
+Usage:
+  kubectl apply (-f FILENAME) [options]

@@ -1,0 +1,47 @@
+Print the logs for a container in a pod or specified resource.
+
+ Shows what the container has written to stdout and stderr. If the pod has
+restarted, --previous shows the output of the instance that ended, which is
+where the reason for a crash usually is. Instead of a pod name you can pass a
+daemon set, deployment or job (TYPE/NAME) and one of its pods is chosen.
+
+Examples:
+  # Show the logs of a pod
+  kubectl logs my-pod
+
+  # Show the logs of the previous (crashed) container instance
+  kubectl logs my-pod -p
+
+  # Show only the last 20 lines
+  kubectl logs my-pod --tail=20
+
+  # Show logs of a pod in namespace demo
+  kubectl logs my-pod -n demo
+
+  # Show logs of one pod belonging to a daemon set
+  kubectl logs ds/my-daemonset -n demo
+
+  # Show logs of every pod with a label (up to five pods)
+  kubectl logs -l app=web
+
+Options:
+    -c, --container='':
+        Container to read from. Defaults to the pod's first container.
+
+    -f, --follow=false:
+        Keep streaming new output (the simulator prints what is available).
+
+    -n, --namespace='':
+        Namespace of the pod (default "default").
+
+    -p, --previous=false:
+        Print the logs of the previous, terminated instance of the container.
+
+    -l, --selector='':
+        Print logs for the pods matching this label selector.
+
+    --tail=-1:
+        Number of most recent lines to show. -1 shows everything.
+
+Usage:
+  kubectl logs [-f] [-p] (POD | TYPE/NAME) [-c CONTAINER] [options]

@@ -1,5 +1,6 @@
 import pytest
 
+from greenray.app.ui import UI
 from greenray.content import solutions
 
 requires_solutions = pytest.mark.skipif(not solutions.available(), reason="private solutions repository not installed")
@@ -10,10 +11,11 @@ def isolated_progress(tmp_path, monkeypatch):
     monkeypatch.setenv("GREENRAY_HOME", str(tmp_path))
 
 
-class ScriptedUI:
-    """Feeds canned input lines and records output. A line that is an exception instance is raised."""
+class ScriptedUI(UI):
+    """The real UI with colour off, fed by canned input lines. A line that is an exception is raised."""
 
     def __init__(self, lines):
+        super().__init__(color=False)
         self.lines = iter(lines)
         self.output = []
         self.prompts = []
@@ -31,6 +33,3 @@ class ScriptedUI:
     @property
     def text(self):
         return "\n".join(self.output)
-
-    def __getattr__(self, name):  # colour helpers
-        return lambda s: s

@@ -1,0 +1,40 @@
+Update fields of a resource using strategic merge patch, a JSON merge patch, or
+a JSON patch.
+
+ The patch is given inline with -p as JSON (or YAML). Three patch types exist:
+  * strategic (default)  merges maps, and merges lists of named items by name
+  * merge                RFC 7386 JSON merge patch: maps merge, lists are replaced
+  * json                 RFC 6902 list of operations (add, remove, replace, ...)
+
+ Pods only allow a few fields to change after creation (container images,
+additional tolerations, ...); for anything else, delete and recreate the pod.
+
+Examples:
+  # Mark a node unschedulable with a strategic merge patch
+  kubectl patch node node01 -p '{"spec":{"unschedulable":true}}'
+
+  # Change the replica count of a deployment
+  kubectl patch deployment web -n demo -p '{"spec":{"replicas":2}}'
+
+  # Change a container image in a pod
+  kubectl patch pod my-pod -p '{"spec":{"containers":[{"name":"main","image":"busybox:1.36"}]}}'
+
+  # Set a value with a merge patch
+  kubectl patch configmap my-config -n demo --type merge -p '{"data":{"mode":"slow"}}'
+
+  # Replace a value with a JSON patch
+  kubectl patch deployment web -n demo --type json \
+    -p '[{"op":"replace","path":"/spec/replicas","value":3}]'
+
+Options:
+    -n, --namespace='':
+        Namespace of the object (default "default").
+
+    -p, --patch='':
+        The patch to apply, as JSON or YAML text.
+
+    --type='strategic':
+        Patch type: one of strategic, merge or json.
+
+Usage:
+  kubectl patch (TYPE NAME | TYPE/NAME) [--type=TYPE] -p PATCH [options]

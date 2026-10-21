@@ -1,0 +1,9 @@
+Usage: rm [OPTION]... [FILE]...
+Remove (unlink) the FILE(s).
+
+  -f, --force           ignore nonexistent files, never prompt
+      --help            display this help and exit
+
+Note that a file removed with rm cannot normally be recovered.
+
+(GreenRay AIO simulates the options listed above.)

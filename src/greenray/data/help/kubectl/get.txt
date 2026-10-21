@@ -1,0 +1,75 @@
+Display one or many resources.
+
+ Prints a table with the most useful fields of each matching resource. Pass a
+resource type to list every object of that type in the current namespace, add
+names to narrow the list, or use a label or field selector to filter it.
+
+ Use "kubectl api-resources" to see the resource types and their short names
+(po, no, ds, deploy, ns, ev, cm, sa, svc, ...).
+
+ The -o flag switches the output to a structured format (yaml, json) or extracts
+only the fields you ask for (jsonpath, custom-columns, name).
+
+Examples:
+  # List the pods in the current namespace
+  kubectl get pods
+
+  # List pods with the node they run on and their IP
+  kubectl get pods -o wide
+
+  # List pods in every namespace
+  kubectl get pods -A
+
+  # Show one pod as YAML
+  kubectl get pod my-pod -o yaml
+
+  # List nodes and print their labels
+  kubectl get nodes --show-labels
+
+  # Add a column with the value of a node label
+  kubectl get nodes -L disktype
+
+  # List pods carrying a label, in namespace demo
+  kubectl get pods -l app=web -n demo
+
+  # List the pods scheduled on a particular node
+  kubectl get pods -A --field-selector spec.nodeName=node01
+
+  # Print only the phase of a pod
+  kubectl get pod my-pod -o jsonpath='{.status.phase}'
+
+  # Print chosen fields as columns
+  kubectl get pods -o custom-columns=NAME:.metadata.name,NODE:.spec.nodeName
+
+  # List several resource types at once
+  kubectl get pods,deployments -n demo
+
+Options:
+    -A, --all-namespaces=false:
+        List the requested objects across all namespaces. The namespace in the
+        current context is ignored even when -n is given.
+
+    --field-selector='':
+        Filter on object fields, e.g. spec.nodeName=node01, status.phase=Running,
+        metadata.name=my-pod (pods) or involvedObject.name=my-pod, type=Warning
+        (events). Supports '=', '==' and '!='.
+
+    -L, --label-columns=[]:
+        Label keys to show as extra columns. May be repeated.
+
+    -n, --namespace='':
+        Namespace to read from (default "default").
+
+    -o, --output='':
+        Output format. One of: wide, yaml, json, name, jsonpath=TEMPLATE,
+        custom-columns=SPEC.
+
+    -l, --selector='':
+        Label selector to filter on, e.g. key=value, key!=value, key (exists),
+        'key in (a,b)'. Several requirements are separated by commas.
+
+    --show-labels=false:
+        Print all labels of each object as the last column.
+
+Usage:
+  kubectl get [(-o|--output=)FORMAT] (TYPE [NAME ...] | TYPE/NAME ...) [flags] [options]

@@ -1,0 +1,10 @@
+Usage: chmod [OPTION]... MODE[,MODE]... FILE...
+  or:  chmod [OPTION]... OCTAL-MODE FILE...
+Change the mode (permission bits) of each FILE to MODE.
+
+  -R, --recursive        change files and directories recursively
+      --help     display this help and exit
+
+MODE is symbolic (u+x, go-w, a=r) or octal (644, 0755).
+
+(GreenRay AIO simulates the options listed above.)

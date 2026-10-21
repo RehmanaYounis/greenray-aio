@@ -1,0 +1,40 @@
+Update the labels on a resource.
+
+ Adds or changes key=value labels on nodes or pods. A label key that ends with
+a dash ('key-') removes that label. Changing a label that already has a
+different value requires --overwrite.
+
+ Node labels are what node selectors and node affinity rules match against, so
+labelling a node can make pods schedule onto it (or stop doing so).
+
+Examples:
+  # Add a label to a node
+  kubectl label nodes node01 disktype=ssd
+
+  # Change an existing label
+  kubectl label nodes node01 disktype=hdd --overwrite
+
+  # Remove a label
+  kubectl label nodes node01 disktype-
+
+  # Label every node
+  kubectl label nodes --all zone=lab
+
+  # Label a pod in namespace demo
+  kubectl label pod my-pod tier=frontend -n demo
+
+Options:
+    --all=false:
+        Apply the change to all nodes.
+
+    -n, --namespace='':
+        Namespace of the pod (default "default").
+
+    --overwrite=false:
+        Allow replacing the value of an existing label.
+
+    -l, --selector='':
+        Apply the change to the nodes that match this selector.
+
+Usage:
+  kubectl label [--overwrite] (TYPE NAME | TYPE/NAME) KEY_1=VAL_1 ... KEY_N=VAL_N [options]

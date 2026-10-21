@@ -1,0 +1,14 @@
+usage: exportfs [-arsv]
+
+  -a         export (or with -r, re-export) every entry in /etc/exports
+  -r         re-read /etc/exports and synchronize the active export table
+             with it; usually combined with -a as "exportfs -ra"
+  -s         show the active exports together with the options given in
+             /etc/exports
+  -v         verbose: show each export with its full effective option set
+             (sync, wdelay, root_squash, ...)
+      --help display this help
+
+Run without options, exportfs lists the directories currently exported.
+
+(GreenRay AIO simulates the options listed above.)

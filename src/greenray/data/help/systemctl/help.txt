@@ -1,0 +1,33 @@
+systemctl [OPTIONS...] COMMAND ...
+
+Query or send control commands to the system manager.
+
+Unit Commands:
+  list-units                          List the service units the manager knows
+                                      about, with their state
+  is-active UNIT...                   Print whether units are active
+  status UNIT...                      Show runtime status of one or more units,
+                                      followed by their most recent log lines
+  start UNIT...                       Start (activate) one or more units
+  stop UNIT...                        Stop (deactivate) one or more units
+  reload UNIT...                      Reload one or more units
+  restart UNIT...                     Start or restart one or more units
+
+Unit File Commands:
+  list-unit-files                     List installed unit files
+  enable UNIT...                      Enable one or more units, so that they
+                                      start at boot
+  disable UNIT...                     Disable one or more units
+  is-enabled UNIT...                  Print whether units are enabled
+
+Manager State Commands:
+  daemon-reload                       Reload systemd manager configuration
+                                      (after editing a unit file)
+
+Options:
+  -h --help              Show this help
+     --now               Start or stop unit after enabling or disabling it
+
+Unit names may be given with or without the ".service" suffix.
+See the systemctl(1) man page for details.
+(GreenRay AIO simulates the commands and options listed above.)

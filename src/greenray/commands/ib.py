@@ -739,14 +739,21 @@ def ip(ctx, args):
             continue
         admin_up = name not in ctx.node.get("netdev_admin_down", [])
         state = "UNKNOWN" if kind == "loopback" else ("UP" if up else "DOWN")
+        state_col = state
+        if brief and ctx.colorize:  # ip -br -c style
+            state_col = {"UP": "\033[32mUP\033[0m", "DOWN": "\033[31mDOWN\033[0m"}.get(state, state) + " " * (
+                14 - len(state)
+            )
         if brief:
             if obj in ("l", "link"):
                 mac = "00:00:00:00:00:00" if kind == "loopback" else (f"7c:c2:55:1a:00:{node_no(ctx.host):02x}")
                 if kind == "infiniband":
                     mac = _ipoib_hw(ctx.host, idx - 3)
-                out.append(f"{name:<16} {state:<14} {mac}")
+                out.append(f"{name:<16} {state_col if ctx.colorize else f'{state:<14}'} {mac}")
             else:
-                out.append(f"{name:<16} {state:<14} {addr if (up or kind == 'loopback') else ''}".rstrip())
+                out.append(
+                    f"{name:<16} {state_col if ctx.colorize else f'{state:<14}'} {addr if (up or kind == 'loopback') else ''}".rstrip()
+                )
             continue
         flags = (
             ["LOOPBACK", "UP", "LOWER_UP"]

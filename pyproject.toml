@@ -24,7 +24,10 @@ classifiers = [
     "Topic :: System :: Clustering",
     "Topic :: System :: Systems Administration",
 ]
-dependencies = ["pyyaml>=6.0"]
+dependencies = [
+    "pyyaml>=6.0",
+    "rich>=13.7",
+]
 
 [project.urls]
 Homepage = "https://github.com/RehmanaYounis/greenray-aio"
@@ -34,7 +37,13 @@ Issues = "https://github.com/RehmanaYounis/greenray-aio/issues"
 greenray = "greenray.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = [
+    "mypy>=2.4.0",
+    "pytest>=8",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.6",
+    "types-pyyaml>=6.0.12.20260906",
+]
 
 [tool.uv.build-backend]
 module-name = "greenray"

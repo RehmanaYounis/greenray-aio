@@ -29,7 +29,7 @@ def cat(ctx, args):
 def ls(ctx, args):
     paths = [a for a in args if not a.startswith("-")] or [ctx.cwd]
     files = sorted(ctx.node.files)
-    dirs = _known_dirs(ctx)
+    dirs = known_dirs(ctx)
     out = []
     for p in paths:
         if p in ctx.node.files:
@@ -41,7 +41,15 @@ def ls(ctx, args):
         globbed = [f for f in files if fnmatch.fnmatch(f, p)]
         if not children and not globbed and p.rstrip("/") not in dirs:
             raise CommandError(f"ls: cannot access '{p}': No such file or directory", 2)
-        out.extend(sorted(children) or globbed)
+        names = sorted(children) or globbed
+        if ctx.colorize:  # ls --color=auto: directories bold blue, scripts bold green
+            names = [
+                f"\033[01;34m{n}\033[0m"
+                if prefix + n in dirs
+                else (f"\033[01;32m{n}\033[0m" if n.endswith(".sh") else n)
+                for n in names
+            ]
+        out.extend(names)
     return "\n".join(out) + ("\n" if out else "")
 
 
@@ -49,7 +57,7 @@ def ls(ctx, args):
 DEFAULT_DIRS = {"/", "/root", "/etc", "/tmp", "/home", "/var/log", "/etc/modules-load.d", "/etc/profile.d"}
 
 
-def _known_dirs(ctx) -> set[str]:
+def known_dirs(ctx) -> set[str]:
     """Explicit directories (mkdir, scenario setup) plus every parent of an existing file."""
     dirs = set(DEFAULT_DIRS) | {d.rstrip("/") or "/" for d in ctx.node.get("dirs", [])}
     for f in ctx.node.files:
@@ -72,7 +80,7 @@ def echo(ctx, args):
 @command("tee", help="write stdin to a file")
 def tee(ctx, args):
     append = "-a" in args
-    targets = [a for a in args if not a.startswith("-")]
+    targets = [ctx.abspath(a) for a in args if not a.startswith("-")]
     for t in targets:
         ctx.node.files[t] = (ctx.node.files.get(t, "") if append else "") + ctx.stdin
     return ctx.stdin
@@ -81,7 +89,8 @@ def tee(ctx, args):
 @command("touch")
 def touch(ctx, args):
     for a in args:
-        ctx.node.files.setdefault(a, "")
+        if not a.startswith("-"):
+            ctx.node.files.setdefault(ctx.abspath(a), "")
     return ""
 
 
@@ -104,6 +113,9 @@ def cp(ctx, args):
             f"cp: missing destination file operand after '{operands[0]}'\nTry 'cp --help' for more information."
         )
     src, dst = operands[:2]
+    dst = ctx.abspath(dst)
+    if dst in known_dirs(ctx):
+        dst = dst.rstrip("/") + "/" + src.rsplit("/", 1)[-1]
     ctx.node.files[dst] = _read(ctx, src)
     return ""
 
@@ -112,12 +124,30 @@ def cp(ctx, args):
 def mkdir(ctx, args):
     dirs = ctx.node.setdefault("dirs", [])
     for a in args:
-        if not a.startswith("-") and a.rstrip("/") not in dirs:
-            dirs.append(a.rstrip("/"))
+        path = ctx.abspath(a)
+        if not a.startswith("-") and path not in dirs:
+            dirs.append(path)
     return ""
 
 
-@command("cd", "chmod", "chown", "sync")
+@command("cd", help="cd [DIR]: change the working directory (default: home)")
+def cd(ctx, args):
+    target = next((a for a in args if a != "--" and not a.startswith("-")), "~")
+    path = ctx.abspath(target)
+    if path in ctx.node.files:
+        raise CommandError(f"bash: cd: {target}: Not a directory")
+    if path not in known_dirs(ctx):
+        raise CommandError(f"bash: cd: {target}: No such file or directory")
+    ctx.cwd = path
+    return ""
+
+
+@command("pwd", help="pwd: print the working directory")
+def pwd(ctx, args):
+    return ctx.cwd + "\n"
+
+
+@command("chmod", "chown", "sync")
 def noop(ctx, args):
     return ""
 
@@ -203,6 +233,8 @@ def grep(ctx, args):
     if not hits:
         raise CommandError("", 1)
     keep = sorted({j for i in hits for j in range(max(0, i - before), min(len(lines), i + after + 1))})
+    if ctx.colorize and "v" not in flags:  # Ubuntu aliases grep to grep --color=auto
+        return "\n".join(rx.sub(lambda m: f"\033[01;31m\033[K{m.group(0)}\033[m\033[K", lines[j]) for j in keep) + "\n"
     return "\n".join(lines[j] for j in keep) + "\n"
 
 
@@ -289,15 +321,31 @@ def ssh(ctx, args):
         sub = Shell(ctx.state, target)
         sub.ctx.executed = ctx.executed
         return sub.run(" ".join(shlex.quote(a) for a in remote))
+    source = ctx.state.nodes[ctx.host]
+    ctx.saved_cwd[len(ctx.host_stack)] = ctx.cwd
     ctx.host_stack.append(ctx.host)
     ctx.host = target
-    return f"Welcome to {node.os}\nLast login from {ctx.host_stack[-1]}\n"
+    ctx.cwd = "/root"
+    return motd(node, source)
+
+
+def motd(node, source) -> str:
+    """Login banner in the style of Ubuntu / DGX OS (generic text, no vendor artwork)."""
+    gpus = node.get("gpus") or []
+    lines = [f"Welcome to {node.os} (GNU/Linux {node.kernel} x86_64)", ""]
+    lines.append(f" * System:      {node.get('model', 'server')}")
+    if gpus:
+        lines.append(f" * GPUs:        {len(gpus)} x {gpus[0].name}  (driver {node.get('driver_version', '?')})")
+    lines.append(" * Management:  Base Command Manager")
+    lines += ["", f"Last login: Tue Oct 20 09:12:44 2026 from {source.get('ip', source.hostname)}"]
+    return "\n".join(lines) + "\n"
 
 
 @command("exit", "logout")
 def exit_(ctx, args):
     if ctx.host_stack:
         ctx.host = ctx.host_stack.pop()
+        ctx.cwd = ctx.saved_cwd.pop(len(ctx.host_stack), "/root")
         return "logout\n"
     raise CommandError("(you are on the head node; use 'quit' to leave the lab)", 0)
 
@@ -371,9 +419,14 @@ def systemctl(ctx, args):
         if action == "status":
             sub = "running" if st == "active" else ("failed" if st == "failed" else "dead")
             enabled = "enabled" if ctx.node.services_enabled.get(name, True) else "disabled"
+            dot, active = "●", f"{st} ({sub})"
+            if ctx.colorize:  # systemctl colours the unit dot and the Active state
+                colour = {"active": "1;32", "failed": "1;31"}.get(st)
+                if colour:
+                    dot, active = f"\033[{colour}m●\033[0m", f"\033[{colour}m{active}\033[0m"
             out.append(
-                f"● {name}.service\n     Loaded: loaded (/lib/systemd/system/{name}.service; {enabled})\n"
-                f"     Active: {st} ({sub})"
+                f"{dot} {name}.service\n     Loaded: loaded (/lib/systemd/system/{name}.service; {enabled})\n"
+                f"     Active: {active}"
             )
             log = ctx.node.journal.get(name, [])
             if log:
@@ -429,7 +482,10 @@ def journalctl(ctx, args):
 
 @command("dmesg", help="kernel ring buffer (look for NVRM: Xid)")
 def dmesg(ctx, args):
-    return "\n".join(ctx.node.dmesg) + "\n"
+    lines = list(ctx.node.dmesg)
+    if ctx.colorize:  # dmesg --color=auto shows timestamps in green
+        lines = [re.sub(r"^(\[\s*[\d.]+\])", "\033[32m\\1\033[0m", line) for line in lines]
+    return "\n".join(lines) + "\n"
 
 
 @command("lsmod")
@@ -484,6 +540,7 @@ def reboot(ctx, args):
     msg = f"Connection to {ctx.host} closed by remote host. (node rebooted and is back up)\n"
     if ctx.host_stack:
         ctx.host = ctx.host_stack.pop()
+        ctx.cwd = ctx.saved_cwd.pop(len(ctx.host_stack), "/root")
     return msg
 
 
@@ -561,3 +618,16 @@ def kill(ctx, args):
     if not found:
         raise CommandError(f"kill: ({' '.join(targets)}) - No such process")
     return ""
+
+
+@command("man", help="man COMMAND: manual page")
+def man(ctx, args):
+    from ..content import helppages
+
+    names = [a for a in args if not a.startswith("-") and not a.isdigit()]
+    if not names:
+        raise CommandError("What manual page do you want?\nFor example, try 'man man'.")
+    text = helppages.manual(names[0])
+    if text is None:
+        raise CommandError(f"No manual entry for {names[0]}", 16)
+    return text

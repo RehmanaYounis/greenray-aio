@@ -1,0 +1,7 @@
+Usage: printenv [OPTION]... [VARIABLE]...
+Print the value of each environment VARIABLE given.
+With no VARIABLE, print every variable as NAME=VALUE.
+
+      --help     display this help and exit
+
+(GreenRay AIO simulates the options listed above.)

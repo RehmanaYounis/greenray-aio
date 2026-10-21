@@ -1,0 +1,12 @@
+ipmitool version 1.8.18
+
+usage: ipmitool [options...] <command>
+
+       -h             Print this help text
+
+Commands:
+	power status  Report whether the chassis power is on or off
+	sdr           Print the Sensor Data Repository: temperatures, fans, PSUs
+	sel list      Print the System Event Log, oldest entry first
+
+(GreenRay AIO simulates the options listed above.)

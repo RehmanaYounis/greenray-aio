@@ -218,19 +218,17 @@ def find(scenario_id: str) -> Scenario:
     raise KeyError(scenario_id)
 
 
-def similar(scenario: Scenario, exclude: set[str] = frozenset()) -> Scenario | None:
+def similar(scenario: Scenario, exclude: frozenset[str] | set[str] = frozenset()) -> Scenario | None:
     """The scenario sharing the most tags with ``scenario`` (ties: same domain first, then id)."""
-    best, best_key = None, None
-    for other in load_all():
-        if other.id in exclude or other.id == scenario.id:
-            continue
-        overlap = len(set(other.tags) & set(scenario.tags))
-        if not overlap:
-            continue
-        key = (overlap, other.domain == scenario.domain, other.id)
-        if best_key is None or key[:2] > best_key[:2] or (key[:2] == best_key[:2] and other.id < best.id):
-            best, best_key = other, key
-    return best
+    candidates = [
+        (len(set(o.tags) & set(scenario.tags)), o.domain == scenario.domain, o)
+        for o in load_all()
+        if o.id != scenario.id and o.id not in exclude
+    ]
+    candidates = [c for c in candidates if c[0]]
+    if not candidates:
+        return None
+    return min(candidates, key=lambda c: (-c[0], not c[1], c[2].id))[2]
 
 
 def replay_solution(scenario: Scenario, shell) -> list[str]:

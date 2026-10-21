@@ -1,0 +1,43 @@
+IPMITOOL(1)                    User Commands                    IPMITOOL(1)
+
+NAME
+       ipmitool - utility for controlling IPMI-enabled devices
+
+SYNOPSIS
+       ipmitool [-h] <command> [subcommand ...]
+
+DESCRIPTION
+       ipmitool talks to a server's Baseboard Management Controller (BMC)
+       using the Intelligent Platform Management Interface. The BMC keeps
+       working when the host operating system is down, so ipmitool is the
+       usual way to read hardware sensors, inspect hardware events and
+       check chassis power.
+
+OPTIONS
+       -h     Print a short usage summary and exit.
+
+COMMANDS
+       power status
+              Print "Chassis Power is on" or "Chassis Power is off".
+
+       sdr    Print every sensor in the Sensor Data Repository, one per
+              line, as name | reading | status. A status other than "ok"
+              (for example "cr", critical) deserves attention.
+
+       sel list
+              Print the System Event Log. Each entry has an ID, date, time,
+              sensor, event description and whether it was asserted or
+              deasserted. Hardware faults such as fan failures, PSU loss or
+              memory errors are recorded here even after the host reboots.
+
+EXAMPLES
+       ipmitool sel list
+              Look for hardware events logged by the BMC.
+
+       ipmitool sdr | grep -i fan
+              Read the fan sensors.
+
+SEE ALSO
+       dmesg(1), nvidia-smi(1)
+
+GreenRay AIO                     lab manual                     IPMITOOL(1)

@@ -1,0 +1,18 @@
+aliases:
+- mpiexec
+wrapper: true
+value_options:
+- -np
+- -n
+- -c
+- -H
+- -host
+- --host
+- -x
+- --hostfile
+- -hostfile
+- --machinefile
+- -N
+- --mca
+- --map-by
+- --bind-to

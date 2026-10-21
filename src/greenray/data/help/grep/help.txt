@@ -1,0 +1,25 @@
+Usage: grep [OPTION]... PATTERN [FILE]...
+Search each FILE (or standard input) for lines that match PATTERN.
+Example: grep -i 'xid' /var/log/syslog
+
+Pattern selection and interpretation:
+  -E                        treat PATTERN as an extended regular expression
+  -i                        match without regard to letter case
+
+Miscellaneous:
+  -v                        print the lines that do NOT match
+
+Output control:
+  -c                        print only the number of selected lines
+
+Context control:
+  -B, --before-context=NUM  also print NUM lines before each match
+  -A, --after-context=NUM   also print NUM lines after each match
+  -C, --context=NUM         print NUM lines of context on both sides
+      --help                display this help text and exit
+
+Single-letter options can be combined, e.g. -ic or -iv.
+When FILE is absent, grep reads standard input.
+Exit status is 0 if a line is selected, 1 if none is, and 2 on error.
+
+(GreenRay AIO simulates the options listed above.)

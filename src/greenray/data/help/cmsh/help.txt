@@ -1,0 +1,15 @@
+Usage: cmsh [options] ......................... Connect to the local cluster manager
+       cmsh [options] -c "<cmd>; <cmd>; ..." .. Run commands, then exit
+       cmsh [options] -f <file> ............... Run commands read from a file, then exit
+
+Valid options:
+--help|-h ...................................... Show this help and exit
+--command|-c <"cmd1; cmd2; ..."> ............... Execute the given commands and exit
+--file|-f <filename> ........................... Execute the commands in <filename> and exit
+
+Commands inside cmsh are grouped into modes. Enter a mode by typing its
+name; 'help' lists the commands available in the current mode.
+
+Modes: device, category, softwareimage, partition, user, group, profile, main
+
+(GreenRay AIO simulates the options listed above.)

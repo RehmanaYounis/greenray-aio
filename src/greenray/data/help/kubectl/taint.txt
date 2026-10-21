@@ -1,0 +1,38 @@
+Update the taints on one or more nodes.
+
+ A taint is written as key=value:effect (the value is optional). The effect is
+one of NoSchedule, PreferNoSchedule or NoExecute:
+  * NoSchedule        new pods without a matching toleration are not placed here
+  * PreferNoSchedule  the scheduler avoids the node when it can
+  * NoExecute         as NoSchedule, and running pods without a toleration are evicted
+ A trailing dash removes a taint: key:effect- removes one effect, key- removes
+every taint with that key.
+
+Examples:
+  # Keep ordinary pods off a node
+  kubectl taint nodes node01 dedicated=special:NoSchedule
+
+  # Remove that taint again
+  kubectl taint nodes node01 dedicated=special:NoSchedule-
+
+  # Remove all taints with the key "dedicated"
+  kubectl taint nodes node01 dedicated-
+
+  # Taint every node with a label
+  kubectl taint nodes -l disktype=ssd maintenance=true:PreferNoSchedule
+
+  # Replace the value of an existing taint
+  kubectl taint nodes node01 dedicated=other:NoSchedule --overwrite
+
+Options:
+    --all=false:
+        Apply the change to all nodes.
+
+    --overwrite=false:
+        Allow replacing a taint that already exists with the same key and effect.
+
+    -l, --selector='':
+        Apply the change to the nodes that match this selector.
+
+Usage:
+  kubectl taint NODE NAME KEY_1=VAL_1:TAINT_EFFECT_1 ... KEY_N=VAL_N:TAINT_EFFECT_N [options]

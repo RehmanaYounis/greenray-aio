@@ -1,0 +1,10 @@
+Usage: mungekey [OPTIONS]
+
+  -c, --create              Create a new keyfile (/etc/munge/munge.key)
+  -f, --force               Overwrite the keyfile if it already exists
+  -h, --help                Display this help message
+
+munged reads the key only when it starts. Hosts can decode each other's
+credentials only if they share an identical key.
+
+(GreenRay AIO simulates the options listed above.)

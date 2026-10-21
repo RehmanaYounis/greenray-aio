@@ -12,26 +12,45 @@ def list_scenarios(ui: UI) -> None:
     prog = progress.load()["scenarios"]
     scenarios = sc.load_all()
     for d in DOMAINS:
-        ui.out(ui.bold(f"\n{d}  ({int(DOMAIN_WEIGHTS[d] * 100)}% of exam)"))
-        for s in (s for s in scenarios if s.domain == d):
+        items = [s for s in scenarios if s.domain == d]
+        rows, styles = [], []
+        for s in items:
             p = prog.get(s.id)
-            mark = ui.green("✔") if p and p["passed"] else (ui.yellow("…") if p else " ")
-            ui.out(f"  {mark} {s.id:<38} {s.title}  {ui.dim(s.difficulty)}")
+            mark = "✔" if p and p["passed"] else ("…" if p else " ")
+            rows.append([mark, s.id, s.title, s.difficulty])
+            styles.append("green" if mark == "✔" else ("yellow" if mark == "…" else ""))
+        ui.out("")
+        if ui.color:
+            ui.out(ui.bold(f"{d}  ({int(DOMAIN_WEIGHTS[d] * 100)}% of exam)"))
+            ui.out(ui.table(["", "Scenario", "Title", "Level"], rows, styles))
+        else:
+            ui.out(f"{d}  ({int(DOMAIN_WEIGHTS[d] * 100)}% of exam)")
+            for mark, sid, title, level in rows:
+                ui.out(f"  {mark} {sid:<38} {title}  {level}")
 
 
 def show_progress(ui: UI) -> None:
     data = progress.load()
     scenarios = sc.load_all()
-    ui.out(ui.bold("\nHands-on scenarios by domain"))
+    rows = []
     for d in DOMAINS:
         ids = [s.id for s in scenarios if s.domain == d]
         done = sum(bool(data["scenarios"].get(i, {}).get("passed")) for i in ids)
         clean = sum(bool(data["scenarios"].get(i, {}).get("clean_passes")) for i in ids)
         alone = sum(bool(data["scenarios"].get(i, {}).get("independent_passes")) for i in ids)
-        ui.out(
-            f"  {d:<36} passed {done}/{len(ids)}   without hints {clean}/{len(ids)}   "
-            f"as an incident, unguided {alone}/{len(ids)}"
+        rows.append(
+            [d, f"{ui.bar(done, len(ids), 12)} {done}/{len(ids)}", f"{clean}/{len(ids)}", f"{alone}/{len(ids)}"]
         )
+    ui.out("")
+    if ui.color:
+        ui.out(ui.table(["Domain", "Passed", "Without hints", "Unguided incidents"], rows))
+    else:
+        ui.out("Hands-on scenarios by domain")
+        for domain, passed_cell, clean_cell, alone_cell in rows:
+            ui.out(
+                f"  {domain:<36} passed {passed_cell.split()[-1]}   without hints {clean_cell}   "
+                f"as an incident, unguided {alone_cell}"
+            )
     todo = [s.id for s in scenarios if not data["scenarios"].get(s.id, {}).get("passed")]
     if todo:
         ui.out(ui.dim(f"  next up: {', '.join(todo[:5])}"))

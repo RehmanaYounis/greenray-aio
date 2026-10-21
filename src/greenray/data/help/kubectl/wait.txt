@@ -1,0 +1,34 @@
+Experimental: Wait for a specific condition on one or many resources.
+
+ Blocks until every selected object meets the condition given with --for, or
+fails with "timed out waiting for the condition" if one does not. The
+simulator advances the cluster clock by a minute while it waits.
+
+Examples:
+  # Wait until a pod is Ready
+  kubectl wait --for=condition=Ready pod/my-pod
+
+  # Wait for every pod with a label in namespace demo
+  kubectl wait --for=condition=Ready pods -l app=web -n demo
+
+  # Wait for all nodes to be Ready
+  kubectl wait --for=condition=Ready nodes --all
+
+Options:
+    --all=false:
+        Select all objects of the given type.
+
+    --for='':
+        The condition to wait for, e.g. condition=Ready.
+
+    -n, --namespace='':
+        Namespace of the objects (default "default").
+
+    -l, --selector='':
+        Label selector for the objects to wait on.
+
+    --timeout=30s:
+        How long to wait before giving up.
+
+Usage:
+  kubectl wait ([-f FILENAME] | TYPE [NAME | -l label | --all]) --for=condition=NAME [options]

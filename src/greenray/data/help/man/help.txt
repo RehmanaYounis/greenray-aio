@@ -1,0 +1,14 @@
+Usage: man [OPTION...] [SECTION] PAGE...
+
+  Display the on-line manual page for PAGE.
+
+  SECTION is accepted for compatibility and ignored; there is one page per
+  command.
+
+      --help                 give this help list
+
+Examples:
+  man sbatch     manual page for sbatch
+  man 1 grep     section numbers are accepted
+
+(GreenRay AIO simulates the options listed above.)

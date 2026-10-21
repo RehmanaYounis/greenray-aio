@@ -1,0 +1,39 @@
+Show details of a specific resource or group of resources.
+
+ Prints a human-readable report of the selected objects: their configuration,
+current status, conditions and the most recent events that involve them. For
+nodes this includes capacity, allocatable resources, taints and the pods that
+are running there; for pods it includes containers, volumes, tolerations and
+scheduling events.
+
+ Describe is usually the first stop when a pod is Pending or restarting: the
+Events section at the bottom explains what the scheduler or kubelet did.
+
+Examples:
+  # Describe a node
+  kubectl describe node node01
+
+  # Describe a pod
+  kubectl describe pod my-pod
+
+  # Describe a pod in another namespace
+  kubectl describe pod my-pod -n demo
+
+  # Describe every pod with a label
+  kubectl describe pods -l app=web
+
+  # Describe a deployment using TYPE/NAME
+  kubectl describe deployment/web -n demo
+
+Options:
+    -A, --all-namespaces=false:
+        Describe matching objects in all namespaces.
+
+    -n, --namespace='':
+        Namespace of the objects (default "default").
+
+    -l, --selector='':
+        Label selector used when no name is given, e.g. app=web.
+
+Usage:
+  kubectl describe (TYPE [NAME_PREFIX | -l label] | TYPE/NAME) [options]

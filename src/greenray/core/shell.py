@@ -7,11 +7,13 @@ heredocs, `export VAR=val`, `sudo` (ignored, you are root), `ssh <host>` / `exit
 from __future__ import annotations
 
 import pickle
+import posixpath
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from .. import commands
 from .errors import CommandError
-from .state import HEAD
+from .state import HEAD, AttrDict
 
 HEREDOC_PROMPT = "> "
 INTERNAL_ERROR_CODE = 70  # EX_SOFTWARE
@@ -20,17 +22,36 @@ INCONSISTENT_FLAG = "_internal_error"  # set in state.flags when a failed comman
 
 @dataclass
 class Context:
-    state: object
+    state: AttrDict
     host: str = HEAD
     host_stack: list = field(default_factory=list)
+    saved_cwd: dict = field(default_factory=dict)  # ssh depth -> working directory to restore on exit
     stdin: str = ""
     cwd: str = "/root"
     history: list = field(default_factory=list)  # raw command lines entered by the user
     executed: list = field(default_factory=list)  # (host, argv) for every simple command run
+    reader: Callable[[str], str | None] | None = (
+        None  # prompt -> line; lets interactive commands (editors) read from the learner
+    )
+    color: bool = False  # the learner's terminal supports colour (set by the UI, never in tests)
+    tty: bool = False  # the current command writes straight to that terminal (not a pipe or redirect)
 
     @property
     def node(self):
         return self.state.nodes[self.host]
+
+    @property
+    def colorize(self) -> bool:
+        """True when a command should colour its output, like real tools do on a terminal."""
+        return self.color and self.tty
+
+    def abspath(self, path: str) -> str:
+        """Resolve ``path`` like the shell would: ``~`` is /root, relative paths start at the cwd."""
+        if path == "~" or path.startswith("~/"):
+            path = "/root" + path[1:]
+        if not path.startswith("/"):
+            path = posixpath.join(self.cwd, path)
+        return posixpath.normpath(path)
 
     def ran(self, *prefix: str, host: str | None = None) -> bool:
         """True if a command starting with ``prefix`` was executed (optionally on ``host``)."""
@@ -188,8 +209,8 @@ def tokenize(text: str, lookup, substitute) -> list[str]:
 
 
 class Shell:
-    def __init__(self, state, host: str = HEAD):
-        self.ctx = Context(state=state, host=host)
+    def __init__(self, state, host: str = HEAD, color: bool = False):
+        self.ctx = Context(state=state, host=host, color=color)
 
     def _lookup(self, name: str) -> str:
         if name == "HOSTNAME":
@@ -204,9 +225,47 @@ class Shell:
         self.ctx.stdin = stdin
         return out
 
+    def _display_cwd(self) -> str:
+        cwd = self.ctx.cwd
+        return "~" + cwd[len("/root") :] if cwd == "/root" or cwd.startswith("/root/") else cwd
+
     @property
     def prompt(self) -> str:
-        return f"root@{self.ctx.host}:~# "
+        return f"root@{self.ctx.host}:{self._display_cwd()}# "
+
+    def styled_prompt(self) -> str:
+        """Ubuntu's default root prompt colours: bold green user@host, bold blue path."""
+        return f"\033[01;32mroot@{self.ctx.host}\033[00m:\033[01;34m{self._display_cwd()}\033[00m# "
+
+    def _resolve_paths(self, argv: list[str]) -> list[str]:
+        """Make relative or ``~`` file arguments absolute when they name an existing file or directory.
+
+        Commands work with absolute paths internally; this lets learners type
+        ``cat gres.conf`` after ``cd /etc/slurm``, as on a real system.
+        """
+        from ..commands.system import known_dirs
+
+        files, dirs = self.ctx.node.files, None
+        out = [argv[0]]
+        for arg in argv[1:]:
+            prefix, value = "", arg
+            if arg.startswith("-"):
+                if "=" not in arg:
+                    out.append(arg)
+                    continue
+                prefix, _, value = arg.partition("=")
+                prefix += "="
+            if not value or value.startswith("/") or "://" in value or (":" in value and not value.startswith("~")):
+                out.append(arg)
+                continue
+            candidate = self.ctx.abspath(value)
+            if dirs is None:
+                dirs = known_dirs(self.ctx)
+            if value.startswith("~") or candidate in files or candidate in dirs:
+                out.append(prefix + candidate)
+            else:
+                out.append(arg)
+        return out
 
     def run(self, line: str, heredoc_reader=None, record: bool = True) -> str:
         """Run one input line and return its combined output."""
@@ -215,6 +274,8 @@ class Shell:
             return ""
         if record:
             self.ctx.history.append(line)
+        if heredoc_reader is not None:
+            self.ctx.reader = heredoc_reader
         heredoc = None
         if "<<" in line:
             line, heredoc = self._read_heredoc(line, heredoc_reader)
@@ -286,12 +347,14 @@ class Shell:
         stages = [s for s, _ in _split_top(segment, ("|",))]
         data = heredoc or ""
         code = 0
-        for _i, stage in enumerate(stages):
+        for i, stage in enumerate(stages):
             redirect, target = None, None
             parts = _split_top(stage, (">>", ">"))
             if len(parts) > 1:
                 stage = parts[0][0]
-                redirect, target = parts[1][1], parts[1][0].strip()
+                redirect, target = parts[1][1], self.ctx.abspath(parts[1][0].strip())
+            # real tools only colour output that goes straight to the terminal
+            self.ctx.tty = i == len(stages) - 1 and not redirect
             try:
                 argv = tokenize(stage, self._lookup, self._substitute)
             except ValueError as e:
@@ -300,6 +363,7 @@ class Shell:
                 argv = argv[1:]
             if not argv:
                 continue
+            argv = self._resolve_paths(argv)
             self.ctx.stdin = data
             executed_before = len(self.ctx.executed)
             self.ctx.executed.append((self.ctx.host, argv))

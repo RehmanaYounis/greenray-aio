@@ -1,0 +1,13 @@
+Usage:
+	modprobe [options] modulename [module parameters...]
+	modprobe [options] -r modulename...
+
+Load or unload kernel modules, including the modules they depend on.
+
+Management Options:
+	-r, --remove                Unload the named modules instead of loading them
+
+General Options:
+	-h, --help                  show this help
+
+(GreenRay AIO simulates the options listed above.)

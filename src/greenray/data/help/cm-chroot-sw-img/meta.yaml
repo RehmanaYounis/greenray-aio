@@ -1,0 +1,3 @@
+flags:
+- --help
+wrapper: true

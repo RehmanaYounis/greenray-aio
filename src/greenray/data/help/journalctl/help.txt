@@ -1,0 +1,21 @@
+journalctl [OPTIONS...] [MATCHES...]
+
+Query the journal.
+
+Filtering options:
+  -u --unit UNIT             Show logs from the specified unit
+                             (the ".service" suffix is optional)
+
+Output control options:
+  -x --catalog               Add message explanations where available
+  -e --pager-end             Immediately jump to the end in the pager
+     --no-pager              Do not pipe output into a pager
+
+Commands:
+  -h --help                  Show this help text
+
+Without -u, messages from all units are printed. The short form
+"journalctl -xeu UNIT" is the usual way to see why a service failed to start.
+
+See the journalctl(1) man page for details.
+(GreenRay AIO simulates the commands and options listed above.)

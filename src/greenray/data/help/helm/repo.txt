@@ -1,0 +1,30 @@
+
+This command consists of multiple subcommands to interact with chart
+repositories.
+
+It can be used to add, remove, list, and refresh the chart repositories that
+"helm search repo", "helm install" and "helm show" read from.
+
+Example usage:
+    $ helm repo add myrepo https://charts.example.com
+    $ helm repo update
+    $ helm repo list
+    $ helm repo remove myrepo
+
+Usage:
+  helm repo [command]
+
+Available Commands:
+  add         add a chart repository (helm repo add NAME URL [--force-update])
+  list        list chart repositories (alias: ls)
+  remove      remove one or more chart repositories (alias: rm)
+  update      update information of available charts locally from chart repositories (alias: up)
+
+Flags:
+  -h, --help   help for repo
+
+Global Flags:
+      --kube-context string   name of the kubeconfig context to use
+  -n, --namespace string      namespace scope for this request
+
+Use "helm repo [command] --help" for more information about a command.

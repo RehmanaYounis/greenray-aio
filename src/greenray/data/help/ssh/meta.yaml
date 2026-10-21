@@ -1,0 +1,10 @@
+flags:
+- --help
+- -h
+wrapper: true
+value_options:
+- -p
+- -i
+- -l
+- -o
+- -J

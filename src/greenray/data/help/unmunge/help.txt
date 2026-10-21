@@ -1,0 +1,13 @@
+Usage: unmunge [OPTIONS]
+
+  -h, --help                Display this help message
+
+unmunge reads a MUNGE credential on stdin, validates it with the local
+munged and prints its metadata (STATUS, ENCODE_HOST, UID, GID, ...).
+A STATUS other than "Success (0)" means the credential could not be
+decoded, for example because the two hosts hold different keys.
+
+Exit status follows the munge error code (0 on success, 15 for an
+invalid credential).
+
+(GreenRay AIO simulates the options listed above.)

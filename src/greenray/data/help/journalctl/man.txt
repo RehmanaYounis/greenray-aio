@@ -1,0 +1,51 @@
+JOURNALCTL(1)                        journalctl                       JOURNALCTL(1)
+
+NAME
+       journalctl - Print log entries from the systemd journal
+
+SYNOPSIS
+       journalctl [OPTIONS...] [MATCHES...]
+
+DESCRIPTION
+       journalctl prints the log records collected by systemd-journald. Each
+       service writes what it prints on stdout and stderr to the journal, so
+       journalctl is where to look when a service is "failed" or misbehaving.
+
+       Without options, all records are printed, oldest first. Use -u to see
+       the records of a single service.
+
+OPTIONS
+       -u, --unit UNIT
+           Show messages from the given unit only. The ".service" suffix may
+           be left out.
+
+       -x, --catalog
+           Add explanatory help texts to log messages where available.
+
+       -e, --pager-end
+           Jump to the end of the journal in the pager, so the most recent
+           messages are shown first on screen.
+
+       --no-pager
+           Print to the terminal directly instead of through a pager.
+
+       -h, --help
+           Print a short help text and exit.
+
+EXIT STATUS
+       On success, 0 is returned. If there are no matching records,
+       "-- No entries --" is printed.
+
+EXAMPLES
+       Show the log of one service:
+
+           journalctl -u docker
+
+       See why a service failed to start, with explanations:
+
+           journalctl -xeu my-service
+
+SEE ALSO
+       systemctl(1), dmesg(1)
+
+GreenRay AIO                                                      JOURNALCTL(1)

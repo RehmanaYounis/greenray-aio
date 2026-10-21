@@ -1,0 +1,16 @@
+
+Usage:
+ runuser [options] -u <user> [[--] <command> [<argument>...]]
+
+Run a command with substitute user and group ID.
+
+Options:
+ -u, --user <user>               username to run the command as
+
+     --help                      display this help
+
+The command and its arguments follow the user name, optionally after --.
+
+For more details see runuser(1).
+
+(GreenRay AIO simulates the options listed above.)

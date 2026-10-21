@@ -1,0 +1,87 @@
+Usage: srun [OPTIONS(0)... [executable(0) [args(0)...]]] [ : [OPTIONS(N)...]] executable(N) [args(N)...]
+
+Parallel run options:
+  -A, --account=name          account the job's usage is charged to
+  -c, --cpus-per-task=ncpus   CPUs needed by each task
+      --comment=name          free-form comment stored with the job
+  -C, --constraint=list       node feature(s) the job requires
+      --cpu-bind=type         bind tasks to CPUs (cores, sockets, map_cpu:, ...)
+  -d, --dependency=type:jobid[:time]
+                              defer start until the dependency is satisfied
+  -D, --chdir=path            working directory for the tasks
+  -e, --error=err             file for the tasks' standard error
+      --export=names          environment variables passed to the tasks
+      --gres=list             generic resources needed per node
+      --gres-flags=opts       GRES scheduling flags (enforce-binding, ...)
+  -H, --hold                  request the job in a held state
+      --hint=                 task binding hint (compute_bound, nomultithread, ...)
+  -I, --immediate             fail unless resources are available at once
+  -J, --job-name=jobname      name shown for the job in squeue/sacct
+  -k, --no-kill               keep the allocation if a node fails
+  -K, --kill-on-bad-exit      end the step if any task exits non-zero
+  -l, --label                 prefix each output line with its task number
+  -m, --distribution=type     task distribution across nodes and sockets
+      --mpi=type              MPI plugin to use (pmix, pmi2, none, ...)
+  -n, --ntasks=ntasks         number of tasks to launch
+      --nice=value            lower the scheduling priority by value
+      --ntasks-per-node=n     tasks to place on each node
+  -N, --nodes=N               number of nodes; may be a range min[-max]
+  -o, --output=out            file for the tasks' standard output
+      --overlap               let this step share resources with other steps
+  -p, --partition=partition   partition to run the job in
+      --pty                   run task 0 on a pseudo-terminal (srun --pty bash)
+  -q, --qos=qos               quality of service for the job
+  -Q, --quiet                 suppress informational messages
+      --reservation=name      run inside the named reservation
+      --signal=[R:]num[@time] signal the tasks shortly before the time limit
+  -t, --time=minutes          wall-clock time limit (MM, HH:MM:SS, D-HH:MM)
+      --time-min=minutes      smallest acceptable time limit
+  -u, --unbuffered            do not buffer task output
+  -v, --verbose               increase informational output
+
+Constraint options:
+      --mem=MB                real memory required per node
+      --mem-per-gpu=MB        real memory required per allocated GPU
+      --mem-bind=type         bind task memory to NUMA domains
+  -w, --nodelist=hosts...     run only on the listed hosts
+  -x, --exclude=hosts...      never run on the listed hosts
+
+Consumable resources related options:
+      --exclusive             do not share allocated nodes with other jobs
+
+Affinity/Multi-core options: (when the task/affinity plugin is enabled)
+      --sockets-per-node=S    sockets required on each node
+
+GPU scheduling options:
+      --cpus-per-gpu=n        CPUs needed by each allocated GPU
+  -G, --gpus=n                total GPUs for the job, optionally type:count
+      --gpus-per-node=n       GPUs needed on each node
+      --gpus-per-task=n       GPUs needed by each task
+      --ntasks-per-gpu=n      tasks to start for every GPU
+
+Options provided by plugins:
+      --container-image=[USER@][REGISTRY#]IMAGE[:TAG]|PATH
+                              [pyxis] container image to run the tasks in
+      --container-mounts=SRC:DST[:FLAGS][,SRC:DST...]
+                              [pyxis] bind mounts added to the container
+      --container-workdir=PATH
+                              [pyxis] working directory inside the container
+      --container-name=NAME   [pyxis] name the container so steps can reuse it
+      --container-env=NAME[,NAME...]
+                              [pyxis] host variables that override the image's
+      --container-mount-home  [pyxis] bind-mount the user's home directory
+      --no-container-mount-home
+                              [pyxis] do not bind-mount the home directory
+      --container-remap-root  [pyxis] become root inside the container
+      --no-container-remap-root
+                              [pyxis] keep the caller's UID in the container
+      --container-writable    [pyxis] make the container filesystem writable
+      --container-readonly    [pyxis] make the container filesystem read-only
+
+Help options:
+      --help                  show this help message
+
+Other options:
+  -V, --version               output version information and exit
+
+(GreenRay AIO simulates the options listed above.)

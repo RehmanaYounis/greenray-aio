@@ -1,0 +1,20 @@
+
+History prints the revisions of a release.
+
+Each install, upgrade and rollback adds a revision. The table shows when each
+one was made, its status and chart version, and a short description:
+
+    $ helm history my-release
+    REVISION    UPDATED                     STATUS        CHART          APP VERSION    DESCRIPTION
+    1           Mon Oct 01 10:00:00 2026    superseded    mychart-1.0    1.0            Install complete
+    2           Mon Oct 01 11:30:00 2026    deployed      mychart-1.1    1.1            Upgrade complete
+
+Usage:
+  helm history RELEASE_NAME [flags]
+
+Flags:
+  -h, --help   help for history
+
+Global Flags:
+      --kube-context string   name of the kubeconfig context to use
+  -n, --namespace string      namespace scope for this request

@@ -1,0 +1,22 @@
+
+This command lists the releases in the current namespace (or in every
+namespace with --all-namespaces).
+
+For each release it shows the namespace, the current revision, when it was
+last changed, its status (deployed, failed, superseded, ...), and the chart and
+application versions.
+
+Usage:
+  helm list [flags]
+
+Aliases:
+  list, ls
+
+Flags:
+  -A, --all-namespaces   list releases across all namespaces
+  -h, --help             help for list
+  -q, --short            output short (quiet) listing format: release names only
+
+Global Flags:
+      --kube-context string   name of the kubeconfig context to use
+  -n, --namespace string      namespace scope for this request

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .. import config
 
-EMPTY = {"scenarios": {}, "exams": []}
+EMPTY: dict[str, dict | list] = {"scenarios": {}, "exams": []}
 
 
 def _path() -> Path:

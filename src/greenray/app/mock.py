@@ -45,7 +45,7 @@ def run_mock(ui: UI, seed: int | None = None) -> None:
     if bank is None:
         return
     qs = qb.pick(bank, N_QUESTIONS, seed=seed)
-    labs = [LabSession(s) for s in pick_labs(seed)]
+    labs = [LabSession(s, color=ui.color) for s in pick_labs(seed)]
     start = time.time()
     deadline = start + MINUTES * 60
     answers: dict = {}
@@ -66,7 +66,7 @@ def run_mock(ui: UI, seed: int | None = None) -> None:
         ui.out(ui.bold(f"\n--- Exam menu ({left} min left) ---"))
         ui.out(f"  q) Questions ({len(answers)}/{len(qs)} answered)")
         for i, lab in enumerate(labs, 1):
-            ui.out(f"  {i}) Lab {i}: {lab.scenario.title}")
+            ui.out(f"  {i}) Lab {i}: {lab.scenario_required.title}")
         ui.out("  f) Finish and grade")
         choice = read_line(ui, "> ").strip().lower()
         if choice == "q":
@@ -81,7 +81,7 @@ def run_mock(ui: UI, seed: int | None = None) -> None:
 
     elapsed = (time.time() - start) / 60
     res = qb.score(qs, answers)
-    lab_scores = {lab.scenario.id: lab.score() for lab in labs}
+    lab_scores = {lab.scenario_required.id: lab.score() for lab in labs}
     total = combined_score(res["pct"], list(lab_scores.values()))
     verdict = ui.green("PASS") if total >= PRACTICE_PASS_PCT else ui.red("NOT YET")
 
@@ -90,7 +90,7 @@ def run_mock(ui: UI, seed: int | None = None) -> None:
     for d, s in res["per_domain"].items():
         ui.out(f"    {d:<36} {s}")
     for lab in labs:
-        ui.out(f"  Lab {lab.scenario.id}: {lab_scores[lab.scenario.id] * 100:.0f}% of objectives")
+        ui.out(f"  Lab {lab.scenario_required.id}: {lab_scores[lab.scenario_required.id] * 100:.0f}% of objectives")
         show_results(ui, lab.grade())
     ui.out(
         ui.dim(
@@ -111,7 +111,7 @@ def run_mock(ui: UI, seed: int | None = None) -> None:
 
     offer_review(ui, qs, answers, res["missed"], flagged)
     for lab in labs:
-        if lab_scores[lab.scenario.id] < 1 and ui.ask(
-            f"\nShow the solution for lab '{lab.scenario.title}'? [Y/n] "
+        if lab_scores[lab.scenario_required.id] < 1 and ui.ask(
+            f"\nShow the solution for lab '{lab.scenario_required.title}'? [Y/n] "
         ).strip().lower() in ("", "y", "yes"):
-            show_solution(ui, lab.scenario)
+            show_solution(ui, lab.scenario_required)
