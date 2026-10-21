@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import fnmatch
 import re
+import time
+from datetime import timedelta
 
+from ..core import clock
 from ..core.errors import CommandError
 from . import command
 
@@ -326,10 +329,10 @@ def ssh(ctx, args):
     ctx.host_stack.append(ctx.host)
     ctx.host = target
     ctx.cwd = "/root"
-    return motd(node, source)
+    return motd(ctx.state, node, source)
 
 
-def motd(node, source) -> str:
+def motd(state, node, source) -> str:
     """Login banner in the style of Ubuntu / DGX OS (generic text, no vendor artwork)."""
     gpus = node.get("gpus") or []
     lines = [f"Welcome to {node.os} (GNU/Linux {node.kernel} x86_64)", ""]
@@ -337,7 +340,7 @@ def motd(node, source) -> str:
     if gpus:
         lines.append(f" * GPUs:        {len(gpus)} x {gpus[0].name}  (driver {node.get('driver_version', '?')})")
     lines.append(" * Management:  Base Command Manager")
-    lines += ["", f"Last login: Tue Oct 20 09:12:44 2026 from {source.get('ip', source.hostname)}"]
+    lines += ["", f"Last login: {clock.stamp(state)} from {source.get('ip', source.hostname)}"]
     return "\n".join(lines) + "\n"
 
 
@@ -352,7 +355,9 @@ def exit_(ctx, args):
 
 @command("uptime")
 def uptime(ctx, args):
-    return " 10:42:17 up 12 days,  3:11,  1 user,  load average: 0.08, 0.05, 0.01\n"
+    busy = sum(g.utilization for g in ctx.node.gpus) / 100 if ctx.node.gpus else 0.0
+    load = f"{busy + 0.08:.2f}, {busy * 0.8 + 0.05:.2f}, {busy * 0.5 + 0.01:.2f}"
+    return f" {clock.stamp(ctx.state, '%H:%M:%S')} up {clock.uptime_text(ctx.state)},  1 user,  load average: {load}\n"
 
 
 @command("uname")
@@ -483,6 +488,13 @@ def journalctl(ctx, args):
 @command("dmesg", help="kernel ring buffer (look for NVRM: Xid)")
 def dmesg(ctx, args):
     lines = list(ctx.node.dmesg)
+    if "-T" in args or "--ctime" in args:
+        boot = clock.booted(ctx.state)
+
+        def human(m):
+            return "[" + (boot + timedelta(seconds=float(m.group(1)))).strftime("%a %b %d %H:%M:%S %Y") + "]"
+
+        lines = [re.sub(r"^\[\s*([\d.]+)\]", human, line) for line in lines]
     if ctx.colorize:  # dmesg --color=auto shows timestamps in green
         lines = [re.sub(r"^(\[\s*[\d.]+\])", "\033[32m\\1\033[0m", line) for line in lines]
     return "\n".join(lines) + "\n"
@@ -631,3 +643,45 @@ def man(ctx, args):
     if text is None:
         raise CommandError(f"No manual entry for {names[0]}", 16)
     return text
+
+
+@command("clear", help="clear the terminal screen")
+def clear(ctx, args):
+    return "\033[H\033[2J" if ctx.streaming else ""
+
+
+@command("watch", help="watch [-n SECONDS] COMMAND: rerun a command and show its output")
+def watch(ctx, args):
+    from ..core.shell import Shell
+
+    interval, rest = 2.0, list(args)
+    if rest and rest[0] in ("-n", "--interval"):
+        if len(rest) < 2:
+            raise CommandError("watch: option requires an argument -- 'n'")
+        try:
+            interval = max(0.1, float(rest[1]))
+        except ValueError:
+            raise CommandError(f"watch: failed to parse argument: '{rest[1]}'")
+        rest = rest[2:]
+    elif rest and rest[0].startswith("-n"):
+        interval, rest = float(rest[0][2:]), rest[1:]
+    if not rest:
+        raise CommandError("watch: no command given\nUsage: watch [-n seconds] command")
+    command_line = " ".join(rest)
+    sub = Shell(ctx.state, ctx.host, color=ctx.color)
+    sub.ctx.cwd, sub.ctx.executed, sub.ctx.reader = ctx.cwd, ctx.executed, ctx.reader
+    # Real watch runs forever; here it stops after a few refreshes or Ctrl-C so the lab never hangs.
+    rounds = 5 if ctx.streaming else 1
+    try:
+        for i in range(rounds):
+            header = f"Every {interval:.1f}s: {command_line}".ljust(60) + f"{ctx.host}: {clock.stamp(ctx.state)}"
+            screen = ("\033[H\033[2J" if ctx.streaming else "") + header + "\n\n" + sub.run(command_line) + "\n"
+            if not ctx.streaming:
+                return screen
+            ctx.emit(screen)
+            if i < rounds - 1:
+                time.sleep(interval if ctx.live_delay else 0)
+                clock.advance(ctx.state, interval)
+    except KeyboardInterrupt:
+        pass
+    return ""

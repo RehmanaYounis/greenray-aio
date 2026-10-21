@@ -12,6 +12,9 @@ import io
 import os
 import shutil
 import sys
+from collections.abc import Callable, Iterable
+from contextlib import contextmanager
+from pathlib import Path
 
 from rich import box
 from rich.console import Console
@@ -19,14 +22,39 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from ..core.shell import Context
+from .console import LabCompleter, LineReader
+
 ACCENT = "green"  # GreenRay brand colour
 
 
 class UI:
-    def __init__(self, color: bool = True):
+    def __init__(self, color: bool = True, history_file: Path | None = None):
         if os.name == "nt":
             os.system("")  # enables ANSI escape codes in the Windows console
-        self.color = color and sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+        self.interactive = sys.stdin.isatty() and sys.stdout.isatty()
+        self.color = color and self.interactive and not os.environ.get("NO_COLOR")
+        self.history_file = history_file
+        self._reader: LineReader | None = None
+
+    def set_completer(self, words: Iterable[str], context: Callable[[], Context | None]) -> None:
+        """Tab completion for the lab shell; no-op without a terminal."""
+        if self.interactive:
+            self._line_reader().completer = LabCompleter(words, context)
+
+    @contextmanager
+    def private_history(self):
+        """Keep exam answers out of the persistent history."""
+        saved, self._reader = self._reader, LineReader(None) if self.interactive else None
+        try:
+            yield
+        finally:
+            self._reader = saved
+
+    def _line_reader(self) -> LineReader:
+        if self._reader is None:
+            self._reader = LineReader(self.history_file)
+        return self._reader
 
     def _c(self, code: str, s: str) -> str:
         return f"\033[{code}m{s}\033[0m" if self.color else s
@@ -105,21 +133,8 @@ class UI:
     def ask(self, prompt: str) -> str:
         """Read a line; EOF (Ctrl-D / end of piped input) reads as ``quit``."""
         try:
+            if self.interactive:
+                return self._line_reader().read(prompt)
             return input(prompt)
         except EOFError:
             return "quit"
-
-
-def enable_line_editing(words: list[str]) -> None:
-    """Arrow-key history and tab completion where GNU readline exists (Linux, macOS, WSL)."""
-    try:
-        import readline
-    except ImportError:
-        return
-
-    def complete(text: str, i: int):
-        matches = [w for w in words if w.startswith(text)]
-        return matches[i] if i < len(matches) else None
-
-    readline.set_completer(complete)
-    readline.parse_and_bind("tab: complete")
