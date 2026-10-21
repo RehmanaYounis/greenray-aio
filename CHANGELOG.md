@@ -4,7 +4,7 @@ All notable changes are listed here. The project follows [Semantic Versioning](h
 
 ## [0.3.0] - unreleased
 
-First release as **GreenRay AIO** (formerly `aiolab`).
+Renamed to **GreenRay AIO** (formerly `aiolab`). Adds editors, realistic help, terminal realism and CI.
 
 ### Added
 - `greenray` command and package (the `AIOLAB_*` environment variables and `~/.aiolab` progress still work).
@@ -20,3 +20,8 @@ First release as **GreenRay AIO** (formerly `aiolab`).
 ### Added
 - Incident mode, `explain <command>`, guided vs independent progress, the full mock exam, and the reliability fixes (command rollback, realistic errors, Ctrl-C handling).
 - 39 scenarios covering every NCP-AIO blueprint topic, and a 166-question bank.
+
+## [0.1.0]
+
+### Added
+- First simulator core (as `aiolab`): cluster state model, bash-like shell, `nvidia-smi` with MIG, scenario engine with grading, timed question drills and progress tracking.

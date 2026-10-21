@@ -33,6 +33,15 @@ CI runs the same checks on Linux and Windows.
 - Only emit colour when `ctx.colorize` is true (the output goes straight to a colour terminal).
 - Help pages live in `src/greenray/data/help/<command>/`; see `src/greenray/content/helppages.py`. Write original text in the real tool's layout, and list only options the simulator implements.
 
+## Versioning
+
+GreenRay AIO uses [semantic versioning](https://semver.org/):
+
+- Below 1.0, each merged set of features bumps the **minor** version (0.3.0 → 0.4.0), and fixes bump the **patch** version (0.3.0 → 0.3.1).
+- 1.0.0 is reserved for when the project goes public and the scenario format is stable.
+- In the same pull request, bump `version` in `pyproject.toml` and add a section to `CHANGELOG.md`.
+- To publish, tag `vX.Y.Z` on `main` (`git tag v0.4.0 && git push origin v0.4.0`). The release workflow then builds the package and creates the GitHub Release.
+
 ## Content rules
 
 - Original wording only. Do not copy vendor documentation, man pages or exam questions.
