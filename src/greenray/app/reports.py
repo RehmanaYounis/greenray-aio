@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ..content import scenarios as sc
 from ..content.domains import DOMAIN_WEIGHTS, DOMAINS
-from . import progress
+from . import progress, study
 from .ui import UI
 
 
@@ -51,9 +51,9 @@ def show_progress(ui: UI) -> None:
                 f"  {domain:<36} passed {passed_cell.split()[-1]}   without hints {clean_cell}   "
                 f"as an incident, unguided {alone_cell}"
             )
-    todo = [s.id for s in scenarios if not data["scenarios"].get(s.id, {}).get("passed")]
-    if todo:
-        ui.out(ui.dim(f"  next up: {', '.join(todo[:5])}"))
+    nxt = study.recommend(data, limit=1)
+    if nxt:
+        ui.out(ui.dim(f"  next up: {nxt[0].command}"))
 
     ui.out(ui.bold("\nExams"))
     if not data["exams"]:
@@ -65,18 +65,9 @@ def show_progress(ui: UI) -> None:
             f"({e['correct']}/{e['total']} Q, {e['minutes']} min)  {domains}"
         )
 
-    totals: dict[str, list[int]] = {}
-    for e in data["exams"][-5:]:
-        for d, v in e["per_domain"].items():
-            c, t = map(int, v.split("/"))
-            totals.setdefault(d, [0, 0])
-            totals[d][0] += c
-            totals[d][1] += t
-    if totals:
-        worst, (c, t) = min(totals.items(), key=lambda kv: kv[1][0] / max(1, kv[1][1]))
+    weak = study.weakest_domain(data)
+    if weak:
+        worst, pct = weak
         ui.out(
-            ui.yellow(
-                f"\nWeakest domain (last 5 exams): {worst} ({100 * c / max(1, t):.0f}%). "
-                f'Drill it: greenray exam -d "{worst}"'
-            )
+            ui.yellow(f'\nWeakest domain (last 5 exams): {worst} ({pct:.0f}%). Drill it: greenray exam -d "{worst}"')
         )

@@ -71,7 +71,7 @@ hints:
   - "`kubectl get pods -n kube-system -o wide | grep nvidia`: which nodes have the crashing pods, and what do they have in common?"
   - "Read the device plugin log (`kubectl logs -n kube-system <pod>`). 'could not load NVML library' inside the container, while nvidia-smi works on the host, means the container was started without the NVIDIA runtime hook."
   - "Compare /etc/containerd/config.toml (or `crictl info`) on dgx-01 and dgx-03. The static device plugin manifest sets no runtimeClassName, so it uses containerd's *default* runtime."
-  - "On each re-imaged node: `nvidia-ctk runtime configure --runtime=containerd --set-as-default`, then `systemctl restart containerd`. The crashing pods recover on their next restart."
+  - "On each re-imaged node: nvidia-ctk runtime configure for the containerd runtime, with --set-as-default, then restart containerd. The crashing pods recover on their next restart."
 references:
   - NVIDIA k8s-device-plugin README - Prerequisites / Configure containerd
   - NVIDIA Container Toolkit - Installing the toolkit, Configuring containerd

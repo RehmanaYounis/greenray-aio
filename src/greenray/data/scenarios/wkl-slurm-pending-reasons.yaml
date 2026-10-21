@@ -68,7 +68,7 @@ hints:
   - "The last column of squeue, NODELIST(REASON), is the scheduler telling you why. scontrol show job <id> and scontrol show partition give the details."
   - "PartitionDown means the partition's State is DOWN: jobs queue but never start. PartitionTimeLimit means the job's TimeLimit is longer than the partition's MaxTime."
   - "--gres=gpu:N is per node. No DGX H100 node has 16 GPUs, so slurmctld rejects the job with 'Requested node configuration is not available'."
-  - "scontrol update partitionname=batch state=up; scontrol update jobid=2002 timelimit=04:00:00; edit ddp.sbatch to -N 2 and --gres=gpu:8, then sbatch it again."
+  - "Three separate fixes: bring the batch partition back up (scontrol update partitionname=... state=up), raise job 2002's time limit (scontrol update jobid=... timelimit=...), and edit ddp.sbatch to -N 2 and --gres=gpu:8, then sbatch it again."
 references:
   - Slurm squeue man page - JOB REASON CODES
   - Slurm scontrol man page (update PartitionName / JobId)

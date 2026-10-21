@@ -7,9 +7,9 @@ Layout, both bundled and external::
     labs/...                       SOLUTION.md files for the real-hardware labs
 
 The package ships a complete set under ``data/solutions``. An external directory
-takes precedence so authors can work on unreleased content: ``$GREENRAY_SOLUTIONS``
-if set, else ``<repo>/solutions``, else a sibling or home-directory clone named
-``greenray-aio-solutions``.
+takes precedence, file by file, so authors can work on unreleased content:
+``$GREENRAY_SOLUTIONS`` if set, else ``<repo>/solutions``, else a sibling or
+home-directory clone named ``greenray-aio-solutions``.
 """
 
 from __future__ import annotations
@@ -67,13 +67,14 @@ def missing_message() -> str:
 
 @cache
 def _load(rel: str) -> dict:
+    """An external directory overrides file by file, so it can carry only unreleased content."""
     base = solutions_dir()
     if base is None:
         return {}
-    path = base / rel
-    if not path.is_file():
-        return {}
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    for path in (base / rel, BUNDLED / rel):
+        if path.is_file():
+            return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return {}
 
 
 def scenario_solution(scenario_id: str) -> dict:

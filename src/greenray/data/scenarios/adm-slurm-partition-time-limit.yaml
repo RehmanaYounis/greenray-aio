@@ -1,0 +1,51 @@
+id: adm-slurm-partition-time-limit
+title: Put a two-day time limit on the defq partition
+domain: Administration
+difficulty: easy
+time_limit_min: 10
+tags: [slurm, slurm.conf, partition, reconfigure, on-ramp]
+briefing: |
+  Change request CR-118, approved for today:
+
+    "Jobs on defq can currently run forever (MaxTime=INFINITE). Cluster policy
+    is a maximum of 2 days per job. Set MaxTime for defq to 2-00:00:00."
+
+  alice's job 2301 has been running on dgx-01 for a day and must not be
+  interrupted. Make the change in /etc/slurm/slurm.conf on the head node and
+  make slurmctld pick it up without restarting daemons or cancelling anything.
+  In this lab slurm.conf is edited directly; on a BCM cluster you would make
+  the same change through cmsh (wlm mode) or in the file BCM generates.
+objectives:
+  - /etc/slurm/slurm.conf on bcm-head gives the defq partition MaxTime=2-00:00:00
+  - slurmctld has re-read its configuration, so scontrol show partition reports the new limit
+  - alice's job 2301 is still running
+setup:
+  - python: |
+      state.slurm.users['alice'] = {'name': 'alice', 'default_account': 'root'}
+      state.slurm.jobs.append({
+          'id': 2301, 'name': 'llama-sft', 'user': 'alice', 'partition': 'defq', 'state': 'RUNNING',
+          'exit_code': '0:0', 'num_nodes': 1, 'gpus_per_node': 8, 'nodelist': ['dgx-01'],
+          'submit_time': -90000, 'start_time': -86400, 'end_time': None, 'batch': True,
+          'command': '/home/alice/sft/run.sbatch', 'duration': None, 'time_limit': None})
+      state.slurm.next_job_id = 2302
+      n = state.slurm.nodes['dgx-01']
+      n.state = 'ALLOCATED'
+      n.gres_used = 'gpu:h100:8'
+      n.alloc_cpus = 224
+checks:
+  - desc: slurm.conf on bcm-head sets MaxTime=2-00:00:00 on the defq PartitionName line
+    expr: "re.search(r'^PartitionName=defq\\b.*\\bMaxTime=2-00:00:00\\b', file('bcm-head', '/etc/slurm/slurm.conf'), re.M | re.I) is not None"
+  - desc: slurmctld reports MaxTime=2-00:00:00 for defq (configuration re-read)
+    expr: "slurm.partitions['defq'].max_time == '2-00:00:00'"
+  - desc: alice's job 2301 is still running
+    expr: "jobs(id=2301) and jobs(id=2301)[0].state == 'RUNNING'"
+  - desc: you checked the partition with scontrol
+    expr: ran(r'^scontrol show (partition|part)')
+hints:
+  - "Partitions are the PartitionName= lines in /etc/slurm/slurm.conf on the head node. scontrol show partition defq shows what the controller is using right now; compare it with the file."
+  - "Edit the file with nano, vim or sed -i. Slurm time limits are written days-hours:minutes:seconds, so two days is 2-00:00:00."
+  - "slurmctld reads slurm.conf when it starts and when an administrator asks it to re-read the file. scontrol has a subcommand for that; it does not touch running jobs. Check with scontrol show partition afterwards."
+references:
+  - Slurm slurm.conf man page (PartitionName, MaxTime)
+  - Slurm scontrol man page (reconfigure)
+  - BCM Administrator Manual, Slurm configuration (wlm mode in cmsh)

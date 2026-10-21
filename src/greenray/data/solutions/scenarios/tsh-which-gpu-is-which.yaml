@@ -1,0 +1,42 @@
+# Private solution for scenario tsh-which-gpu-is-which
+solution:
+  - sinfo -N -n dgx-03
+  - ssh dgx-03
+  - ipmitool sel list
+  - dmesg | grep -i 5d:00
+  - nvidia-smi --query-gpu=index,pci.bus_id,uuid,serial --format=csv
+  - nvidia-smi -q -i 3 | grep -iE 'bus id|uuid|serial'
+  - exit
+  - |
+    cat > /root/gpu-report-dgx-03.txt <<EOF
+    Node: dgx-03
+    PCI bus id: 0000:5d:00.0 (nvidia-smi: 00000000:5D:00.0)
+    GPU index: 3
+    UUID: GPU-7f3a0303-1c2e-4b5a-9d0e-0303a1b2c3d4
+    Serial: 1652303003417
+    Symptom: PCIe correctable errors (RxErr) in BMC SEL and dmesg, 3 events in 24 h; no job impact yet
+    EOF
+  - cat /root/gpu-report-dgx-03.txt
+explanation: |
+  Three different tools talk about the same GPU with three different names. The
+  BMC and the kernel use the PCI bus address (0000:5d:00.0); nvidia-smi numbers
+  GPUs 0 to 7 by bus order; the driver, DCGM and Kubernetes use the UUID; and
+  the service record uses the serial number printed on the board. The job here is
+  to translate between them without changing anything.
+
+  nvidia-smi --query-gpu prints any combination of those fields in one table,
+  which is the fastest way to map bus id 5D:00.0 to index 3. nvidia-smi -q
+  confirms it: every GPU's block is headed by its bus id and lists the serial and
+  UUID. dmesg shows the kernel's AER messages for the same address (corrected
+  physical-layer receiver errors), and ipmitool sel list shows the BMC entries
+  the alert came from.
+
+  Correctable errors are retried by the link, so nothing fails yet. They are still
+  worth a swap when they recur, because they usually precede uncorrectable ones.
+  Resetting or draining the GPU now would only cost the users a node.
+edge_cases:
+  - "The nvidia-smi index can change after a GPU is removed or falls off the bus: the remaining GPUs are renumbered. The UUID and serial never change, which is why the report must carry them."
+  - "/dev/nvidia<N> minor numbers usually match the nvidia-smi index, but not always (MIG, driver reloads, CUDA_DEVICE_ORDER). nvidia-smi -q prints 'Minor Number' to check."
+  - "Inside a container or a Slurm job, GPU 0 is the first GPU of the allocation, not of the node. Map bus ids from the host, not from inside a job."
+  - "Uncorrectable PCIe errors, or an Xid 79 (fallen off the bus), are a different situation: then the GPU is gone from nvidia-smi and the node must be drained."
+  - "DGX H100 documents which physical slot each bus id belongs to. Hardware support still wants the serial, because the slot layout is the same on every unit and the serial is unique."

@@ -3,10 +3,12 @@
 greenray                     interactive menu
 greenray list                scenarios by domain, with your status
 greenray lab <id>            hands-on scenario (practice mode)
-greenray mock                full mock exam: 30 questions + 3 labs, 120 minutes
+greenray mock [--labs-only]  full mock exam: 30 questions + 3 labs, 120 minutes
 greenray exam [-n] [-m] [-d] question drill
 greenray sandbox             healthy cluster, free practice
 greenray progress            scores and weakest domain
+greenray next                what to practise next
+greenray plan                four-week study schedule
 greenray validate            content self-test
 """
 
@@ -20,11 +22,12 @@ from .app.exam import run_exam
 from .app.lab import pick_incident, run_lab
 from .app.mock import run_mock
 from .app.reports import list_scenarios, show_progress
+from .app.study import show_next, show_plan
 from .app.ui import UI
 from .content import scenarios as sc
 from .content import solutions
 from .content.domains import DOMAINS
-from .content.validate import check_scenario, structural_problems
+from .content.validate import check_scenario, hint_leaks, structural_problems
 
 MENU = """\
 0  Incident        investigate a random problem; root cause hidden
@@ -34,6 +37,8 @@ MENU = """\
 4  Domain drill    20 questions from one domain
 5  Sandbox         a healthy cluster to explore
 6  Progress        what you have passed and your weakest domain
+7  Next            what to practise next
+8  Plan            a four-week study schedule
 q  Quit"""
 
 
@@ -71,6 +76,10 @@ def menu(ui: UI) -> None:
             run_lab(ui, None)
         elif choice == "6":
             show_progress(ui)
+        elif choice == "7":
+            show_next(ui)
+        elif choice == "8":
+            show_plan(ui)
         elif choice in ("q", "quit"):
             return
 
@@ -132,6 +141,9 @@ def validate(ui: UI) -> int:
             err = check_scenario(s) if s.has_solution else "no reference solution in the solutions repo"
             ui.out(f"{ui.red('BAD') if err else ui.green('ok ')} {s.id}" + (f": {err}" if err else ""))
             problems += [err] if err else []
+        for leak in hint_leaks():
+            ui.out(ui.red(f"BAD {leak}"))
+            problems.append(leak)
     ui.out(f"\n{len(sc.load_all())} scenarios, {'no' if not problems else len(problems)} problems")
     return 1 if problems else 0
 
@@ -148,13 +160,16 @@ def build_parser() -> argparse.ArgumentParser:
     inc.add_argument("-d", "--domain", choices=DOMAINS)
     inc.add_argument("-t", "--topic", help="scenario tag, e.g. slurm, kubernetes, bcm, mig, infiniband")
     inc.add_argument("--id", help="retry a specific scenario as an incident (its id is known, objectives stay hidden)")
-    sub.add_parser("mock", help="full mock exam: 30 questions + 3 labs in 120 minutes")
+    mock = sub.add_parser("mock", help="full mock exam: 30 questions + 3 labs in 120 minutes")
+    mock.add_argument("--labs-only", action="store_true", help="the 3 labs alone in 40 minutes (exam-day pacing)")
     ex = sub.add_parser("exam", help="timed question drill")
     ex.add_argument("-n", type=int, default=60, help="number of questions (default 60)")
     ex.add_argument("-m", type=int, default=120, help="minutes (default 120)")
     ex.add_argument("-d", "--domain", choices=DOMAINS)
     sub.add_parser("sandbox", help="healthy cluster, nothing graded")
     sub.add_parser("progress", help="your scores and weakest domain")
+    sub.add_parser("next", help="what to practise next")
+    sub.add_parser("plan", help="a four-week study schedule covering every scenario")
     sub.add_parser("validate", help="check scenarios and questions")
     sub.add_parser("doctor", help="show version, environment and where solutions come from")
     return p
@@ -173,13 +188,17 @@ def main(argv: list[str] | None = None) -> int:
         elif args.cmd == "lab":
             run_lab(ui, sc.find(args.id))
         elif args.cmd == "mock":
-            run_mock(ui)
+            run_mock(ui, labs_only=args.labs_only)
         elif args.cmd == "exam":
             run_exam(ui, n=args.n, minutes=args.m, domain=args.domain)
         elif args.cmd == "sandbox":
             run_lab(ui, None)
         elif args.cmd == "progress":
             show_progress(ui)
+        elif args.cmd == "next":
+            show_next(ui)
+        elif args.cmd == "plan":
+            show_plan(ui)
         elif args.cmd == "validate":
             return validate(ui)
         elif args.cmd == "doctor":

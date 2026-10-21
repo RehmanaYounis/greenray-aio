@@ -6,6 +6,19 @@ This maps every topic in the NCP-AIO blueprint to the hands-on scenarios (`green
 
 **Topic sources.** The domain names and weights come from the official page (Installation and Deployment 31%, Administration 23%, Workload Management 23%, Troubleshooting and Optimization 23%). The topic bullets are paraphrased from public summaries of the blueprint. Official materials win if they differ.
 
+## On-ramp (start here)
+
+Six short scenarios, ten minutes each, for the first week. They practise the Linux and cluster basics every other scenario assumes: reading logs, editing a configuration file and applying it, submitting a job, reading pod events, reading BCM settings, and naming a GPU three different ways.
+
+| Skill | Scenario |
+| --- | --- |
+| Reading Slurm accounting and node logs (`sacct`, `journalctl`, `dmesg`) | `tsh-first-look-at-logs` |
+| Editing `slurm.conf` and making slurmctld re-read it | `adm-slurm-partition-time-limit` |
+| Writing and submitting a GPU batch script (`sbatch`, `squeue`, `sacct`) | `wkl-slurm-first-gpu-job` |
+| Reading pod events and node labels (`kubectl describe`, `nodeSelector`) | `wkl-k8s-pod-pending-nodeselector` |
+| Reading device, category and image settings in `cmsh` | `adm-bcm-cmsh-inventory` |
+| Mapping PCI bus id, index, UUID and serial of a GPU (`nvidia-smi`) | `tsh-which-gpu-is-which` |
+
 ## Installation and Deployment (31%)
 
 | Topic | Hands-on scenarios |
@@ -24,10 +37,10 @@ This maps every topic in the NCP-AIO blueprint to the hands-on scenarios (`green
 
 | Topic | Hands-on scenarios |
 | --- | --- |
-| BCM monitoring, node status, power control | `adm-bcm-power-and-status` |
+| BCM monitoring, node status, power control | `adm-bcm-power-and-status`, `adm-bcm-cmsh-inventory` |
 | BCM patching and image synchronisation (grabimage / imageupdate) | `ins-bcm-softwareimage-update`, `adm-bcm-grabimage-sync` |
 | BCM users and roles | `adm-bcm-user-role` |
-| Slurm partitions, QOS and limits | `adm-slurm-partition-qos` |
+| Slurm partitions, QOS and limits | `adm-slurm-partition-qos`, `adm-slurm-partition-time-limit` |
 | Slurm accounts and fairshare | `adm-slurm-fairshare-accounts` |
 | MIG configuration | `adm-mig-h100-1g` |
 | MIG in Kubernetes | `adm-k8s-mig-mixed-strategy` |
@@ -40,10 +53,10 @@ This maps every topic in the NCP-AIO blueprint to the hands-on scenarios (`green
 
 | Topic | Hands-on scenarios |
 | --- | --- |
-| Slurm job submission and pending reasons | `wkl-slurm-pending-reasons` |
+| Slurm job submission and pending reasons | `wkl-slurm-first-gpu-job`, `wkl-slurm-pending-reasons` |
 | Multi-node Slurm GPU jobs | `wkl-slurm-multinode-sbatch` |
 | Containers in Slurm (pyxis/enroot) | `wkl-pyxis-container-job` |
-| Kubernetes GPU pods and scheduling | `wkl-k8s-pod-pending-gpu` |
+| Kubernetes GPU pods and scheduling | `wkl-k8s-pod-pending-nodeselector`, `wkl-k8s-pod-pending-gpu` |
 | Taints, tolerations and node selection | `wkl-k8s-taint-toleration` |
 | Run:ai workload submission and fractional GPUs | `wkl-runai-fractional-gpu` |
 
@@ -51,6 +64,7 @@ This maps every topic in the NCP-AIO blueprint to the hands-on scenarios (`green
 
 | Topic | Hands-on scenarios |
 | --- | --- |
+| GPU identification (bus id, index, UUID, serial) | `tsh-which-gpu-is-which` |
 | XID errors and GPUs falling off the bus | `tsh-xid79-drained-node` |
 | ECC and row remapping | `tsh-ecc-row-remap` |
 | DCGM diagnostics | `tsh-dcgm-diag-failure` |
@@ -64,3 +78,4 @@ This maps every topic in the NCP-AIO blueprint to the hands-on scenarios (`green
 | Docker / container GPU access | `tsh-docker-gpu-runtime` |
 | Kubernetes GPU stack failures | `tsh-device-plugin-crashloop` |
 | Slurm node DOWN (munge, slurmd) | `tsh-slurm-node-down-munge` |
+| Reading logs: job failures, OOM | `tsh-first-look-at-logs` |

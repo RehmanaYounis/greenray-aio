@@ -67,7 +67,7 @@ edge_cases:
 - `greenray lab <id>` (guided) shows the title, briefing and objectives.
 - `greenray incident` shows only the briefing, so write the **briefing as an incident report**: symptoms, impact, and every constraint the learner must respect (e.g. "don't kill bob's job"). It must never name the root cause.
 - Objectives and check descriptions may name the cause. In incident mode they stay hidden until solved, or until the learner chooses `objectives`.
-- Hints should go from a pointer to an area, to a diagnostic command, to (only in the last hint) something close to the fix. The last hint is shown only after confirmation.
+- Hints should go from a pointer to an area, to a diagnostic command, to (only in the last hint) something close to the fix. The last hint is shown only after confirmation. A hint may name the tool and the setting, but never quotes a fix command from the solution verbatim; `greenray validate` and the test-suite check this by replaying the solution and comparing every state-changing step with every hint.
 
 ## Writing checks
 

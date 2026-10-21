@@ -64,7 +64,7 @@ checks:
 hints:
   - "DCGM works on groups. On dgx-03: dcgmi group -c allgpus --default, then dcgmi health -g <id> -s mn (or -s a for everything), then dcgmi health -g <id> -c."
   - "Health watches only report on the systems you watch. A check with no watches set says Healthy whatever the hardware is doing."
-  - "dcgmi diag -r 3 runs the integration, hardware and stress tests and prints which GPUs failed which test. Read the error lines."
+  - "A level-3 diagnostic (dcgmi diag with -r 3) runs the integration, hardware and stress tests and prints which GPUs failed which test. Read the error lines."
   - "scontrol update nodename=dgx-03 state=drain reason=\"...\" lets the running job finish (DRAINING). state=down would kill it. Then run nvidia-bug-report.sh on dgx-03 and hwticket create --node dgx-03 --component gpu --summary \"...\"."
 references:
   - NVIDIA DCGM User Guide - Health Monitoring and Active Diagnostics

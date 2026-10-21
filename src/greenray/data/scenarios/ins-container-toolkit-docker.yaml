@@ -50,9 +50,9 @@ checks:
     expr: "any(c['host'] == 'dgx-03' and c['gpus'] == 8 for c in flags.get('gpu_containers', []))"
 hints:
   - "Docker's --gpus flag is served by the NVIDIA Container Toolkit (nvidia-container-runtime-hook). Is it installed? Try `dpkg -l | grep nvidia-container` or `nvidia-ctk --version` on dgx-03."
-  - "A new apt repository is only visible after the package lists are refreshed: `apt-get update`, then `apt-get install -y nvidia-container-toolkit` (without -y, apt asks for confirmation and this shell answers no)."
-  - "Installing the packages does not touch Docker's config. `nvidia-ctk runtime configure --runtime=docker` writes the nvidia runtime into /etc/docker/daemon.json. dockerd only reads that file, and only looks for the toolkit hook, when it starts, so restart it: `systemctl restart docker`."
-  - "Verify: `docker info | grep -i runtime`, then `docker run --rm --gpus all nvcr.io/nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi`."
+  - "A new apt repository is only visible after the package lists are refreshed (apt-get update). Then install the nvidia-container-toolkit package; without -y, apt asks for confirmation and this shell answers no."
+  - "Installing the packages does not touch Docker's config. nvidia-ctk runtime configure, told which runtime to configure (--runtime=docker), writes the nvidia runtime into /etc/docker/daemon.json. dockerd only reads that file, and only looks for the toolkit hook, when it starts, so restart the docker service afterwards."
+  - "Verify: `docker info | grep -i runtime` should list nvidia, then run a CUDA base image from nvcr.io with --gpus all and nvidia-smi as the command."
 references:
   - NVIDIA Container Toolkit - Installation Guide (apt) and Configuring Docker
   - NVIDIA Container Toolkit - Specialized configurations with Docker (NVIDIA_VISIBLE_DEVICES, --gpus)

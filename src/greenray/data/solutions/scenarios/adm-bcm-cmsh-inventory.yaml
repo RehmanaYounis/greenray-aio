@@ -1,0 +1,32 @@
+# Private solution for scenario adm-bcm-cmsh-inventory
+solution:
+  - cmsh -c "device; list"
+  - cmsh -c "device; use dgx-03; show"
+  - cmsh -c "category; use dgx-h100; show"
+  - cmsh -c "softwareimage; list"
+  - |
+    cat > /root/cmdb-dgx-03.txt <<EOF
+    MAC: 7C:C2:55:1A:00:03
+    Category: dgx-h100
+    Software image: dgx-os-6.2-h100-image
+    Image kernel: 5.15.0-1042-nvidia
+    EOF
+  - cat /root/cmdb-dgx-03.txt
+explanation: |
+  BCM identifies a node by the MAC address of its provisioning interface, which is
+  why device list prints it next to the hostname. The other three facts are a
+  chain of inheritance: the node belongs to a category, the category names the
+  software image it is provisioned from, and the image carries a kernel version.
+  device show prints the inherited values and marks their origin ("from category
+  dgx-h100"), category show confirms the image, and softwareimage list shows the
+  kernel of every image on the head node.
+
+  cmsh in one-shot mode (-c) runs a semicolon-separated list of commands and
+  exits, which makes it easy to script and to record in a ticket. Nothing here
+  needed set or commit, so the cluster is unchanged.
+edge_cases:
+  - "A node can override its category's software image (set softwareimage on the device). device show then prints the image without 'from category', and the category's image is no longer what the node boots."
+  - "Changing a MAC in BCM is a real operation (a replaced motherboard or NIC): device; use <node>; set mac <new>; commit. Until that is done the node PXE-boots as an unknown device."
+  - "softwareimage list shows the kernel installed in the image directory. The running kernel on a node can differ if the image was updated but the node not yet re-provisioned; uname -r on the node tells you what it actually runs."
+  - "In interactive cmsh the same commands work one per line, with Tab completion. The exam environment usually provides the interactive shell."
+  - "cmsh must run on a head node. On a compute node the command is not available and the CMDaemon API is reached through cmsh on the head or through the BCM Python client."

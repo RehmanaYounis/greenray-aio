@@ -57,8 +57,8 @@ checks:
 hints:
   - "On dgx-04: nvidia-smi -q -d ROW_REMAPPER (or --query-gpu=index,remapped_rows.pending,remapped_rows.failure --format=csv). Pending: Yes means the spare row is reserved but only takes effect after a GPU reset."
   - "A reset needs the GPU to be idle. Drain the node first so no new job lands on it: scontrol update nodename=dgx-04 state=drain reason=\"...\"."
-  - "The job is requeue-safe. scontrol requeue 3101 frees the node and the job restarts elsewhere from its checkpoint. scancel would throw the allocation away."
-  - "Once the GPU is idle: nvidia-smi -r -i 6 on dgx-04, check that Pending is No, then scontrol update nodename=dgx-04 state=resume."
+  - "The job is requeue-safe. Requeueing job 3101 with scontrol frees the node and the job restarts elsewhere from its checkpoint. scancel would throw the allocation away."
+  - "Once the GPU is idle: reset GPU 6 on dgx-04 with nvidia-smi (-r together with -i), check that Pending is No, then resume the node with scontrol update."
 references:
   - NVIDIA GPU Memory Error Management (row remapping) documentation
   - NVIDIA GPU Xid Errors documentation (Xid 63, 64, 94, 95)

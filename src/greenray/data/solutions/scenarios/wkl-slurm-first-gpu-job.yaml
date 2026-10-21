@@ -1,0 +1,36 @@
+# Private solution for scenario wkl-slurm-first-gpu-job
+solution:
+  - sinfo
+  - |
+    cat > /root/hello-gpu.sbatch <<EOF
+    #!/bin/bash
+    #SBATCH --job-name=hello-gpu
+    #SBATCH --gres=gpu:1
+    #SBATCH --time=00:05:00
+    nvidia-smi -L
+    EOF
+  - cat /root/hello-gpu.sbatch
+  - sbatch /root/hello-gpu.sbatch
+  - squeue
+  - squeue
+  - sacct -j 1001 --format=JobID,JobName,State,ExitCode,NodeList
+  - ls
+  - cat slurm-1001.out
+explanation: |
+  sbatch takes a script whose #SBATCH lines are read as if they were command-line
+  options. --gres=gpu:1 asks the GRES scheduler for one GPU on the node;
+  --time=00:05:00 caps the run and lets the scheduler backfill it into small gaps.
+  Without a GPU request the job would run on a GPU node but see no GPU at all,
+  because cgroups restrict devices to what was allocated.
+
+  squeue lists only pending and running jobs. Once the job finishes it disappears
+  from squeue and only sacct, which reads the accounting database, still shows it,
+  with its State and ExitCode. The output lands in slurm-<jobid>.out in the
+  submission directory unless --output says otherwise, and because the job was
+  given exactly one GPU, nvidia-smi -L inside it prints a single line.
+edge_cases:
+  - "sbatch refuses a file that does not start with #! ('This does not look like a batch script'). The shebang is not optional."
+  - "--gpus=1 and --gpus-per-node=1 are newer spellings that also work with GRES-based GPU scheduling; --gres=gpu:1 is the one the exam material uses most. A type can be added: --gres=gpu:h100:1."
+  - "A job pending with reason Resources or Priority is normal on a busy cluster; a reason such as ReqNodeNotAvail or PartitionTimeLimit means the request itself can never be satisfied. squeue -j <id> -o '%r' shows it."
+  - "Job output written with --output=%x-%j.out uses the job name and id, which is easier to find than slurm-<jobid>.out when many jobs run."
+  - "srun --gres=gpu:1 nvidia-smi -L does the same thing interactively and is a quick way to test a node's GPU visibility without writing a script."

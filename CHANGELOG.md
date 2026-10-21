@@ -2,6 +2,22 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - 2026-10-21
+
+Teaches better.
+
+### Added
+- Six on-ramp scenarios for the first week: reading Slurm accounting and node logs, editing slurm.conf and reconfiguring, a first GPU batch job, a Pending pod with a wrong node selector, a read-only cmsh inventory, and mapping a GPU's bus id to its index, UUID and serial.
+- `greenray next` recommends what to practise from your progress; `greenray plan` prints a four-week schedule covering every scenario, with passed labs ticked.
+- `greenray mock --labs-only`: the three labs alone in 40 minutes. Every mock now ends with a report card: per-domain bars over questions and labs, and a practise-next list.
+- A recording kit for the README demo under `docs/demo/`, a code of conduct and Dependabot configuration.
+
+### Changed
+- Hints name the tool and the setting instead of quoting the fix command; `greenray validate` and the test-suite reject a hint that quotes a state-changing solution step.
+- On-ramp scenarios are never picked as mock-exam labs.
+- An external solutions directory overrides the bundled solutions file by file.
+- `nvidia-smi -q` prints the PCI block (bus id) and the minor number.
+
 ## [0.5.1] - 2026-10-21
 
 ### Fixed

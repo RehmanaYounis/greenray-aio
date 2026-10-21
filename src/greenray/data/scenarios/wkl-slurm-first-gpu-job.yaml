@@ -1,0 +1,41 @@
+id: wkl-slurm-first-gpu-job
+title: Submit your first GPU batch job
+domain: Workload Management
+difficulty: easy
+time_limit_min: 10
+tags: [slurm, sbatch, squeue, sacct, gres, on-ramp]
+briefing: |
+  Onboarding task from the platform team:
+
+    "Before you touch user jobs, run one of your own. Write a batch script
+    /root/hello-gpu.sbatch that asks for one GPU and five minutes, names the
+    job hello-gpu and runs `nvidia-smi -L`. Submit it from the head node, watch
+    it through the queue, then read the output file and confirm it lists the
+    GPU the job was given."
+
+  You are root on bcm-head. The cluster is healthy and idle.
+objectives:
+  - /root/hello-gpu.sbatch is a batch script that requests one GPU
+  - A job named hello-gpu ran with one GPU and completed
+  - Its output file contains the nvidia-smi -L line for the GPU it was given
+  - You watched the job with squeue or sacct
+setup: []
+checks:
+  - desc: /root/hello-gpu.sbatch starts with a shebang line
+    expr: "file('bcm-head', '/root/hello-gpu.sbatch').startswith('#!')"
+  - desc: the script requests a GPU (--gres=gpu:1, --gpus or --gpus-per-node)
+    expr: "re.search(r'--(gres=gpu|gpus|gpus-per-node)', file('bcm-head', '/root/hello-gpu.sbatch')) is not None"
+  - desc: a batch job named hello-gpu with one GPU completed
+    expr: "any(j.get('batch') and j.name == 'hello-gpu' and j.get('gpus_per_node', 0) >= 1 and j.state == 'COMPLETED' for j in slurm.jobs)"
+  - desc: the job's output file lists the GPU it ran on
+    expr: "any(j.name == 'hello-gpu' and 'UUID' in file('bcm-head', j.get('stdout') or '') for j in slurm.jobs)"
+  - desc: you watched the queue or the accounting record
+    expr: ran(r'^(squeue|sacct)')
+hints:
+  - "A batch script is a shell script whose first line is #!/bin/bash, followed by #SBATCH lines that hold the options you would otherwise give sbatch: --job-name, --gres=gpu:1, --time=00:05:00. Write it with nano or a cat heredoc."
+  - "sbatch <script> prints the job id. squeue shows it while it is pending (PD) or running (R); run squeue again until it is gone, then sacct -j <id> shows the final state."
+  - "By default sbatch writes the job's output to slurm-<jobid>.out in the directory you submitted from. cat it: nvidia-smi -L inside the job sees only the GPU Slurm allocated."
+references:
+  - Slurm sbatch man page (#SBATCH, --gres, --time, --output)
+  - Slurm squeue and sacct man pages
+  - Slurm Generic Resource (GRES) scheduling guide

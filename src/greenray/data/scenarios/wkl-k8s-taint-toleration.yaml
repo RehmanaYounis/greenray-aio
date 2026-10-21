@@ -78,7 +78,7 @@ checks:
 hints:
   - "`kubectl describe pod -l app=triton-inference`: the FailedScheduling message names the exact taint the pods don't tolerate."
   - "Compare that taint with the toleration in /root/triton.yaml. With operator: Equal the key, value AND effect must all match."
-  - "Either use the taint's real value ('present') or `operator: Exists` (which ignores the value). Then `kubectl apply -f /root/triton.yaml`. The Deployment rolls out new pods from the updated template."
+  - "Either use the taint's real value ('present') or `operator: Exists` (which ignores the value). Then apply the corrected /root/triton.yaml with kubectl apply -f. The Deployment rolls out new pods from the updated template."
 references:
   - Kubernetes docs - Taints and Tolerations
   - NVIDIA GPU Operator - daemonsets.tolerations
