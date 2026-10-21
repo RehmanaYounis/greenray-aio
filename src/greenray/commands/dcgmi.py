@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import time
 
+from ..core import live
 from ..core.errors import CommandError
 from ..core.state import AttrDict
 from . import HOOKS_REBOOT, HOOKS_SERVICE, command
@@ -815,8 +816,10 @@ def _dmon(ctx, args):
     count = int(_opt(args, "-c", "--count", default="1") or 1)
     hdr = "#Entity   " + "".join(f"{FIELDS[f][0]:<12}" for f in fids)
     units = "ID        " + "".join(f"{FIELDS[f][1]:<12}" for f in fids)
-    out = [hdr.rstrip(), units.rstrip()]
-    for _ in range(max(1, min(count, 3))):
+    count = max(1, min(count, 3))
+    stream = live.Stream(ctx, header=[hdr.rstrip(), units.rstrip()], delay=int(_opt(args, "-d", default="1000")) / 1000)
+    for k in range(count):
+        rows = []
         for g in gpus:
             vals = []
             for f in fids:
@@ -824,8 +827,9 @@ def _dmon(ctx, args):
                 if f >= 1001 and node.services.get(SERVICE) != "active":
                     v = "N/A"
                 vals.append(f"{str(v):<12}")
-            out.append(f"GPU {g.index:<6}" + "".join(vals).rstrip())
-    return "\n".join(out) + "\n"
+            rows.append(f"GPU {g.index:<6}" + "".join(vals).rstrip())
+        stream.sample(rows, last=k == count - 1)
+    return stream.text()
 
 
 # ---------------------------------------------------------------- policy

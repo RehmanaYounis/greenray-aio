@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ..core import live
 from ..core.errors import CommandError
 from . import HOOKS_REBOOT, HOOKS_SERVICE, command
 
@@ -784,14 +785,17 @@ def _dmon(ctx, args=()):
         "# gpu    pwr  gtemp  mtemp     sm    mem    enc    dec   mclk   pclk",
         "# Idx      W      C      C      %      %      %      %    MHz    MHz",
     ]
+    stream = live.Stream(ctx, header=out)
     for k in range(count):
+        rows = []
         for g in gpus:
             sm = g.utilization if pattern is None else pattern[k]  # DDP ranks stall together
             mem = 0 if pattern is None else int(sm * 0.42)
             pwr = int(g.power_draw_w) if pattern is None else int(120 + sm * 5.6)
             pclk = g.sm_clock_mhz if pattern is None else (1980 if sm > 50 else 1755)
-            out.append(
+            rows.append(
                 f"    {g.index:>1}  {pwr:>5}  {g.temp_c:>5}  {g.mem_temp_c:>5}  {sm:>5}  {mem:>5}      0      0  "
                 f"{g.mem_clock_mhz:>5}  {pclk:>5}"
             )
-    return "\n".join(out) + "\n"
+        stream.sample(rows, last=k == count - 1)
+    return stream.text()

@@ -15,7 +15,7 @@ GreenRay AIO drops you into a broken or half-configured **4-node DGX H100 cluste
 - **39 incident and task scenarios** covering every topic of the exam blueprint ([docs/COVERAGE.md](docs/COVERAGE.md))
 - **Incident mode**: only the incident report is shown, and the root cause stays hidden until the debrief
 - **`explain <command>`** for learning tools as you need them, plus progressive hints and a debrief after every lab
-- **Feels like a real node**: `--help` and `man` pages, `nano`/`vim` (your real editor), `cd`, a coloured prompt and real-tool colours
+- **Feels like a real node**: `--help` and `man` pages, `nano`/`vim` (your real editor), `cd` with tab completion of paths, command history, `watch`, live `dmon` samples, a coloured prompt and real-tool colours
 - **Full mock exam** in the current format: 30 questions plus 3 hands-on labs in 120 minutes (per NVIDIA's exam page; re-check before booking)
 - Runs anywhere Python runs: Linux, WSL, macOS or Windows. **No GPU needed.**
 
@@ -85,7 +85,7 @@ Run these as `uv run greenray …` from the repository folder. If you activate t
 
 | Command | What it does |
 | --- | --- |
-| `greenray` | Interactive menu |
+| `greenray` | Interactive menu (`--no-color` for plain output) |
 | `greenray list` | All scenarios by exam domain, with your pass marks |
 | `greenray incident [-d DOMAIN] [-t TOPIC]` | **Investigate a random incident.** Only the incident report is shown; the scenario's id, title and success criteria stay hidden until the debrief. `-t` takes a scenario tag such as `slurm`, `kubernetes`, `bcm`, `mig` or `infiniband` |
 | `greenray incident --id <id>` | Retry a specific scenario as an incident (for a fresh independent attempt) |

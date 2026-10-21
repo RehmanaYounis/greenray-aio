@@ -2,7 +2,22 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
-## [0.3.0] - unreleased
+## [0.4.0] - unreleased
+
+Feels like a real terminal.
+
+### Added
+- Line editing on every OS (prompt_toolkit): persistent history, Ctrl-R search, and tab completion of commands, hosts and the simulated node's paths relative to the working directory.
+- A simulated clock: `uptime`, `dmesg -T` and the login banner show the current date and time, and time passes as you work.
+- `watch -n N <command>` refreshes on a terminal, `clear`, and `nvidia-smi dmon` / `dcgmi dmon` print samples live with real delays.
+- `--no-color` flag; the mock exam shows time left, questions answered and the current lab in the prompt.
+- `ARCHITECTURE.md`.
+
+### Changed
+- `commands/slurm.py` and `commands/kubectl.py` are now packages split by concern; their public names are unchanged.
+- Exam answers are kept out of the persistent history.
+
+## [0.3.0] - 2026-10-21
 
 Renamed to **GreenRay AIO** (formerly `aiolab`). Adds editors, realistic help, terminal realism and CI.
 

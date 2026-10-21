@@ -45,11 +45,12 @@ def run_mock(ui: UI, seed: int | None = None) -> None:
     if bank is None:
         return
     qs = qb.pick(bank, N_QUESTIONS, seed=seed)
-    labs = [LabSession(s, color=ui.color) for s in pick_labs(seed)]
+    labs = [LabSession(s, color=ui.color, ui=ui) for s in pick_labs(seed)]
     start = time.time()
     deadline = start + MINUTES * 60
     answers: dict = {}
     flagged: set = set()
+    touched: set[int] = set()
 
     ui.out(ui.bold(f"\nMock NCP-AIO exam: {len(qs)} questions + {len(labs)} labs, {MINUTES} minutes total"))
     ui.out("Do the sections in any order. Labs keep your work when you go back to the menu.")
@@ -61,23 +62,30 @@ def run_mock(ui: UI, seed: int | None = None) -> None:
     )
     ui.out(ui.dim("No hints, no solutions, no grading until you finish.\n"))
 
-    while time.time() < deadline:
-        left = int((deadline - time.time()) // 60)
-        ui.out(ui.bold(f"\n--- Exam menu ({left} min left) ---"))
-        ui.out(f"  q) Questions ({len(answers)}/{len(qs)} answered)")
-        for i, lab in enumerate(labs, 1):
-            ui.out(f"  {i}) Lab {i}: {lab.scenario_required.title}")
-        ui.out("  f) Finish and grade")
-        choice = read_line(ui, "> ").strip().lower()
-        if choice == "q":
-            ask_questions(ui, qs, deadline, answers, flagged)
-        elif choice.isdigit() and 1 <= int(choice) <= len(labs):
-            run_exam_lab(ui, labs[int(choice) - 1], deadline)
-        elif choice in ("f", "finish", "quit"):
-            if ui.ask("Finish the exam now? [y/N] ").strip().lower() == "y":
-                break
-    else:
-        ui.out(ui.red("\nTime is up. Grading."))
+    with ui.private_history():
+        while time.time() < deadline:
+            left = int((deadline - time.time()) // 60)
+            ui.out(ui.bold(f"\n--- Exam menu ({left} min left) ---"))
+            ui.out(f"  q) Questions ({len(answers)}/{len(qs)} answered)")
+            for i, lab in enumerate(labs, 1):
+                ui.out(f"  {i}) Lab {i}: {lab.scenario_required.title}")
+            ui.out("  f) Finish and grade")
+            choice = read_line(ui, "> ").strip().lower()
+            if choice == "q":
+                ask_questions(ui, qs, deadline, answers, flagged)
+            elif choice.isdigit() and 1 <= int(choice) <= len(labs):
+                lab_no = int(choice)
+                touched.add(lab_no)
+
+                def status(n: int = lab_no) -> str:
+                    return f"Q {len(answers)}/{len(qs)} · lab {n}/{len(labs)}"
+
+                run_exam_lab(ui, labs[lab_no - 1], deadline, status=status)
+            elif choice in ("f", "finish", "quit"):
+                if ui.ask("Finish the exam now? [y/N] ").strip().lower() == "y":
+                    break
+        else:
+            ui.out(ui.red("\nTime is up. Grading."))
 
     elapsed = (time.time() - start) / 60
     res = qb.score(qs, answers)

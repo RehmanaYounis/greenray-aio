@@ -1,4 +1,4 @@
-"""Focused tests for the Slurm and DCGM emulators (greenray/commands/slurm.py, dcgmi.py)."""
+"""Focused tests for the Slurm and DCGM emulators (the greenray.commands.slurm package, dcgmi.py)."""
 
 from greenray.commands import slurm as sl
 from greenray.core.shell import Shell

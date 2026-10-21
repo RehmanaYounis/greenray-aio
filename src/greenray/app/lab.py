@@ -14,6 +14,7 @@ from __future__ import annotations
 import random
 import time
 import zlib
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from .. import config
@@ -26,7 +27,7 @@ from ..core.errors import CommandError
 from ..core.shell import Shell
 from ..core.state import COMPUTE_NODES, HEAD, make_cluster
 from . import progress
-from .ui import UI, enable_line_editing
+from .ui import UI
 
 LAB_HELP = """\
 Lab commands (not part of the simulated cluster):
@@ -76,6 +77,7 @@ class LabSession:
 
     scenario: Scenario | None
     color: bool = False
+    ui: UI | None = None
     shell: Shell = field(init=False)
     hints_used: int = 0
     objectives_revealed: bool = False
@@ -89,6 +91,9 @@ class LabSession:
         """Rebuild the broken cluster. Same attempt: hints, objectives and timer carry over."""
         state = self.scenario.build_state() if self.scenario else make_cluster()
         self.shell = Shell(state, color=self.color)
+        if self.ui is not None and self.ui.interactive:  # stream watch/dmon samples on a real terminal
+            self.shell.ctx.emit = self.ui.out
+            self.shell.ctx.live_delay = 1.0
 
     def new_attempt(self) -> None:
         """Fresh attempt: cluster, timer and guidance counters all start over."""
@@ -290,8 +295,8 @@ def _record(session: LabSession, passed: bool, gave_up: bool, incident: bool) ->
 
 def run_lab(ui: UI, s: Scenario | None, incident: bool = False, hide_identity: bool = False) -> None:
     """Practice a scenario (guided by default, or as an incident); the result is saved to progress."""
-    enable_line_editing(_completion_words())
-    session = LabSession(s, color=ui.color)
+    session = LabSession(s, color=ui.color, ui=ui)
+    ui.set_completer(_completion_words(), lambda: session.shell.ctx)
     incident = incident and s is not None
     gave_up = passed = False
     show_briefing(ui, s, incident=incident)
@@ -386,13 +391,17 @@ def pick_incident(domain: str | None = None, tag: str | None = None, seed: int |
     return random.Random(seed).choice(fresh or pool)
 
 
-def run_exam_lab(ui: UI, session: LabSession, deadline: float) -> None:
-    """Exam mode: no hints or solutions; returns to the exam menu on `back` or timeout."""
-    enable_line_editing(_completion_words())
+def run_exam_lab(ui: UI, session: LabSession, deadline: float, status: Callable[[], str] | None = None) -> None:
+    """Exam mode: no hints or solutions; returns to the exam menu on `back` or timeout.
+
+    ``status`` supplies the rest of the exam status line (questions answered, labs touched).
+    """
+    ui.set_completer(_completion_words(), lambda: session.shell.ctx)
     show_briefing(ui, session.scenario, exam=True)
     while time.time() < deadline:
         left = int((deadline - time.time()) // 60)
-        line = read_line(ui, ui.dim(f"[{left}m] ") + prompt(ui, session))
+        extra = f" · {status()}" if status else ""
+        line = read_line(ui, ui.dim(f"[{left}m left{extra}] ") + prompt(ui, session))
         cmd = line.strip()
         if cmd in ("back", "quit", "q"):
             return

@@ -15,7 +15,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import __version__
+from . import __version__, config
 from .app.exam import run_exam
 from .app.lab import pick_incident, run_lab
 from .app.mock import run_mock
@@ -110,6 +110,7 @@ def validate(ui: UI) -> int:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="greenray", description="NCP-AIO hands-on practice lab")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    p.add_argument("--no-color", action="store_true", help="plain output (also honours NO_COLOR)")
     sub = p.add_subparsers(dest="cmd")
     sub.add_parser("list", help="list scenarios by domain")
     lab = sub.add_parser("lab", help="start a hands-on scenario")
@@ -131,7 +132,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    ui = UI()
+    ui = UI(color=not args.no_color, history_file=config.home() / "history")
     try:
         if args.cmd is None:
             menu(ui)

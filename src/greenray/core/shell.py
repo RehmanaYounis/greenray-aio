@@ -12,6 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from .. import commands
+from . import clock
 from .errors import CommandError
 from .state import HEAD, AttrDict
 
@@ -35,10 +36,17 @@ class Context:
     )
     color: bool = False  # the learner's terminal supports colour (set by the UI, never in tests)
     tty: bool = False  # the current command writes straight to that terminal (not a pipe or redirect)
+    emit: Callable[[str], None] | None = None  # print immediately; lets watch/dmon stream on a terminal
+    live_delay: float = 0.0  # real seconds between streamed samples (0 in tests and pipes)
 
     @property
     def node(self):
         return self.state.nodes[self.host]
+
+    @property
+    def streaming(self) -> bool:
+        """True when a command may print samples as they happen instead of returning one blob."""
+        return self.tty and self.emit is not None
 
     @property
     def colorize(self) -> bool:
@@ -368,6 +376,7 @@ class Shell:
             executed_before = len(self.ctx.executed)
             self.ctx.executed.append((self.ctx.host, argv))
             checkpoint = self._checkpoint()
+            clock.advance(self.ctx.state)  # inside the checkpoint so a rolled-back crash takes no time
             try:
                 data = commands.dispatch(self.ctx, argv)
                 code = 0

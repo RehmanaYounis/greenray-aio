@@ -1,6 +1,6 @@
 [project]
 name = "greenray-aio"
-version = "0.3.0"
+version = "0.4.0"
 description = "GreenRay AIO: hands-on lab simulator and mock exam for the NVIDIA NCP-AIO (AI Operations) certification"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -25,6 +25,7 @@ classifiers = [
     "Topic :: System :: Systems Administration",
 ]
 dependencies = [
+    "prompt-toolkit>=3.0.43",
     "pyyaml>=6.0",
     "rich>=13.7",
 ]
