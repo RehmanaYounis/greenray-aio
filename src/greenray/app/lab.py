@@ -26,7 +26,7 @@ from ..content.scenarios import Scenario
 from ..core.errors import CommandError
 from ..core.shell import Shell
 from ..core.state import COMPUTE_NODES, HEAD, make_cluster
-from . import progress
+from . import progress, reflect
 from .ui import UI
 
 LAB_HELP = """\
@@ -397,6 +397,7 @@ def run_lab(ui: UI, s: Scenario | None, incident: bool = False, hide_identity: b
                 if mins > s.time_limit_min:
                     ui.out(ui.yellow("Correct, but slower than the target. Repeat it later for speed."))
                 show_debrief(ui, session, passed=True, identity_hidden=hide_identity)
+                reflect.run(ui, s)
                 break
             met = sum(ok for _, ok, _ in results)
             ui.out(ui.dim(f"\n{met}/{len(results)} criteria met, {mins:.1f} min elapsed."))

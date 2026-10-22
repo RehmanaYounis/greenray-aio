@@ -2,6 +2,17 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [0.9.0] - 2026-10-22
+
+Where to look, not only what to fix.
+
+### Added
+- Three cross-system incidents, each with three variants and in the mock-exam pool: a DGX node without a driver after a reboot because its BCM category changed; a two-node training run eight times slower because the updated software image lost the GPUDirect RDMA module and one InfiniBand link trained at 100G; a Deployment replica Pending because a pool node was switched to MIG.
+- Reflection after a passed lab: three ungraded questions (the evidence, the choice of fix, the verification) whose answers are kept in `~/.greenray/notes/<scenario-id>.md`. `greenray progress` counts them.
+
+### Changed
+- Reseating a cable restores a link that trained at reduced speed, as a replaced cable does.
+
 ## [0.8.0] - 2026-10-22
 
 Tests judgment, not memory.

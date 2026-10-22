@@ -1,0 +1,81 @@
+id: tsh-nccl-slow-after-image-update
+title: Two-node training is eight times slower since the image update
+domain: Troubleshooting and Optimization
+difficulty: hard
+time_limit_min: 25
+tags: [nccl, infiniband, gpudirect, bcm, softwareimage, mlxlink, cross-system]
+briefing: |
+  From the ML platform channel:
+
+    "Our 16-GPU run on dgx-01 + dgx-02 used to do 2.1 steps/s. Since the DGX
+    nodes were re-provisioned from the updated software image on Sunday it does
+    0.26 steps/s. Single-node runs on either node are as fast as before. NCCL
+    does not print any error."
+
+  Find everything that makes the pair slow, fix it on the nodes, and make sure
+  the next re-provisioning from the software image does not bring the problem
+  back. Prove the result with an NCCL all_reduce across dgx-01 and dgx-02.
+objectives:
+  - Identify why inter-node NCCL traffic between dgx-01 and dgx-02 is slow (there is more than one cause)
+  - GPUDirect RDMA works on both nodes, now and after a reboot, and the software image carries the fix
+  - Every compute-fabric port on both nodes runs at full NDR rate
+  - A two-node all_reduce_perf over IB with GPUDirect RDMA on both nodes reaches at least 350 GB/s busbw
+setup:
+  - python: |
+      head = state.nodes['bcm-head']
+      head.files.pop('/cm/images/dgx-os-6.2-h100-image/etc/modules-load.d/nvidia-peermem.conf', None)
+      head.files['/cm/images/dgx-os-6.2-h100-image/etc/modules-load.d/nvidia.conf'] = "nvidia\nnvidia_uvm\n"
+      for h in ('dgx-01', 'dgx-02'):
+          n = state.nodes[h]
+          n.modules = [m for m in n.modules if m != 'nvidia_peermem']
+          n.volatile_modules = ['nvidia_peermem']
+          n.files['/etc/modules-load.d/nvidia.conf'] = "nvidia\nnvidia_uvm\n"
+          n.files['/etc/modules'] = "# /etc/modules: kernel modules to load at boot time.\n"
+          n.journal['cmd'] = [
+              f"2026-10-19 02:10:04 {h} cmd[2210]: node-installer: install mode AUTO, image dgx-os-6.2-h100-image (version 2)",
+              f"2026-10-19 02:14:41 {h} cmd[2210]: node-installer: finished, booting local disk",
+          ]
+      p = state.nodes['{slow}'].ib[{rail}]
+      p.rate_gbps = 100
+      p.symbol_errors = 1842
+      state.nodes['{slow}'].dmesg.append("[  310.118204] mlx5_core 0000:{busl}:00.0: Port module event: module {rail}, Cable plugged")
+      state.slurm.users['alice'] = {'name': 'alice', 'default_account': 'root'}
+      state.slurm.jobs.append({
+          'id': 5120, 'name': 'llama-2node', 'user': 'alice', 'partition': 'defq', 'state': 'COMPLETED',
+          'exit_code': '0:0', 'num_nodes': 2, 'gpus_per_node': 8, 'nodelist': ['dgx-01', 'dgx-02'],
+          'submit_time': -20000, 'start_time': -19900, 'end_time': -4000, 'batch': True,
+          'command': '/home/alice/llama/train2.sbatch', 'stdout': '/home/alice/llama/slurm-5120.out'})
+      head.files['/home/alice/llama/slurm-5120.out'] = (
+          "step 100  loss 2.311  0.26 steps/s\nstep 200  loss 2.287  0.26 steps/s\nstep 300  loss 2.262  0.26 steps/s\n")
+      state.slurm.next_job_id = 5121
+checks:
+  - desc: you looked at NCCL's own view of the transport (NCCL_DEBUG=INFO)
+    expr: ran(r'NCCL_DEBUG=INFO')
+  - desc: you checked the loaded kernel modules on a node
+    expr: ran(r'\blsmod\b|/proc/modules')
+  - desc: you checked the IB port rates on {slow} (ibstat/ibstatus/mlxlink)
+    expr: ran(r'^(ibstat|ibstatus|mlxlink|ibv_devinfo)', '{slow}')
+  - desc: nvidia_peermem is loaded on dgx-01 and dgx-02
+    expr: all(any(m.replace('-', '_') == 'nvidia_peermem' for m in nodes[h].modules) for h in ('dgx-01', 'dgx-02'))
+  - desc: both nodes load the module at boot (modules-load.d or /etc/modules)
+    expr: "all(any(((p.startswith('/etc/modules-load.d/') and p.endswith('.conf')) or p == '/etc/modules') and re.search(r'(?m)^\\s*nvidia[-_]peermem\\b', str(t)) for p, t in nodes[h].files.items()) for h in ('dgx-01', 'dgx-02'))"
+  - desc: the software image dgx-os-6.2-h100-image carries the module load entry, so re-provisioning keeps it
+    expr: "any(p.startswith('/cm/images/dgx-os-6.2-h100-image/etc/modules') and re.search(r'(?m)^\\s*nvidia[-_]peermem\\b', str(t)) for p, t in nodes['bcm-head'].files.items())"
+  - desc: "{slow} mlx5_{rail} runs at 400 Gb/s again"
+    expr: nodes['{slow}'].ib[{rail}].state == 'Active' and nodes['{slow}'].ib[{rail}].rate_gbps == 400
+  - desc: the last two-node NCCL run used IB with GPUDirect RDMA on both nodes and reached >= 350 GB/s
+    expr: "(lambda r: r.get('ok') and {'dgx-01', 'dgx-02'} <= set(r.get('hosts', [])) and r.get('transport') == 'IB' and all((r.get('gdr') or {}).get(h) for h in ('dgx-01', 'dgx-02')) and r.get('busbw', 0) >= 350)(flags.get('nccl_last', {}))"
+hints:
+  - "Reproduce with numbers: mpirun all_reduce_perf across both nodes with -x NCCL_DEBUG=INFO. NCCL says which transport it uses and whether GPU Direct RDMA is enabled per HCA; the busbw at 8 GB tells you how far from 370 GB/s you are."
+  - "'GPU Direct RDMA Disabled ... (no module)' points at the nvidia-peermem kernel module. lsmod on both nodes, then look at what loads modules at boot (/etc/modules-load.d, /etc/modules) and compare with what the software image under /cm/images holds: a re-provisioned node only has what the image has."
+  - "Loading the module brings the bandwidth up, but not all the way. One cause usually hides a second: compare every port's Rate in ibstat on both nodes, and ask mlxlink -m about the one that is different. A link that trained at a lower speed is a cable or transceiver problem; this lab's reseat-cable helper is the technician."
+  - "Fix in three places: the running nodes (load the module), their boot configuration, and the image on the head node so the next node-installer run does not undo it. Then run the all_reduce again to prove both causes are gone."
+references:
+  - NVIDIA GPUDirect RDMA documentation (nvidia-peermem)
+  - NCCL environment variables (NCCL_DEBUG) and NCCL tests (all_reduce_perf)
+  - NVIDIA MFT mlxlink user guide (module info, link speed)
+  - BCM Administrator Manual, software image management
+variants:
+  - {"slow": "dgx-02", "rail": 5, "busl": "ab"}
+  - {"slow": "dgx-01", "rail": 2, "busl": "3a"}
+  - {"slow": "dgx-02", "rail": 7, "busl": "db"}

@@ -1,0 +1,115 @@
+id: wkl-k8s-replica-pending-after-mig
+title: One triton replica is Pending since the ML team got their MIG slices
+domain: Workload Management
+difficulty: hard
+time_limit_min: 20
+tags: [kubernetes, mig, gpu-operator, scheduling, labels, cross-system]
+briefing: |
+  From the serving team:
+
+    "Our Deployment 'triton' (2 replicas, 4 GPUs each) runs on the inference
+    pool, the nodes labelled team=inference. Since this morning one replica is
+    Pending and we are serving at half capacity. Nobody touched the
+    Deployment; the manifest is /root/triton.yaml. Yesterday the ML team said
+    they were 'getting MIG for their notebooks' on one of the nodes."
+
+  Constraints from the platform lead: the ML team keeps their MIG layout, the
+  batch pod embed-batch keeps running, and the inference pool stays a labelled
+  set of nodes (do not remove the Deployment's node selector).
+
+  Get both triton replicas Running.
+objectives:
+  - Find in the pod's events and the nodes' resources why the second replica cannot be placed
+  - Explain the connection between the MIG layout and the missing nvidia.com/gpu capacity
+  - Both triton replicas are Running on nodes labelled team=inference
+  - The MIG node keeps its layout, embed-batch keeps running, and the Deployment keeps its node selector
+setup:
+  - python: |
+      from greenray.commands import helm, kubectl as kc
+      helm.preinstall(state, "nvidia/gpu-operator", values={"driver": {"enabled": False}, "mig": {"strategy": "mixed"}}, settle=86400 * 5)
+      kc.reconcile(state)
+      for n in ('{mig}', '{other}'):
+          state.k8s.nodes[n].labels['team'] = 'inference'
+      state.k8s.nodes['{mig}'].labels['nvidia.com/mig.config'] = 'all-1g.10gb'
+      kc.advance(state, 600)
+      kc.reconcile(state)
+  - file: /root/triton.yaml
+    host: bcm-head
+    content: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: triton
+        labels:
+          app: triton
+      spec:
+        replicas: 2
+        selector:
+          matchLabels:
+            app: triton
+        template:
+          metadata:
+            labels:
+              app: triton
+          spec:
+            nodeSelector:
+              team: inference
+            containers:
+            - name: triton
+              image: nvcr.io/nvidia/tritonserver:24.05-py3
+              args: ["tritonserver", "--model-repository=/models"]
+              resources:
+                limits:
+                  nvidia.com/gpu: 4
+  - python: |
+      from greenray.commands import kubectl as kc
+      kc.apply_yaml(state, """
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: embed-batch
+        labels: {app: embed}
+      spec:
+        nodeSelector: {team: inference}
+        containers:
+        - name: embed
+          image: nvcr.io/nvidia/pytorch:24.05-py3
+          command: ["python", "embed.py"]
+          resources:
+            limits:
+              nvidia.com/gpu: 4
+      """)
+      kc.advance(state, 120)
+      kc.reconcile(state)
+      kc.apply_yaml(state, state.nodes["bcm-head"].files["/root/triton.yaml"])
+      kc.advance(state, 3600)
+      kc.reconcile(state)
+checks:
+  - desc: you read the scheduler's reasons in the pod events
+    expr: "ran(r'kubectl (describe (pod|pods|po)\\b|get (events|ev)\\b)')"
+  - desc: you looked at the nodes' labels or allocatable resources
+    expr: "ran(r'kubectl (describe (node|nodes|no)\\b|get (nodes|node|no)\\b.*(-L|--show-labels|-o))')"
+  - desc: both triton replicas are Running on nodes labelled team=inference
+    expr: "len([p for p in pods('default', 'triton-') if p.status == 'Running' and k8s.nodes[p.node].labels.get('team') == 'inference']) == 2"
+  - desc: no triton replica is Pending
+    expr: "not [p for p in pods('default', 'triton-') if p.status == 'Pending']"
+  - desc: the Deployment still selects team=inference
+    expr: "any(d.name == 'triton' and (d.template.spec.get('nodeSelector') or {}).get('team') == 'inference' for d in k8s.deployments)"
+  - desc: "{mig} keeps its MIG layout (all-1g.10gb, applied)"
+    kind: safety
+    expr: "k8s.nodes['{mig}'].labels.get('nvidia.com/mig.config') == 'all-1g.10gb' and all(g.mig_mode and len(g.gpu_instances) == 7 for g in nodes['{mig}'].gpus)"
+  - desc: embed-batch is still Running and no running pod was deleted
+    kind: safety
+    expr: "any(p.name == 'embed-batch' and p.status == 'Running' for p in pods('default')) and not audit('delete_running_pod')"
+hints:
+  - "kubectl describe the Pending replica: the FailedScheduling event counts nodes per reason. Which reason applies to the two inference nodes, and why does it differ between them?"
+  - "kubectl describe node {mig} and look at Allocatable: it advertises nvidia.com/mig-1g.10gb slices and zero nvidia.com/gpu. A GPU in MIG mode is no longer a whole GPU to Kubernetes; the mig.config label on the node is what the ML team changed, through the GPU Operator's MIG manager."
+  - "The pool is defined by a label, and the other inference node is full. The constraints rule out touching MIG, embed-batch and the selector, which leaves the pool itself: kubectl label can make another DGX node part of it. The scheduler places the Pending replica as soon as a matching node has 4 free GPUs."
+references:
+  - NVIDIA GPU Operator - MIG support (mig.strategy, nvidia.com/mig.config)
+  - Kubernetes docs - Assigning Pods to Nodes (labels and nodeSelector)
+  - Kubernetes docs - Schedule GPUs (extended resources)
+variants:
+  - {"mig": "dgx-03", "other": "dgx-04", "spare": "dgx-02"}
+  - {"mig": "dgx-01", "other": "dgx-02", "spare": "dgx-03"}
+  - {"mig": "dgx-04", "other": "dgx-01", "spare": "dgx-02"}

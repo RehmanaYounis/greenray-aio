@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ..content import scenarios as sc
 from ..content.domains import DOMAIN_WEIGHTS, DOMAINS
-from . import progress, study
+from . import progress, reflect, study
 from .ui import UI
 
 
@@ -54,6 +54,8 @@ def show_progress(ui: UI) -> None:
     nxt = study.recommend(data, limit=1)
     if nxt:
         ui.out(ui.dim(f"  next up: {nxt[0].command}"))
+    if reflect.count():
+        ui.out(ui.dim(f"  your notes: {reflect.count()} scenario(s) in {reflect.notes_dir()}"))
 
     ui.out(ui.bold("\nExams"))
     if not data["exams"]:

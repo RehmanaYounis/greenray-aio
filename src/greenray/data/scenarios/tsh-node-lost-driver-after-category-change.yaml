@@ -1,0 +1,92 @@
+id: tsh-node-lost-driver-after-category-change
+title: Every job on {node} fails since the maintenance reboot
+domain: Troubleshooting and Optimization
+difficulty: hard
+time_limit_min: 25
+tags: [bcm, cmsh, slurm, driver, provisioning, cross-system]
+briefing: |
+  Incident report, priority high:
+
+    "Since last night's maintenance reboot, {node} is DOWN in Slurm and the
+    two jobs that were scheduled there this morning failed inside a second
+    with 'CUDA driver version is insufficient' and 'no CUDA-capable device'.
+    The other DGX nodes are fine. Nothing was changed on the node itself;
+    the maintenance was a routine reboot of all four DGX nodes from BCM."
+
+  The other three nodes came back healthy from the same reboot. Find out why
+  {node} did not, fix the cause so that the next reboot does not bring the
+  problem back, and return the node to service. Do not change anything on
+  the other nodes or in the categories they use.
+objectives:
+  - Find why {node} has no working NVIDIA driver after the reboot
+  - Trace the cause to how BCM provisions the node, not to the node itself
+  - "{node} is provisioned from the DGX OS image again, with the driver loaded and slurmd running"
+  - "{node} is IDLE in Slurm; the other nodes and the categories are unchanged"
+setup:
+  - python: |
+      from greenray.commands.cmsh import bcm_init
+      bcm = bcm_init(state)
+      img = bcm.softwareimages['default-image']
+      dev = bcm.devices['{node}']
+      dev.category = 'default'
+      dev.synced_image = 'default-image'
+      dev.provisioned_image_version = 2
+      n = state.nodes['{node}']
+      n.packages = dict(img.packages)
+      n.kernel = img.kernel
+      n.driver_loaded = False
+      n.modules = [m for m in n.modules if not m.startswith('nvidia')]
+      for svc in ('nvidia-persistenced', 'nvidia-dcgm', 'nvidia-fabricmanager', 'slurmd'):
+          n.services[svc] = 'inactive'
+      n.dmesg = [l for l in n.dmesg if 'NVRM' not in l and 'nvidia' not in l]
+      n.journal['cmd'] = [
+          "2026-10-21 23:41:08 {node} cmd[2210]: node-installer: install mode AUTO, image default-image (version 2)",
+          "2026-10-21 23:41:08 {node} cmd[2210]: node-installer: synchronising image default-image to local disk",
+          "2026-10-21 23:46:52 {node} cmd[2210]: node-installer: finished, booting local disk",
+      ]
+      n.journal['slurmd'] = [
+          "2026-10-21 23:47:30 {node} systemd[1]: slurmd.service: Unit not found.",
+      ]
+      bcm.events.extend([
+          "2026-10-21 17:02:11 [notice] bcm-head: category of {node} changed to default (cmsh, script onboarding.cmsh)",
+          "2026-10-21 23:40:15 [notice] bcm-head: dgx-01: node provisioned (reboot, install mode AUTO, image dgx-os-6.2-h100-image)",
+          "2026-10-21 23:40:15 [notice] bcm-head: {node}: node provisioned (reboot, install mode AUTO, image default-image)",
+      ])
+      sn = state.slurm.nodes['{node}']
+      sn.state = 'DOWN'
+      sn.reason = 'Not responding'
+      sn.reason_user = 'slurm'
+      sn['down'] = True
+      state.nodes['bcm-head'].journal['slurmctld'] = [
+          "2026-10-21 23:52:40 bcm-head slurmctld[2211]: error: Nodes {node} not responding, setting DOWN",
+      ]
+checks:
+  - desc: you looked at the node itself (nvidia-smi, lsmod, dpkg or the cmd journal on {node})
+    expr: ran(r'^(nvidia-smi|lsmod|dpkg|journalctl|uname|dmesg)', '{node}')
+  - desc: you read the node's settings in cmsh before changing them
+    kind: evidence
+    expr: ran_before(r'^cmsh .*(show|get |list)', r'^cmsh .*set ')
+  - desc: "{node} is back in category dgx-h100, committed"
+    expr: bcm.devices['{node}'].category == 'dgx-h100' and not bcm.uncommitted
+  - desc: "{node} was re-provisioned from the DGX OS image"
+    expr: bcm.devices['{node}'].get('synced_image') == 'dgx-os-6.2-h100-image'
+  - desc: the NVIDIA driver is loaded and slurmd is running on {node}
+    expr: nodes['{node}'].driver_loaded and nodes['{node}'].services.get('slurmd') == 'active'
+  - desc: "{node} is IDLE in Slurm"
+    expr: slurm.nodes['{node}'].state == 'IDLE'
+  - desc: the categories and the other nodes were left alone
+    kind: safety
+    expr: bcm.categories['default'].softwareimage == 'default-image' and bcm.categories['dgx-h100'].softwareimage == 'dgx-os-6.2-h100-image' and all(d.category == 'dgx-h100' for k, d in bcm.devices.items() if k.startswith('dgx-'))
+hints:
+  - "Start where the symptom is: sinfo -R, then on {node} nvidia-smi, lsmod | grep nvidia and dpkg -l | grep nvidia-driver. Is the driver missing, broken, or simply not installed?"
+  - "A node that reboots without the packages it had yesterday did not lose them by itself. On a BCM cluster the node-installer copies a software image onto the node at every boot: journalctl -u cmd on the node and cmsh's event log on the head say which image was used."
+  - "Which image a node gets comes from its category. Compare {node} with a healthy DGX node in cmsh (device show on both, category list). Fix the node's setting, not the category: the other nodes depend on it."
+  - "After the category is corrected, the node still runs the wrong image until it is provisioned again (a reboot or power reset through cmsh, or imageupdate). Slurm then needs the node resumed, because it stays DOWN until an administrator says otherwise."
+references:
+  - BCM Administrator Manual, node provisioning and software images
+  - BCM Administrator Manual, categories and node categories in cmsh
+  - Slurm scontrol man page (update NodeName State=RESUME)
+variants:
+  - {"node": "dgx-02"}
+  - {"node": "dgx-04"}
+  - {"node": "dgx-01"}

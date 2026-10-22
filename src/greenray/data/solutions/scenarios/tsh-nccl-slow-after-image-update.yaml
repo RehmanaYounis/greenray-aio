@@ -1,0 +1,51 @@
+# Private solution for scenario tsh-nccl-slow-after-image-update
+solution:
+  - sacct -j 5120 --format=JobID,JobName,State,NodeList,Elapsed
+  - mpirun --allow-run-as-root -np 16 -H dgx-01:8,dgx-02:8 -x NCCL_DEBUG=INFO all_reduce_perf -b 1G -e 8G -f 2 -g 1
+  - ssh dgx-01 lsmod | grep -i peer
+  - ssh dgx-02 lsmod | grep -i peer
+  - ssh dgx-01 ls /etc/modules-load.d
+  - ssh dgx-01 journalctl -u cmd
+  - ls /cm/images/dgx-os-6.2-h100-image/etc/modules-load.d
+  - ssh dgx-01
+  - modprobe nvidia-peermem
+  - echo nvidia-peermem > /etc/modules-load.d/nvidia-peermem.conf
+  - exit
+  - ssh dgx-02
+  - modprobe nvidia-peermem
+  - echo nvidia-peermem > /etc/modules-load.d/nvidia-peermem.conf
+  - exit
+  - echo nvidia-peermem > /cm/images/dgx-os-6.2-h100-image/etc/modules-load.d/nvidia-peermem.conf
+  - mpirun --allow-run-as-root -np 16 -H dgx-01:8,dgx-02:8 -x NCCL_DEBUG=INFO all_reduce_perf -b 1G -e 8G -f 2 -g 1
+  - ssh {slow}
+  - ibstat | grep -E "CA '|State|Rate"
+  - mlxlink -d mlx5_{rail} -m
+  - exit
+  - reseat-cable {slow} mlx5_{rail}
+  - ssh {slow} ibstat mlx5_{rail}
+  - mpirun --allow-run-as-root -np 16 -H dgx-01:8,dgx-02:8 -x NCCL_DEBUG=INFO all_reduce_perf -b 1G -e 8G -f 2 -g 1
+explanation: |
+  Two independent faults add up to the slowdown, and the first one hides the
+  second. NCCL_DEBUG=INFO shows the transport is IB but "GPU Direct RDMA
+  Disabled ... (no module)" on every HCA: nvidia_peermem is not loaded on either
+  node, so every inter-node message is staged through host memory. The module
+  was loaded before the image update; it disappeared because the updated
+  software image has no modules-load.d entry for it, and a re-provisioned node
+  carries exactly what the image carries. Loading it fixes the nodes for now;
+  the modules-load.d file on each node fixes the next reboot; the same file
+  inside /cm/images/dgx-os-6.2-h100-image fixes the next provisioning, which is
+  what the ticket asked for.
+
+  With GDR back, the benchmark is still short of the expected 370 GB/s. ibstat
+  on {slow} shows mlx5_{rail} Active but at 100 Gb/s instead of 400, and mlxlink
+  reports a link trained at reduced speed with lane errors: a cable or
+  transceiver problem, not software. After the technician reseats it the port
+  trains at NDR again and the all_reduce reaches full bandwidth. Fixing only
+  one of the two would have left the users with a job that is "working" and
+  still slow.
+edge_cases:
+  - "The modules-load.d entry on a node survives reboots but not re-provisioning; the entry in the software image survives both. On a BCM cluster the image is the source of truth, and the node file is just a copy of it."
+  - "Toggling the port (mlxlink --port_state TG) can re-train a link, but a link that trained at reduced speed because of a damaged cable comes back at reduced speed. Cable type matters too: a 100G-rated cable never gives NDR."
+  - "A single slow rail on an 8-rail node costs more than one eighth of bandwidth in a rail-aligned fabric, because the GPU behind that rail becomes the straggler for the collective."
+  - "NCCL_NET_GDR_LEVEL changes when NCCL uses GDR relative to the PCIe topology; it does not help when the kernel module is absent."
+  - "Compare the image version in the cmd journal on the node with cmsh's softwareimage list when a problem starts right after a re-provisioning: the image, not the node, is what changed."

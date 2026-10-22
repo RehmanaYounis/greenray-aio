@@ -1,0 +1,34 @@
+# Private solution for scenario wkl-k8s-replica-pending-after-mig
+solution:
+  - kubectl get pods -o wide
+  - kubectl describe pod -l app=triton
+  - kubectl get nodes -L team,nvidia.com/mig.config,nvidia.com/mig.strategy
+  - kubectl describe node {mig} | grep -A 8 Allocatable
+  - kubectl describe node {other} | grep -A 12 "Allocated resources"
+  - ssh {mig} nvidia-smi -L
+  - cat /root/triton.yaml
+  - kubectl label node {spare} team=inference
+  - kubectl get pods -o wide
+explanation: |
+  The scheduler's message has one reason per node: the control plane is
+  tainted, two nodes do not match the selector, and the two inference nodes
+  report Insufficient nvidia.com/gpu. On {other} that is plain arithmetic:
+  embed-batch and the first replica use all eight GPUs. On {mig} it is a
+  different thing: Allocatable lists 56 nvidia.com/mig-1g.10gb and zero
+  nvidia.com/gpu. When the ML team labelled the node nvidia.com/mig.config=
+  all-1g.10gb, the GPU Operator's MIG manager reconfigured every GPU into seven
+  1g.10gb slices and the device plugin stopped advertising whole GPUs there.
+  A pod that asks for nvidia.com/gpu: 4 can never land on that node again,
+  although nvidia-smi still shows eight H100s.
+
+  The constraints close every other door: the MIG layout stays, embed-batch
+  stays, and the selector stays. The pool is only a label, so the fix is to
+  grow the pool: label a free DGX node team=inference. The scheduler retries
+  Pending pods continuously, and as soon as a node matches the selector with
+  four free GPUs the replica is placed. Nothing was deleted or restarted.
+edge_cases:
+  - "With mig.strategy=single the node would advertise nvidia.com/gpu again, but each unit would be one 1g.10gb slice. A 4-GPU request would then get four slices, which is not what a Triton replica sized for whole H100s expects."
+  - "Changing the Deployment to request nvidia.com/mig-1g.10gb would move inference onto slices, a capacity decision for the serving team, not a scheduler fix."
+  - "Scaling embed-batch away or deleting it would free {other}, and the ReplicaSet would place the replica there, but the batch pod was explicitly protected by the constraints. Read them before touching running work."
+  - "nvidia.com/gpu.count and nvidia.com/gpu.product labels describe the physical GPUs; Allocatable describes what the device plugin offers. After a MIG change the two disagree on purpose."
+  - "Labelling a node that is also a Slurm node makes it eligible for Kubernetes GPU pods while Slurm may schedule jobs on the same GPUs. In mixed clusters, the inference pool must be excluded from Slurm (or the reverse) by the platform team."
