@@ -16,6 +16,7 @@ from pathlib import Path
 
 import yaml
 
+from ..core import audit as audit_log
 from ..core.shell import INCONSISTENT_FLAG
 from ..core.state import AttrDict, append_path, get_path, make_cluster, set_path, wrap
 from . import solutions
@@ -137,6 +138,11 @@ class Scenario:
 
     # ------------------------------------------------------------ grading
 
+    @property
+    def kinds(self) -> list[str]:
+        """One of ``outcome`` (default), ``evidence`` or ``safety`` per check, in check order."""
+        return [c.get("kind", "evidence" if "ran(" in c["expr"] else "outcome") for c in self.checks]
+
     def grade(self, shell) -> list[tuple[str, bool, str]]:
         """Return [(description, passed, error)] for every check."""
         env = check_env(shell)
@@ -185,6 +191,21 @@ def check_env(shell) -> dict:
         rx = re.compile(pattern)
         return any(rx.search(" ".join(argv)) for h, argv in executed if host is None or h == host)
 
+    def first(pattern: str, host: str | None = None) -> int | None:
+        rx = re.compile(pattern)
+        for i, (h, argv) in enumerate(executed):
+            if (host is None or h == host) and rx.search(" ".join(argv)):
+                return i
+        return None
+
+    def ran_before(earlier: str, later: str, host: str | None = None) -> bool:
+        """Both ran, and the first match of ``earlier`` came before the first match of ``later``."""
+        a, b = first(earlier, host), first(later, host)
+        return a is not None and b is not None and a < b
+
+    def audit(kind: str | None = None) -> list:
+        return audit_log.events(state, kind)
+
     def file(host: str, path: str) -> str:
         return state.nodes[host].files.get(path, "")
 
@@ -209,6 +230,8 @@ def check_env(shell) -> dict:
         "dcgm": state.dcgm,
         "flags": state.flags,
         "ran": ran,
+        "ran_before": ran_before,
+        "audit": audit,
         "file": file,
         "pods": pods,
         "release": release,

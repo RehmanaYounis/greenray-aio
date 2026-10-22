@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import yaml
 
+from ...core import audit
 from ...core.errors import CommandError
 from ...core.state import wrap
 from .. import container as ct
@@ -394,6 +395,8 @@ def delete_obj(state, kind: str, ns: str, name: str, opts: dict) -> str:
         p = next((p for p in k.pods if p.namespace == ns and p.name == name), None)
         if p is None:
             raise CommandError(f'Error from server (NotFound): pods "{name}" not found', 1)
+        if p.status == "Running":
+            audit.record(state, audit.DELETE_RUNNING_POD, "bcm-head", "kubectl delete pod", f"{ns}/{name}")
         remove_pod(state, p)
         return f'pod "{name}" deleted'
     if kind == "deployments":

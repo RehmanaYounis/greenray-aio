@@ -29,6 +29,9 @@ checks:
     expr: ran(r'^(ibstat|ibstatus|ibv_devinfo)', '{node}')
   - desc: you looked at link/module diagnostics with mlxlink
     expr: ran(r'^mlxlink .*-d', '{node}')
+  - desc: the module diagnostics came before the cable was reseated
+    kind: evidence
+    expr: ran_before(r'^mlxlink .*-d', r'^reseat-cable')
   - desc: a multi-node NCCL test including {node} reached >= 350 GB/s over IB
     expr: (lambda r:r.get('ok') and '{node}' in r.get('hosts', []) and len(r.get('hosts', [])) > 1 and r.get('transport') == 'IB' and r.get('busbw', 0) >= 350)(flags.get('nccl_last', {}))
 hints:

@@ -178,20 +178,31 @@ def show_briefing(
     ui.out(ui.dim("Type 'help' for lab commands, 'explain <command>' to learn a command.\n"))
 
 
-def show_results(ui: UI, results: list[tuple[str, bool, str]], hide_unmet: bool = False) -> None:
-    """Print check results. ``hide_unmet`` keeps unmet criteria secret (incident mode)."""
+KIND_TAG = {"safety": "safe practice", "evidence": "evidence"}
+
+
+def show_results(
+    ui: UI, results: list[tuple[str, bool, str]], hide_unmet: bool = False, kinds: list[str] | None = None
+) -> None:
+    """Print check results. ``hide_unmet`` keeps unmet criteria secret (incident mode).
+
+    ``kinds`` (one per result) tags evidence and safe-practice rows so the learner sees what kind
+    of judgment each one rewards.
+    """
     debug = config.debug()
+    kinds = kinds or ["outcome"] * len(results)
     rows, styles, unmet = [], [], 0
-    for desc, ok, err in results:
+    for (desc, ok, err), kind in zip(results, kinds):
         if hide_unmet and not ok:
             unmet += 1
             continue
-        detail = f"  ({err})" if err and debug else ""
+        tag = KIND_TAG.get(kind)
+        label = desc + (f"  ({err})" if err and debug else "")
         if ui.color:
-            rows.append(["✓" if ok else "✗", desc + detail])
+            rows.append(["✓" if ok else "✗", f"[{tag}] {label}" if tag else label])
             styles.append("green" if ok else "red")
         else:
-            ui.out(f"  {'PASS' if ok else 'FAIL'}  {desc}{detail}")
+            ui.out(f"  {'PASS' if ok else 'FAIL'}  {f'[{tag}] ' if tag else ''}{label}")
     if unmet:
         noun = "criterion" if unmet == 1 else "criteria"
         line = f"{unmet} more success {noun} not met yet"
@@ -370,7 +381,7 @@ def run_lab(ui: UI, s: Scenario | None, incident: bool = False, hide_identity: b
                 break
         elif s and cmd == "check":
             results = session.grade()
-            show_results(ui, results, hide_unmet=incident and not session.objectives_revealed)
+            show_results(ui, results, hide_unmet=incident and not session.objectives_revealed, kinds=s.kinds)
             mins = (time.time() - session.started) / 60
             if all(ok for _, ok, _ in results):
                 passed = True

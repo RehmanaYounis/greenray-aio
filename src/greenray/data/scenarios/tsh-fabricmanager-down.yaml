@@ -53,8 +53,9 @@ checks:
     expr: flags.get('last_cuda', {}).get('{node}') == 'PASS'
   - desc: you read the Fabric Manager logs on {node}
     expr: ran(r'(journalctl.*fabricmanager|systemctl status nvidia-fabricmanager)', '{node}')
-  - desc: you compared the Fabric Manager version with the driver version
-    expr: ran(r'nv-fabricmanager (-v|--version)|dpkg.*fabricmanager|apt.*fabricmanager|cat /var/log/apt/history.log', '{node}')
+  - desc: you compared the Fabric Manager version with the driver version before starting the service
+    kind: evidence
+    expr: ran_before(r'nv-fabricmanager (-v|--version)|dpkg.*fabricmanager|apt.*fabricmanager|cat /var/log/apt/history.log', r'systemctl (enable|start|restart).*fabricmanager', '{node}')
 hints:
   - "CUDA error 802 (cudaErrorSystemNotReady) on an NVSwitch system almost always means the NVLink fabric was never set up. Which service does that?"
   - "Check `systemctl status nvidia-fabricmanager` and `journalctl -u nvidia-fabricmanager` on {node}. Read the whole story, including the last line."

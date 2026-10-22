@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ...core import audit
 from .. import command
 from .affinity import _gpu_core_map
 from .common import (
@@ -233,6 +234,9 @@ def _update_node(ctx, kv):
             if st == "DOWN":
                 for j in s.jobs:
                     if j.state == "RUNNING" and n in j.nodelist:
+                        audit.record(
+                            state, audit.NODE_DOWN_WITH_JOBS, ctx.host, "scontrol update state=down", f"{n}: {j.id}"
+                        )
                         _finish(state, j, "NODE_FAIL", "0:0")
         elif st in ("RESUME", "IDLE", "UNDRAIN"):
             if not (sn.drain or sn.down or sn.invalid_reg):

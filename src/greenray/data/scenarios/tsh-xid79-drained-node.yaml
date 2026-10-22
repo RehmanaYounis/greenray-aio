@@ -51,6 +51,9 @@ setup:
 checks:
   - desc: you read the kernel log on {node} (the Xid tells you what failed)
     expr: ran(r'^(dmesg|journalctl -k|journalctl --dmesg)', '{node}')
+  - desc: you read the logs before rebooting or power-cycling the node
+    kind: evidence
+    expr: ran_before(r'^(dmesg|journalctl)', r'^(reboot|scontrol reboot|cmsh .*power|ipmitool .*power)')
   - desc: all 8 GPUs on {node} are visible again
     expr: not any(g.fallen_off_bus for g in nodes['{node}'].gpus)
   - desc: a DCGM diagnostic of level 2+ passed on {node}

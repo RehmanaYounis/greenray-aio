@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import shlex
 
+from ...core import audit
 from ...core.errors import CommandError
 from .. import command
 from .common import (
@@ -511,6 +512,8 @@ def scancel(ctx, args):
                 continue
             targets.append(j)
     for j in targets:
+        if j.user != "root":
+            audit.record(state, audit.CANCEL_USER_JOB, ctx.host, "scancel", f"{j.id} ({j.user})")
         _finish(state, j, "CANCELLED", "0:0")
     schedule(state)
     if out:

@@ -48,6 +48,12 @@ checks:
     expr: ran(r'nvidia-smi .*(ROW_REMAPPER|remapped_rows|-d ECC|-q)', '{node}') or ran(r'dcgmi (diag|health)', '{node}')
   - desc: "{node} was drained for the maintenance"
     expr: len(slurm.nodes['{node}'].get('drain_log', [])) > 0
+  - desc: the node was drained before the GPU was reset or the node rebooted
+    kind: safety
+    expr: ran_before(r'(scontrol update .*state=drain|cmsh .*drain)', r'(nvidia-smi .*-r\b|^reboot|scontrol reboot)')
+  - desc: nothing was rebooted, powered off or set DOWN with {user}'s job still on it
+    kind: safety
+    expr: not audit('reboot_with_jobs') and not audit('power_off_with_jobs') and not audit('node_down_with_jobs')
   - desc: GPU {gpu} has no pending row remap (remap activated by a GPU reset or reboot)
     expr: not nodes['{node}'].gpus[{gpu}].remap_pending and not nodes['{node}'].gpus[{gpu}].remap_failure
   - desc: "{user}'s job {job} was requeued (not simply killed)"

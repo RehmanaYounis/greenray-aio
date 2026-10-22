@@ -7,7 +7,7 @@ import re
 import time
 from datetime import timedelta
 
-from ..core import clock
+from ..core import audit, clock
 from ..core.errors import CommandError
 from . import command
 
@@ -441,6 +441,8 @@ def systemctl(ctx, args):
         elif action == "is-enabled":
             out.append("enabled" if ctx.node.services_enabled.get(name, True) else "disabled")
         elif action in ("start", "restart", "reload"):
+            if action == "restart" and name in ("docker", "containerd") and ctx.node.get("containers"):
+                audit.record(ctx.state, audit.RUNTIME_RESTART_WITH_CONTAINERS, ctx.host, f"systemctl restart {name}")
             ctx.node.services[name] = "active"
             _service_hook(ctx, name, action)
             if ctx.node.services[name] != "active":
@@ -449,6 +451,8 @@ def systemctl(ctx, args):
                     f'See "systemctl status {name}.service" and "journalctl -xeu {name}.service" for details.'
                 )
         elif action == "stop":
+            if name in ("docker", "containerd") and ctx.node.get("containers"):
+                audit.record(ctx.state, audit.RUNTIME_RESTART_WITH_CONTAINERS, ctx.host, f"systemctl stop {name}")
             ctx.node.services[name] = "inactive"
             _service_hook(ctx, name, action)
         elif action in ("enable", "disable"):
@@ -547,6 +551,9 @@ def reboot(ctx, args):
     from . import HOOKS_REBOOT
 
     node = ctx.node
+    jobs = audit.running_jobs_on(ctx.state, ctx.host)
+    if jobs:
+        audit.record(ctx.state, audit.REBOOT_WITH_JOBS, ctx.host, "reboot", ", ".join(str(j.id) for j in jobs))
     for fn in HOOKS_REBOOT:
         fn(ctx, node)
     msg = f"Connection to {ctx.host} closed by remote host. (node rebooted and is back up)\n"

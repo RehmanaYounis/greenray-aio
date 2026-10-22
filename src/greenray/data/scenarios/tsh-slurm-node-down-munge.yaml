@@ -68,11 +68,15 @@ setup:
 checks:
   - desc: you gathered evidence (slurmd/slurmctld/munge logs, or a munge -n | unmunge test)
     expr: ran(r'^journalctl') or ran(r'^unmunge')
+  - desc: the evidence came before the key was copied or munge restarted
+    kind: evidence
+    expr: ran_before(r'^(journalctl|unmunge|md5sum)', r'(scp .*munge|systemctl restart munge|imageupdate)')
   - desc: "{node} has the cluster's MUNGE key"
     expr: file('{node}', '/etc/munge/munge.key') == file('bcm-head', '/etc/munge/munge.key')
   - desc: munged on {node} is running with that key (restarted after the copy)
     expr: nodes['{node}'].services['munge'] == 'active' and nodes['{node}'].get('munge_key_loaded') == nodes['bcm-head'].get('munge_key_loaded')
   - desc: the cluster-wide key was not rotated (head node and {others_text} unchanged)
+    kind: safety
     expr: all(nodes[h].get('munge_key_loaded') == "munge-key:4f1d8c2a9e07b6d35a1c2e9f80b7d4c6e1a3f5b7092c4d6e8f0a1b3c5d7e9f102\n" and file(h, '/etc/munge/munge.key') == nodes[h].get('munge_key_loaded') for h in ('bcm-head', {others}))
   - desc: "{node} is IDLE and responding in Slurm"
     expr: slurm.nodes['{node}'].state == 'IDLE' and not slurm.nodes['{node}'].get('not_responding')

@@ -55,8 +55,8 @@ A good routine is to learn a topic in guided mode first, then prove it with `gre
 ## What the grader can and cannot judge
 
 - It grades the **end state** of the cluster, so any valid fix passes. `nvidia-smi -pm 1` and `systemctl enable --now nvidia-persistenced` are both accepted for persistence mode.
-- Evidence checks confirm that you **ran** the diagnostic commands. Unless a check says otherwise, they do not check that you ran them before changing anything. Diagnose first anyway; the debrief reminds you.
-- It does not generally detect unnecessary changes. Some scenarios guard against specific harmful ones, such as raising a power limit to hide a thermal fault or killing a user's job, and say so in their objectives.
+- **Evidence** checks confirm that you ran the diagnostic commands, and where the order matters, that you ran them before changing anything.
+- **Safe practice** checks catch the shortcuts an operations team would not accept: a reboot or power-off with a user's job still on the node, a node set DOWN instead of drained, another user's job cancelled, a running pod deleted, a power limit raised to hide a thermal fault. Results tag these rows so you can see what each criterion rewards. They count towards passing like any other objective.
 - If a command crashes inside the simulator, which is a bug, the cluster is restored to its state before that command and you are told so. Please report it.
 
 ## Files and settings
