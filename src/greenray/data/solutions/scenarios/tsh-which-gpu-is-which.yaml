@@ -9,11 +9,11 @@ solution:
   - exit
   - |
     cat > /root/gpu-report-{node}.txt <<EOF
-    Node: "{node}"
+    Node: {node}
     PCI bus id: 0000:{busl}:00.0 (nvidia-smi: 00000000:{bus}:00.0)
     GPU index: {gpu}
-    UUID: "{uuid}"
-    Serial: "{serial}"
+    UUID: {uuid}
+    Serial: {serial}
     Symptom: PCIe correctable errors (RxErr) in BMC SEL and dmesg, 3 events in 24 h; no job impact yet
     EOF
   - cat /root/gpu-report-{node}.txt
