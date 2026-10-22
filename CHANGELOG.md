@@ -2,6 +2,11 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [0.9.1] - 2026-10-22
+
+### Fixed
+- The interactive menu answers unknown input instead of silently reprinting itself, accepts `help`, the entry names and commands pasted from the docs (`greenray next`, `lab <id>`), and tells a first-time user where to start.
+
 ## [0.9.0] - 2026-10-22
 
 Where to look, not only what to fix.

@@ -18,6 +18,7 @@ import argparse
 import sys
 
 from . import __version__, config
+from .app import progress
 from .app.exam import run_exam
 from .app.lab import pick_incident, run_lab
 from .app.mock import run_mock
@@ -42,26 +43,68 @@ MENU = """\
 q  Quit"""
 
 
+MENU_HELP = """\
+Type the number of a menu entry and press Enter, or q to quit.
+
+Everything here is also a command outside the menu, which is the quicker way once you know them:
+  greenray next            what to practise next (start here)
+  greenray lab <id>        a scenario in guided mode; greenray list shows the ids
+  greenray incident        a random incident with the cause hidden
+  greenray mock            the mock exam
+  greenray --help          every command and flag
+
+Inside a lab, type help for the lab commands and commands for the simulated tools.
+Manual: https://rehmanayounis.github.io/greenray-aio/
+"""
+
+# Words accepted at the menu prompt besides the numbers, so a command pasted from the docs also works.
+MENU_WORDS = {
+    "incident": "0",
+    "labs": "1",
+    "lab": "1",
+    "list": "1",
+    "mock": "2",
+    "exam": "3",
+    "drill": "3",
+    "domain": "4",
+    "sandbox": "5",
+    "progress": "6",
+    "next": "7",
+    "plan": "8",
+    "quit": "q",
+    "exit": "q",
+}
+
+
 def menu(ui: UI) -> None:
     ui.out(ui.banner(__version__, "Hands-on labs for AI infrastructure operations · NCP-AIO exam prep"))
+    data = progress.load()
+    if not data["scenarios"] and not data["exams"]:
+        ui.out(ui.dim("First time here? Choose 7: it starts you on the first on-ramp lab. Type help for more."))
     while True:
         ui.out("")
         ui.out(ui.panel(MENU, title="Main menu"))
-        choice = ui.ask("> ").strip().lower()
-        if choice == "0":
+        raw = ui.ask("Choice (0-8, q, or help): ").strip()
+        words = raw.lower().removeprefix("greenray").split()
+        choice = MENU_WORDS.get(words[0], words[0]) if words else ""
+        if choice in ("help", "?", "h"):
+            ui.out(ui.panel(MENU_HELP.rstrip(), title="How to use GreenRay AIO"))
+        elif choice == "0":
             for i, d in enumerate(DOMAINS, 1):
                 ui.out(f"  {i}) {d}")
             k = ui.ask("Domain (blank = any): ").strip()
             domain = DOMAINS[int(k) - 1] if k.isdigit() and 1 <= int(k) <= len(DOMAINS) else None
             start_incident(ui, domain=domain)
         elif choice == "1":
-            list_scenarios(ui)
-            sid = ui.ask("\nScenario id (blank to go back): ").strip()
+            sid = words[1] if len(words) > 1 else ""
+            if not sid:
+                list_scenarios(ui)
+                sid = ui.ask("\nScenario id (blank to go back): ").strip()
             if sid:
                 try:
                     run_lab(ui, sc.find(sid))
                 except KeyError:
-                    ui.out(ui.red(f"No scenario '{sid}'."))
+                    ui.out(ui.red(f"No scenario '{sid}'. Choose 1 to see the list."))
         elif choice == "2":
             run_mock(ui)
         elif choice == "3":
@@ -80,8 +123,10 @@ def menu(ui: UI) -> None:
             show_next(ui)
         elif choice == "8":
             show_plan(ui)
-        elif choice in ("q", "quit"):
+        elif choice == "q":
             return
+        elif choice:
+            ui.out(ui.red(f"Unknown choice '{raw}'. Enter a number from the menu, or help."))
 
 
 def start_incident(ui: UI, domain: str | None = None, tag: str | None = None, sid: str | None = None) -> int:
