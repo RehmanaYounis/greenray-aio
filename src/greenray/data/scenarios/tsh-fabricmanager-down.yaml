@@ -1,5 +1,5 @@
 id: tsh-fabricmanager-down
-title: "CUDA error: system not yet initialized on {node}"
+title: "CUDA error: system not yet initialized on one DGX node"
 domain: Troubleshooting and Optimization
 difficulty: medium
 time_limit_min: 12

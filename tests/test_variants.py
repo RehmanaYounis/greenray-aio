@@ -17,7 +17,8 @@ def test_variant_fills_problem_and_solution():
     assert len(raw.variants) == 3 and raw.variant_label == ""
     v = raw.variant(1)
     node = raw.variants[1]["node"]
-    assert node in v.title and node in v.briefing and "{node}" not in v.briefing
+    assert node in v.briefing and "{node}" not in v.briefing
+    assert "{" not in raw.title  # titles stay generic: lists show the raw scenario
     assert all(node in c["expr"] or "{node}" not in c["expr"] for c in v.checks)
     assert any(node in step for step in v.solution) and "{node}" not in v.explanation
     assert v.variant_label == "variant 2 of 3"

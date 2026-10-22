@@ -1,5 +1,5 @@
 id: tsh-xid79-drained-node
-title: "{node} drained overnight and a fine-tuning job died"
+title: "A DGX node drained overnight and a fine-tuning job died"
 domain: Troubleshooting and Optimization
 difficulty: medium
 time_limit_min: 15

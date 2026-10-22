@@ -2,6 +2,13 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [0.9.2] - 2026-10-22
+
+### Fixed
+- A lab started without `--variant` showed the unfilled briefing, objectives and hints (`{node}`) while grading a concrete variant. The lab now shows the variant it grades, and `retry` shows the next one.
+- Scenario titles no longer carry placeholders, so `greenray list` and `greenray next` read correctly.
+- The test-suite drives every variant of every scenario through the lab interface, in guided and incident mode, exactly as a learner types it, and fails on any placeholder that reaches the screen.
+
 ## [0.9.1] - 2026-10-22
 
 ### Fixed
