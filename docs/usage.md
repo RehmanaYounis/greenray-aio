@@ -40,9 +40,9 @@ These meta-commands sit alongside the simulated cluster commands:
 
 Ctrl-C cancels the current line, as in bash. Tab completes commands, hostnames and paths on the simulated node; the up arrow and Ctrl-R search your history.
 
-When you pass, you get the **debrief**: the reference solution, why it works, the edge cases and exam traps, your own commands for comparison, and a related scenario to practise next. Read it even when you passed.
+When you pass, the lab offers the **debrief**: the reference solution, why it works, the edge cases and exam traps, your own commands for comparison, and a related scenario to practise next. Enter shows it; `n` skips it. Read it even when you passed.
 
-After the debrief come three questions: which evidence identified the cause, why your fix was safer than the alternative, and what you would verify before declaring recovery. They are not graded. Answer in a line or two, or press Enter to skip. Answers are appended to `~/.greenray/notes/<scenario-id>.md`, one file per scenario, so your own reasoning is there to reread before the exam.
+After the debrief the lab offers three questions (Enter accepts, `n` skips): which evidence identified the cause, why your fix was safer than the alternative, and what you would verify before declaring recovery. They are not graded. Answer in a line or two, or press Enter to skip. Answers are appended to `~/.greenray/notes/<scenario-id>.md`, one file per scenario, so your own reasoning is there to reread before the exam.
 
 ## Guided or independent
 

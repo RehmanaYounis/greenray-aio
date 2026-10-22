@@ -400,8 +400,7 @@ def run_lab(ui: UI, s: Scenario | None, incident: bool = False, hide_identity: b
                 )
                 if mins > s.time_limit_min:
                     ui.out(ui.yellow("Correct, but slower than the target. Repeat it later for speed."))
-                show_debrief(ui, session, passed=True, identity_hidden=hide_identity)
-                reflect.run(ui, s)
+                after_pass(ui, session, incident, hide_identity)
                 break
             met = sum(ok for _, ok, _ in results)
             ui.out(ui.dim(f"\n{met}/{len(results)} criteria met, {mins:.1f} min elapsed."))
@@ -409,6 +408,26 @@ def run_lab(ui: UI, s: Scenario | None, incident: bool = False, hide_identity: b
             run_shell_line(ui, session, line)
     if s:
         _record(session, passed, gave_up, incident)
+
+
+def _yes(ui: UI, question: str) -> bool:
+    """Enter means yes; only an explicit n/no declines. Ctrl-C counts as no."""
+    try:
+        return ui.ask(question).strip().lower() not in ("n", "no")
+    except KeyboardInterrupt:
+        ui.out("")
+        return False
+
+
+def after_pass(ui: UI, session: LabSession, incident: bool, hide_identity: bool) -> None:
+    """The debrief and the reflection are offered, not forced, so the result stays on screen."""
+    what = "reference solution, why it works, edge cases"
+    if hide_identity:
+        what += ", and the scenario's identity"
+    if _yes(ui, f"\nShow the debrief ({what})? [Y/n] "):
+        show_debrief(ui, session, passed=True, identity_hidden=hide_identity)
+    if _yes(ui, "\nReflect on it now? Three short questions, not graded. [Y/n] "):
+        reflect.run(ui, session.scenario_required)
 
 
 def pick_incident(domain: str | None = None, tag: str | None = None, seed: int | None = None) -> Scenario | None:
