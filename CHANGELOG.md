@@ -2,6 +2,11 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [0.9.3] - 2026-10-22
+
+### Changed
+- After every objective is met, the lab offers the debrief and then the reflection instead of printing both at once, so the result stays on screen. Enter accepts, `n` skips.
+
 ## [0.9.2] - 2026-10-22
 
 ### Fixed

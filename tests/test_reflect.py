@@ -12,7 +12,7 @@ SOLVE = ["ssh dgx-03", "nvidia-smi -q -d PERFORMANCE", "nvidia-smi -pl 700", "nv
 
 def test_answers_are_saved_per_scenario():
     ui = ScriptedUI(
-        [*SOLVE, "the SW Power Cap reason", "it restores the default instead of guessing", "clocks under load"]
+        [*SOLVE, "", "", "the SW Power Cap reason", "it restores the default instead of guessing", "clocks under load"]
     )
     lab.run_lab(ui, concrete(SID))
     path = reflect.note_path(SID)
@@ -23,7 +23,7 @@ def test_answers_are_saved_per_scenario():
 
 
 def test_blank_answers_write_nothing():
-    ui = ScriptedUI([*SOLVE, "", "", ""])
+    ui = ScriptedUI([*SOLVE, "", "", "", "", ""])
     lab.run_lab(ui, concrete(SID))
     assert not reflect.note_path(SID).exists() and reflect.count() == 0
 
@@ -35,3 +35,14 @@ def test_no_reflection_in_the_exam_or_on_a_failed_lab():
     ui = ScriptedUI(["solution", "y"])
     lab.run_lab(ui, sc.find("adm-mig-h100-1g"))
     assert not any("evidence told you" in p for p in ui.prompts)
+
+
+def test_debrief_and_reflection_are_offered_not_forced():
+    ui = ScriptedUI([*SOLVE, "n", "n"])
+    lab.run_lab(ui, concrete(SID))
+    assert "All objectives met" in ui.text
+    assert "Debrief:" not in ui.text and "Reflect (not graded" not in ui.text
+    assert not reflect.note_path(SID).exists()
+    ui = ScriptedUI([*SOLVE, "", "n"])
+    lab.run_lab(ui, concrete(SID))
+    assert "Debrief:" in ui.text and "Reflect (not graded" not in ui.text

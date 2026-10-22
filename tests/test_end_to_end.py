@@ -25,7 +25,7 @@ def typed(scenario: sc.Scenario) -> list[str]:
 @requires_solutions
 @pytest.mark.parametrize("s", VARIANTS, ids=IDS)
 def test_guided_lab_passes_when_typed(s):
-    ui = ScriptedUI([*typed(s), "check", "", "", ""])
+    ui = ScriptedUI([*typed(s), "check", "", "", "", "", ""])
     lab.run_lab(ui, s)
     assert "All objectives met" in ui.text, ui.text[-1500:]
     assert not PLACEHOLDER.search(ui.text), PLACEHOLDER.search(ui.text).group(0)
@@ -34,7 +34,7 @@ def test_guided_lab_passes_when_typed(s):
 @requires_solutions
 @pytest.mark.parametrize("s", VARIANTS, ids=IDS)
 def test_incident_passes_when_typed(s):
-    ui = ScriptedUI([*typed(s), "check", "", "", ""])
+    ui = ScriptedUI([*typed(s), "check", "", "", "", "", ""])
     lab.run_lab(ui, s, incident=True, hide_identity=True)
     assert "All objectives met" in ui.text and "independently" in ui.text
     assert not PLACEHOLDER.search(ui.text)
