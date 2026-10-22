@@ -99,10 +99,22 @@ def touch(ctx, args):
 
 @command("rm")
 def rm(ctx, args):
+    force = any(a.startswith("-") and "f" in a for a in args)
+    recursive = any(a.startswith("-") and ("r" in a or "R" in a) for a in args)
     for a in args:
         if a.startswith("-"):
             continue
-        ctx.node.files.pop(a, None)
+        path = ctx.abspath(a)
+        inside = [f for f in ctx.node.files if f.startswith(path.rstrip("/") + "/")]
+        if path in ctx.node.files:
+            del ctx.node.files[path]
+        elif inside and recursive:
+            for f in inside:
+                del ctx.node.files[f]
+        elif inside:
+            raise CommandError(f"rm: cannot remove '{a}': Is a directory", 1)
+        elif not force:
+            raise CommandError(f"rm: cannot remove '{a}': No such file or directory", 1)
     return ""
 
 
@@ -511,12 +523,46 @@ def lsmod(ctx, args):
     return "\n".join(rows) + "\n"
 
 
+# Modules the DGX OS image ships; anything else fails the way modprobe does on a real node.
+KNOWN_MODULES = frozenset(
+    {
+        "nvidia",
+        "nvidia_uvm",
+        "nvidia_modeset",
+        "nvidia_drm",
+        "nvidia_peermem",
+        "nvidia_fs",
+        "mlx5_core",
+        "mlx5_ib",
+        "ib_core",
+        "ib_uverbs",
+        "ib_umad",
+        "rdma_ucm",
+        "rdma_cm",
+        "ib_ipoib",
+        "nvme",
+        "nvme_tcp",
+        "overlay",
+        "br_netfilter",
+        "ipmi_devintf",
+        "ipmi_si",
+        "gdrdrv",
+        "nfs",
+        "lustre",
+    }
+)
+
+
 @command("modprobe", help="modprobe [-r] <module>")
 def modprobe(ctx, args):
     remove = "-r" in args
     # the kernel treats '-' and '_' in module names as the same character
     mods = [a.replace("-", "_") for a in args if not a.startswith("-")]
+    if not mods:
+        raise CommandError("modprobe: ERROR: missing parameters. See -h.", 1)
     for m in mods:
+        if m not in KNOWN_MODULES and m not in ctx.node.modules:
+            raise CommandError(f"modprobe: FATAL: Module {m} not found in directory /lib/modules/{ctx.node.kernel}", 1)
         if remove:
             if m == "nvidia" and any(g.processes for g in ctx.node.gpus):
                 raise CommandError("modprobe: FATAL: Module nvidia is in use.")

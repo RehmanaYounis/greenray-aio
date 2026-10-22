@@ -299,10 +299,32 @@ def creds_valid(state, user: str, password: str) -> bool:
     return user == OAUTH_USER and key_valid(state, password)
 
 
+# Public Docker Hub repositories the lab knows; anything else is "repository does not exist", as for real.
+DOCKER_HUB_REPOS = frozenset(
+    {
+        "library/ubuntu",
+        "library/busybox",
+        "library/alpine",
+        "library/python",
+        "library/nginx",
+        "library/hello-world",
+        "library/debian",
+        "nvidia/cuda",
+        "pytorch/pytorch",
+        "tensorflow/tensorflow",
+        "rocm/pytorch",
+        "jupyter/base-notebook",
+        "bitnami/kubectl",
+    }
+)
+
+
 def registry_check(state, ref: str, creds=None):
     """Return None if the image can be pulled with ``creds`` (user, password) else an error kind."""
     container_init(state)
     reg, repo, tag = parse_image(ref)
+    if reg == "docker.io":
+        return None if repo in DOCKER_HUB_REPOS else "not_found"
     if reg != "nvcr.io":
         return None
     authed = bool(creds) and creds_valid(state, *creds)
@@ -1648,6 +1670,17 @@ def enroot(ctx, args):
                     1,
                 )
             lines.append("[INFO] Authentication succeeded")
+        elif registry_check(ctx.state, ref, None):
+            raise CommandError(
+                "\n".join(
+                    lines
+                    + [
+                        "[INFO] Authenticating with user: <anonymous>",
+                        f"[ERROR] URL https://registry-1.docker.io/v2/{repo}/manifests/{tag} returned error code: 404 Not Found",
+                    ]
+                ),
+                1,
+            )
         name = out_name or (repo.replace("/", "+") + "+" + tag + ".sqsh").removeprefix("library+")
         path = name if name.startswith("/") else f"{ctx.cwd.rstrip('/')}/{name}"
         if path in node.files:

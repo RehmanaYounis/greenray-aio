@@ -611,7 +611,9 @@ def nvidia_smi(ctx, args):
         return _query_full(ctx, _visible(gpus), set(d.upper().split(",")) if d else set())
     pm = _opt(args, "-pm", "--persistence-mode")
     if pm is not None:
-        on = pm in ("1", "ENABLED", "Enabled")
+        if pm.upper() not in ("0", "1", "ENABLED", "DISABLED"):
+            raise CommandError(f"Invalid persistence mode value: {pm}. Valid values are 0/DISABLED or 1/ENABLED.", 1)
+        on = pm.upper() in ("1", "ENABLED")
         out = []
         for g in _visible(gpus):
             g.persistence_mode = on
@@ -698,6 +700,14 @@ def nvidia_smi(ctx, args):
     lgc = _opt(args, "-lgc", "--lock-gpu-clocks")
     if lgc is not None:
         lo, _, hi = lgc.partition(",")
+        if not (lo.isdigit() and (not hi or hi.isdigit())):
+            raise CommandError(f"Invalid value for lock GPU clocks: {lgc}", 1)
+        if any(int(hi or lo) > g.max_sm_clock_mhz or int(lo) > int(hi or lo) for g in _visible(gpus)):
+            raise CommandError(
+                f"Setting locked GPU clocks is not allowed: requested clocks {lgc} MHz are outside the supported range "
+                f"for {_visible(gpus)[0].name} (max {_visible(gpus)[0].max_sm_clock_mhz} MHz).",
+                1,
+            )
         for g in _visible(gpus):
             g.sm_clock_mhz = int(hi or lo)
         return (
