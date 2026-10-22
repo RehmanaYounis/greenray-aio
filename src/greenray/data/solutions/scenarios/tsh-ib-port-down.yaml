@@ -1,18 +1,18 @@
 # Private solution for scenario tsh-ib-port-down
 solution:
-  - ssh dgx-03
+  - ssh {node}
   - ibstat
-  - ibstatus mlx5_3
-  - mlxlink -d mlx5_3 -m
-  - mlxlink -d mlx5_3 --port_state TG
-  - ibstat mlx5_3
+  - ibstatus mlx5_{rail}
+  - mlxlink -d mlx5_{rail} -m
+  - mlxlink -d mlx5_{rail} --port_state TG
+  - ibstat mlx5_{rail}
   - exit
-  - reseat-cable dgx-03 mlx5_3
-  - ssh dgx-03
-  - ibstat mlx5_3
+  - reseat-cable {node} mlx5_{rail}
+  - ssh {node}
+  - ibstat mlx5_{rail}
   - ibdiagnet
   - exit
-  - mpirun --allow-run-as-root -np 16 -H dgx-01:8,dgx-03:8 all_reduce_perf -b 1G -e 8G -f 2 -g 1
+  - mpirun --allow-run-as-root -np 16 -H {peer}:8,{node}:8 all_reduce_perf -b 1G -e 8G -f 2 -g 1
 explanation: |
   Read IB port states in two layers:
     * Physical state: LinkUp, Polling, Disabled. Polling = the port is trying
@@ -22,7 +22,7 @@ explanation: |
     * Logical state: Down, Initializing, Armed, Active. With LinkUp +
       Initializing the physical link is fine but no Subnet Manager has
       configured the port. That is an SM/UFM problem, not a cable.
-  mlx5_3 showed Down/Polling, "Rate: 10" (what ibstat prints when there is no
+  mlx5_{rail} showed Down/Polling, "Rate: 10" (what ibstat prints when there is no
   link), and -40 dBm RX power on every lane in `mlxlink -m`, meaning no light
   is arriving. A software toggle cannot fix that. Reseating the transceiver
   and fiber restored the link, and the port trained at 4X NDR (400 Gb/s).

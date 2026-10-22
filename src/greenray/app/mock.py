@@ -152,7 +152,7 @@ def run_mock(ui: UI, seed: int | None = None, labs_only: bool = False) -> None:
         ui.out(f"  Questions: {res['correct']}/{res['total']} = {res['pct']:.0f}%")
     for lab in labs:
         ui.out(f"  Lab {lab.scenario_required.id}: {lab_scores[lab.scenario_required.id] * 100:.0f}% of objectives")
-        show_results(ui, lab.grade())
+        show_results(ui, lab.grade(), kinds=lab.scenario_required.kinds)
     if not labs_only:
         ui.out(
             ui.dim(

@@ -10,7 +10,7 @@ import time
 
 import pytest
 
-from conftest import ScriptedUI, requires_solutions
+from conftest import ScriptedUI, concrete, requires_solutions
 from greenray.app import lab, progress
 from greenray.commands import names as command_names
 from greenray.content import guides, solutions
@@ -32,12 +32,12 @@ def record():
 
 def play(lines, incident=False, hide_identity=False, scenario=SID):
     ui = ScriptedUI(lines)
-    lab.run_lab(ui, sc.find(scenario), incident=incident, hide_identity=hide_identity)
+    lab.run_lab(ui, concrete(scenario), incident=incident, hide_identity=hide_identity)
     return ui
 
 
 def grade(cmds, scenario=SID):
-    s = sc.find(scenario)
+    s = concrete(scenario)
     sh = Shell(s.build_state())
     for c in cmds:
         sh.run(c)
@@ -59,7 +59,7 @@ def test_last_hint_needs_confirmation():
     ui = play(["hint", "hint", "hint", "n", "quit"])
     assert any("close to the answer" in p for p in ui.prompts)
     assert "Hint 2/3" in ui.text and "Hint 3/3" not in ui.text
-    assert sc.find(SID).hints[2] not in ui.text
+    assert concrete(SID).hints[2] not in ui.text
 
 
 # 2. experienced learner, independently ----------------------------------------------------
@@ -121,7 +121,7 @@ def test_guides_do_not_contain_reference_solutions():
 
 def test_explain_is_not_available_in_the_mock_exam():
     ui = ScriptedUI(["explain nvidia-smi", "back"])
-    lab.run_exam_lab(ui, lab.LabSession(sc.find(SID)), deadline=time.time() + 3600)
+    lab.run_exam_lab(ui, lab.LabSession(concrete(SID)), deadline=time.time() + 3600)
     assert "Not available during the exam" in ui.text
     assert "What it does" not in ui.text
 
@@ -140,7 +140,7 @@ def test_partial_fix_does_not_pass_and_hides_unmet_criteria():
 
 
 def test_reset_restores_cluster_but_keeps_attempt_guidance():
-    s = sc.find(SID)
+    s = concrete(SID)
     session = lab.LabSession(s)
     initial = [ok for _, ok, _ in session.grade()]
     for c in [*DIAGNOSE, *FIX]:
@@ -151,11 +151,12 @@ def test_reset_restores_cluster_but_keeps_attempt_guidance():
     assert session.hints_used == 1  # same attempt: no laundering hints through reset
 
 
-def test_retry_starts_a_fresh_independent_attempt():
-    ui = play(["objectives", "y", "retry", *DIAGNOSE, *FIX, "check"], incident=True)
-    assert "Fresh attempt #2" in ui.text
+def test_retry_starts_a_fresh_independent_attempt_on_another_variant():
+    other = [c.replace("dgx-03", "dgx-02") for c in DIAGNOSE]  # retry moves to the next variant
+    ui = play(["objectives", "y", "retry", *other, *FIX, "check"], incident=True)
+    assert "Fresh attempt #2" in ui.text and "variant 2 of 3" in ui.text
     rec = record()
-    assert rec["attempts"] == 2 and rec["independent_passes"] == 1
+    assert rec["attempts"] == 2 and rec["independent_passes"] == 1 and rec["variants_seen"] == [0, 1]
 
 
 def test_revealing_objectives_makes_the_attempt_guided():
@@ -191,7 +192,7 @@ def test_remote_commands_from_head_node_pass():
 
 
 def test_persistence_daemon_state_is_consistent_evidence():
-    sh = Shell(sc.find(SID).build_state())
+    sh = Shell(concrete(SID).build_state())
     sh.run("ssh dgx-03")
     assert "inactive" in sh.run("systemctl status nvidia-persistenced")
     sh.run("systemctl stop nvidia-persistenced")
@@ -216,7 +217,7 @@ def test_mig_alternative_syntax_passes():
 
 
 def test_incident_mode_hides_identity_and_objectives_until_debrief():
-    s = sc.find(SID)
+    s = concrete(SID)
     ui = play(["task", "check", "quit"], incident=True, hide_identity=True)
     text = ui.text
     assert s.title not in text and s.id not in text
@@ -226,14 +227,14 @@ def test_incident_mode_hides_identity_and_objectives_until_debrief():
 
 
 def test_guided_lab_still_shows_title_and_objectives():
-    s = sc.find(SID)
+    s = concrete(SID)
     ui = play(["quit"])
     assert s.title in ui.text and all(o in ui.text for o in s.objectives)
 
 
 def test_debrief_reveals_identity_and_shows_learner_commands():
     ui = play([*DIAGNOSE, *FIX, "check"], incident=True, hide_identity=True)
-    s = sc.find(SID)
+    s = concrete(SID)
     assert f"This incident was: {s.title}" in ui.text
     assert "Your commands" in ui.text and "$ nvidia-smi -pl 700" in ui.text
     assert "Practise next: greenray incident --id" in ui.text
@@ -241,7 +242,7 @@ def test_debrief_reveals_identity_and_shows_learner_commands():
 
 @requires_solutions
 def test_solution_only_after_pass_or_explicit_request():
-    s = sc.find(SID)
+    s = concrete(SID)
     marker = s.explanation.strip().splitlines()[0]
     assert marker not in play(["hint", "check", "quit"]).text
     assert marker in play(["solution", "y"]).text
@@ -251,7 +252,7 @@ def test_solution_only_after_pass_or_explicit_request():
 def test_progress_file_contains_no_solution_text():
     play([*DIAGNOSE, *FIX, "check"], incident=True)
     blob = json.dumps(progress.load())
-    s = sc.find(SID)
+    s = concrete(SID)
     assert s.explanation.strip().splitlines()[0] not in blob
     assert not any(step in blob for step in s.solution if len(step) > 15)
 

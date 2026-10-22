@@ -26,6 +26,7 @@ import fnmatch
 import re
 import shlex
 
+from ..core import audit
 from ..core.errors import CommandError
 from ..core.state import HEAD, wrap
 from . import HOOKS_REBOOT, command
@@ -1496,6 +1497,8 @@ class Cmsh:
             if action == "status":
                 self.p(_dots("ipmi0", node.power.upper(), n))
             elif action == "off":
+                if audit.running_jobs_on(self.state, n):
+                    audit.record(self.state, audit.POWER_OFF_WITH_JOBS, HEAD, "cmsh power off", n)
                 node.power, node.up, dev.status, dev.power = "off", False, "DOWN", "off"
                 sl = self.state.slurm.nodes.get(n)
                 if sl is not None and not str(sl.state).startswith("DRAIN"):
@@ -1512,6 +1515,8 @@ class Cmsh:
                 self.p(f"{NOW} [notice] {HEAD}: {n} [ INSTALLING ] (node-installer: install mode {mode}, image {img})")
                 self.p(f"{NOW} [notice] {HEAD}: {n} [   UP   ]")
             else:  # reset / cycle
+                if audit.running_jobs_on(self.state, n):
+                    audit.record(self.state, audit.POWER_OFF_WITH_JOBS, HEAD, f"cmsh power {action}", n)
                 dev.power = "on"
                 mode, img = provision(self.ctx, n, "power " + action)
                 self.p(_dots("ipmi0", "RESET" if action == "reset" else "ON", n))

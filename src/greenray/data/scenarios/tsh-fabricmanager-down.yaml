@@ -1,34 +1,34 @@
 id: tsh-fabricmanager-down
-title: "CUDA error: system not yet initialized on dgx-01"
+title: "CUDA error: system not yet initialized on {node}"
 domain: Troubleshooting and Optimization
 difficulty: medium
 time_limit_min: 12
 tags: [fabricmanager, nvswitch, cuda, systemd, driver]
 briefing: |
-  Since yesterday's maintenance window, every job on dgx-01 dies immediately with
+  Since yesterday's maintenance window, every job on {node} dies immediately with
       RuntimeError: CUDA error: system not yet initialized
   nvidia-smi on the node looks normal: 8 GPUs, no XIDs, nothing running.
   Other DGX nodes are fine. In the maintenance window the GPU driver on
-  dgx-01 was upgraded from 550.54.15 to 550.90.07.
+  "{node} was upgraded from 550.54.15 to 550.90.07."
   Find the root cause, fix it so it also survives the next reboot, and confirm
   that CUDA works (deviceQuery is installed on the DGX nodes).
 objectives:
-  - CUDA applications on dgx-01 can initialise the GPUs
+  - CUDA applications on {node} can initialise the GPUs
   - nvidia-fabricmanager is running AND enabled at boot
   - You confirmed that the Fabric Manager and driver versions match before starting it
 setup:
   - python: |
-      n = state.nodes['dgx-01']
+      n = state.nodes['{node}']
       n.services['nvidia-fabricmanager'] = 'inactive'
       n.services_enabled['nvidia-fabricmanager'] = False
       n.fm_version = n.driver_version
       n.journal['nvidia-fabricmanager'] = [
-          "Oct 18 22:41:07 dgx-01 systemd[1]: Starting NVIDIA fabric manager service...",
-          "Oct 18 22:41:07 dgx-01 nv-fabricmanager[3021]: fabric manager NVIDIA GPU driver interface version 550.54.15 don't match with driver version 550.90.07. Please update with matching NVIDIA driver package.",
-          "Oct 18 22:41:07 dgx-01 systemd[1]: nvidia-fabricmanager.service: Control process exited, code=exited, status=1/FAILURE",
-          "Oct 18 22:41:07 dgx-01 systemd[1]: nvidia-fabricmanager.service: Failed with result 'exit-code'.",
-          "Oct 18 22:41:07 dgx-01 systemd[1]: Failed to start NVIDIA fabric manager service.",
-          "Oct 18 22:58:30 dgx-01 systemd[1]: Removed /etc/systemd/system/multi-user.target.wants/nvidia-fabricmanager.service.",
+          "Oct 18 22:41:07 {node} systemd[1]: Starting NVIDIA fabric manager service...",
+          "Oct 18 22:41:07 {node} nv-fabricmanager[3021]: fabric manager NVIDIA GPU driver interface version 550.54.15 don't match with driver version 550.90.07. Please update with matching NVIDIA driver package.",
+          "Oct 18 22:41:07 {node} systemd[1]: nvidia-fabricmanager.service: Control process exited, code=exited, status=1/FAILURE",
+          "Oct 18 22:41:07 {node} systemd[1]: nvidia-fabricmanager.service: Failed with result 'exit-code'.",
+          "Oct 18 22:41:07 {node} systemd[1]: Failed to start NVIDIA fabric manager service.",
+          "Oct 18 22:58:30 {node} systemd[1]: Removed /etc/systemd/system/multi-user.target.wants/nvidia-fabricmanager.service.",
       ]
       n.files['/var/log/apt/history.log'] = (
           "Start-Date: 2026-10-18  22:30:12\n"
@@ -45,21 +45,26 @@ setup:
           "apt-get install -y nvidia-fabricmanager-550=550.90.07-1\n"
           "exit\n")
 checks:
-  - desc: nvidia-fabricmanager is active on dgx-01
-    expr: nodes['dgx-01'].services['nvidia-fabricmanager'] == 'active'
-  - desc: nvidia-fabricmanager is enabled at boot on dgx-01
-    expr: nodes['dgx-01'].services_enabled.get('nvidia-fabricmanager') is True
-  - desc: a CUDA application on dgx-01 now passes
-    expr: flags.get('last_cuda', {}).get('dgx-01') == 'PASS'
-  - desc: you read the Fabric Manager logs on dgx-01
-    expr: ran(r'(journalctl.*fabricmanager|systemctl status nvidia-fabricmanager)', 'dgx-01')
-  - desc: you compared the Fabric Manager version with the driver version
-    expr: ran(r'nv-fabricmanager (-v|--version)|dpkg.*fabricmanager|apt.*fabricmanager|cat /var/log/apt/history.log', 'dgx-01')
+  - desc: nvidia-fabricmanager is active on {node}
+    expr: nodes['{node}'].services['nvidia-fabricmanager'] == 'active'
+  - desc: nvidia-fabricmanager is enabled at boot on {node}
+    expr: nodes['{node}'].services_enabled.get('nvidia-fabricmanager') is True
+  - desc: a CUDA application on {node} now passes
+    expr: flags.get('last_cuda', {}).get('{node}') == 'PASS'
+  - desc: you read the Fabric Manager logs on {node}
+    expr: ran(r'(journalctl.*fabricmanager|systemctl status nvidia-fabricmanager)', '{node}')
+  - desc: you compared the Fabric Manager version with the driver version before starting the service
+    kind: evidence
+    expr: ran_before(r'nv-fabricmanager (-v|--version)|dpkg.*fabricmanager|apt.*fabricmanager|cat /var/log/apt/history.log', r'systemctl (enable|start|restart).*fabricmanager', '{node}')
 hints:
   - "CUDA error 802 (cudaErrorSystemNotReady) on an NVSwitch system almost always means the NVLink fabric was never set up. Which service does that?"
-  - "Check `systemctl status nvidia-fabricmanager` and `journalctl -u nvidia-fabricmanager` on dgx-01. Read the whole story, including the last line."
+  - "Check `systemctl status nvidia-fabricmanager` and `journalctl -u nvidia-fabricmanager` on {node}. Read the whole story, including the last line."
   - "Fabric Manager must match the driver version exactly. `nv-fabricmanager --version` and `nvidia-smi` (Driver Version) should show the same number. /var/log/apt/history.log shows what changed."
   - "Starting the service fixes it now, but 'Removed .../multi-user.target.wants/...' means it was disabled. `systemctl enable --now` does both."
 references:
   - NVIDIA Fabric Manager User Guide
   - CUDA Runtime API error codes (cudaErrorSystemNotReady = 802)
+variants:
+  - {"node": "dgx-01"}
+  - {"node": "dgx-03"}
+  - {"node": "dgx-04"}

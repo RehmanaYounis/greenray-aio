@@ -8,12 +8,14 @@ from greenray.content.validate import check_scenario
 
 SCENARIOS = sc.load_all()
 IDS = [s.id for s in SCENARIOS]
+VARIANTS = [v for s in SCENARIOS for v in s.all_variants()]
+VARIANT_IDS = [f"{v.id}[{v.variant_index + 1}]" if v.variant_index is not None else v.id for v in VARIANTS]
 
 
 @requires_solutions
-@pytest.mark.parametrize("s", SCENARIOS, ids=IDS)
+@pytest.mark.parametrize("s", VARIANTS, ids=VARIANT_IDS)
 def test_reference_solution_solves_scenario(s):
-    assert s.has_solution, f"{s.id} has no solution in the solutions repo"
+    assert s.has_solution, f"{s.id} has no reference solution"
     assert check_scenario(s) is None
 
 

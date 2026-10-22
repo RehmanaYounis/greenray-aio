@@ -39,6 +39,7 @@ The site's pages live in `docs/`. The architecture, contributing, security and c
 - Raise `CommandError` with the real tool's wording for user mistakes. Any other exception is treated as a simulator bug: the shell rolls the cluster back and reports it.
 - Only emit colour when `ctx.colorize` is true (the output goes straight to a colour terminal).
 - Help pages live in `src/greenray/data/help/<command>/`; see `src/greenray/content/helppages.py`. Write original text in the real tool's layout, and list only options the simulator implements.
+- `tests/test_strictness.py` is a table of invocations the real tools reject, with the wording they use. A new command should add its own rows: a simulator that accepts a wrong command teaches a wrong habit. When a user reports the real tool being stricter than the simulator, the fix starts with a row in that table.
 
 ## Versioning
 

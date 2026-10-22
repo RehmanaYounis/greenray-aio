@@ -7,13 +7,16 @@ solution, explanation and edge cases live in the private solutions repository
 
 from __future__ import annotations
 
+import copy
+import random
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import lru_cache
 from pathlib import Path
 
 import yaml
 
+from ..core import audit as audit_log
 from ..core.shell import INCONSISTENT_FLAG
 from ..core.state import AttrDict, append_path, get_path, make_cluster, set_path, wrap
 from . import solutions
@@ -22,6 +25,18 @@ from .domains import DOMAINS
 SCENARIO_DIR = Path(__file__).resolve().parent.parent / "data" / "scenarios"
 DIFFICULTIES = ("easy", "medium", "hard")
 PRIVATE_KEYS = ("solution", "explanation", "edge_cases")
+PLACEHOLDER = re.compile(r"\{(\w+)\}")
+
+
+def fill(value, params: dict):
+    """Substitute ``{name}`` for every name in ``params``, recursively; other braces are left alone."""
+    if isinstance(value, str):
+        return PLACEHOLDER.sub(lambda m: str(params[m.group(1)]) if m.group(1) in params else m.group(0), value)
+    if isinstance(value, list):
+        return [fill(v, params) for v in value]
+    if isinstance(value, dict):
+        return {k: fill(v, params) for k, v in value.items()}
+    return value
 
 
 @dataclass
@@ -38,7 +53,9 @@ class Scenario:
     hints: list = field(default_factory=list)
     references: list = field(default_factory=list)
     tags: list = field(default_factory=list)
+    variants: list = field(default_factory=list)
     path: str = ""
+    variant_index: int | None = None
 
     @classmethod
     def from_file(cls, path: Path) -> Scenario:
@@ -55,13 +72,43 @@ class Scenario:
             raise ValueError(f"{path.name}: difficulty must be one of {DIFFICULTIES}")
         if path.stem != data.get("id"):
             raise ValueError(f"{path.name}: file name must match id {data.get('id')!r}")
+        variants = data.get("variants") or []
+        if variants and (not all(isinstance(v, dict) for v in variants) or len({frozenset(v) for v in variants}) != 1):
+            raise ValueError(f"{path.name}: variants must be dicts with the same keys")
         return cls(**data, path=str(path))
+
+    # ------------------------------------------------------------ variants
+
+    @property
+    def params(self) -> dict:
+        return self.variants[self.variant_index] if self.variant_index is not None else {}
+
+    def variant(self, index: int) -> Scenario:
+        """A concrete scenario with the placeholders of variant ``index`` filled in."""
+        if not 0 <= index < len(self.variants):
+            raise IndexError(f"{self.id} has {len(self.variants)} variants")
+        params = self.variants[index]
+        filled = {
+            k: fill(copy.deepcopy(getattr(self, k)), params)
+            for k in ("title", "briefing", "objectives", "setup", "checks", "hints")
+        }
+        return replace(self, variant_index=index, **filled)
+
+    def all_variants(self) -> list[Scenario]:
+        """Every concrete variant of a raw scenario; a concrete one is just itself."""
+        if self.variant_index is not None or not self.variants:
+            return [self]
+        return [self.variant(i) for i in range(len(self.variants))]
+
+    @property
+    def variant_label(self) -> str:
+        return f"variant {self.variant_index + 1} of {len(self.variants)}" if self.variant_index is not None else ""
 
     # ------------------------------------------------------------ private content
 
     @property
     def private(self) -> dict:
-        return solutions.scenario_solution(self.id)
+        return fill(solutions.scenario_solution(self.id), self.params)
 
     @property
     def has_solution(self) -> bool:
@@ -82,12 +129,19 @@ class Scenario:
     # ------------------------------------------------------------ state
 
     def build_state(self) -> AttrDict:
+        if self.variants and self.variant_index is None:
+            raise ValueError(f"{self.id} has variants: pick one with variant(i) or pick_variant() first")
         state = make_cluster()
         for op in self.setup:
             apply_op(state, op)
         return state
 
     # ------------------------------------------------------------ grading
+
+    @property
+    def kinds(self) -> list[str]:
+        """One of ``outcome`` (default), ``evidence`` or ``safety`` per check, in check order."""
+        return [c.get("kind", "evidence" if "ran(" in c["expr"] else "outcome") for c in self.checks]
 
     def grade(self, shell) -> list[tuple[str, bool, str]]:
         """Return [(description, passed, error)] for every check."""
@@ -137,6 +191,21 @@ def check_env(shell) -> dict:
         rx = re.compile(pattern)
         return any(rx.search(" ".join(argv)) for h, argv in executed if host is None or h == host)
 
+    def first(pattern: str, host: str | None = None) -> int | None:
+        rx = re.compile(pattern)
+        for i, (h, argv) in enumerate(executed):
+            if (host is None or h == host) and rx.search(" ".join(argv)):
+                return i
+        return None
+
+    def ran_before(earlier: str, later: str, host: str | None = None) -> bool:
+        """Both ran, and the first match of ``earlier`` came before the first match of ``later``."""
+        a, b = first(earlier, host), first(later, host)
+        return a is not None and b is not None and a < b
+
+    def audit(kind: str | None = None) -> list:
+        return audit_log.events(state, kind)
+
     def file(host: str, path: str) -> str:
         return state.nodes[host].files.get(path, "")
 
@@ -161,6 +230,8 @@ def check_env(shell) -> dict:
         "dcgm": state.dcgm,
         "flags": state.flags,
         "ran": ran,
+        "ran_before": ran_before,
+        "audit": audit,
         "file": file,
         "pods": pods,
         "release": release,
@@ -216,6 +287,14 @@ def find(scenario_id: str) -> Scenario:
         if s.id == scenario_id:
             return s
     raise KeyError(scenario_id)
+
+
+def pick_variant(s: Scenario, seed: int | None = None, avoid: int | None = None) -> Scenario:
+    """A random variant (not ``avoid`` when there is a choice); the scenario itself when it has none."""
+    if not s.variants:
+        return s
+    choices = [i for i in range(len(s.variants)) if i != avoid] or list(range(len(s.variants)))
+    return s.variant(random.Random(seed).choice(choices))
 
 
 def similar(scenario: Scenario, exclude: frozenset[str] | set[str] = frozenset()) -> Scenario | None:

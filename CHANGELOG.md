@@ -2,6 +2,21 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [0.8.0] - 2026-10-22
+
+Tests judgment, not memory.
+
+### Added
+- Scenario variants: a scenario can list variants that change the node, GPU, job or user. A lab picks one at random, `greenray lab <id> --variant N` chooses, `retry` moves to the next, and `greenray validate` replays every variant. Ten scenarios have three variants each.
+- Safe-practice grading: the simulator records destructive operations that cost users work (a reboot or power-off with jobs on the node, a node set DOWN with jobs, another user's job cancelled, a running pod deleted, a container runtime restarted with containers up). Checks read that log with `audit()` and require order of work with `ran_before()`. Checks carry a kind (outcome, evidence or safety) that results display. Seven scenarios use them.
+- A strictness table in the test-suite: invocations the real tools reject must fail in the simulator with the same wording.
+
+### Fixed
+- `scontrol update partitionname=... maxtime=` rejects malformed time limits; `sacct -j` rejects non-numeric job ids.
+- `nvidia-smi -pm` rejects values other than 0/1 and `-lgc` rejects clocks outside the supported range.
+- `modprobe` fails for modules the DGX image does not ship; `rm` fails for a missing file unless `-f` is given.
+- `docker pull`, `docker run` and `enroot import` fail for Docker Hub repositories that do not exist.
+
 ## [0.7.0] - 2026-10-22
 
 Ready for a public audience.

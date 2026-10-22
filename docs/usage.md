@@ -10,6 +10,7 @@ Installed with uv tool, pipx or Docker, the command is `greenray`. From a source
 | `greenray plan` | A four-week schedule covering every scenario, with your passes ticked off |
 | `greenray list` | All scenarios by exam domain, with your pass marks |
 | `greenray lab <id>` | A scenario in guided mode: title, objectives and hints are available |
+| `greenray lab <id> --variant N` | A specific variant of a scenario that has several (another node, GPU or job); without the flag one is picked at random |
 | `greenray incident [-d DOMAIN] [-t TOPIC]` | A random scenario as an incident: only the incident report is shown, and the id, title and success criteria stay hidden until the debrief. `-t` is a scenario tag such as `slurm`, `kubernetes`, `bcm`, `mig` or `infiniband` |
 | `greenray incident --id <id>` | A specific scenario as an incident, for a fresh independent attempt |
 | `greenray sandbox` | A healthy cluster to explore; nothing is graded |
@@ -54,8 +55,8 @@ A good routine is to learn a topic in guided mode first, then prove it with `gre
 ## What the grader can and cannot judge
 
 - It grades the **end state** of the cluster, so any valid fix passes. `nvidia-smi -pm 1` and `systemctl enable --now nvidia-persistenced` are both accepted for persistence mode.
-- Evidence checks confirm that you **ran** the diagnostic commands. Unless a check says otherwise, they do not check that you ran them before changing anything. Diagnose first anyway; the debrief reminds you.
-- It does not generally detect unnecessary changes. Some scenarios guard against specific harmful ones, such as raising a power limit to hide a thermal fault or killing a user's job, and say so in their objectives.
+- **Evidence** checks confirm that you ran the diagnostic commands, and where the order matters, that you ran them before changing anything.
+- **Safe practice** checks catch the shortcuts an operations team would not accept: a reboot or power-off with a user's job still on the node, a node set DOWN instead of drained, another user's job cancelled, a running pod deleted, a power limit raised to hide a thermal fault. Results tag these rows so you can see what each criterion rewards. They count towards passing like any other objective.
 - If a command crashes inside the simulator, which is a bug, the cluster is restored to its state before that command and you are told so. Please report it.
 
 ## Files and settings

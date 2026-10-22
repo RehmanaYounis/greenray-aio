@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import re
+
+from ...core import audit
 from .. import command
 from .affinity import _gpu_core_map
 from .common import (
@@ -233,6 +236,9 @@ def _update_node(ctx, kv):
             if st == "DOWN":
                 for j in s.jobs:
                     if j.state == "RUNNING" and n in j.nodelist:
+                        audit.record(
+                            state, audit.NODE_DOWN_WITH_JOBS, ctx.host, "scontrol update state=down", f"{n}: {j.id}"
+                        )
                         _finish(state, j, "NODE_FAIL", "0:0")
         elif st in ("RESUME", "IDLE", "UNDRAIN"):
             if not (sn.drain or sn.down or sn.invalid_reg):
@@ -300,7 +306,11 @@ def _update_partition(ctx, kv, create=False):
         elif k == "nodes":
             p.nodes = v
         elif k == "maxtime":
-            p.max_time = v
+            if not re.fullmatch(
+                r"(UNLIMITED|INFINITE|\d+|\d+:\d{2}|\d+:\d{2}:\d{2}|\d+-\d{1,2}(:\d{2}){0,2})", v, re.I
+            ):
+                raise _err("scontrol: error: Invalid time limit specification")
+            p.max_time = v.upper() if v.upper() in ("UNLIMITED", "INFINITE") else v
         elif k == "qos":
             if v and v not in s.qos:
                 raise _err("slurm_update error: Invalid qos specification")

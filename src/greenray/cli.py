@@ -156,6 +156,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("list", help="list scenarios by domain")
     lab = sub.add_parser("lab", help="start a hands-on scenario")
     lab.add_argument("id")
+    lab.add_argument("--variant", type=int, metavar="N", help="pick variant N of a scenario that has several")
     inc = sub.add_parser("incident", help="investigate a random incident; root cause, id and title stay hidden")
     inc.add_argument("-d", "--domain", choices=DOMAINS)
     inc.add_argument("-t", "--topic", help="scenario tag, e.g. slurm, kubernetes, bcm, mig, infiniband")
@@ -186,7 +187,13 @@ def main(argv: list[str] | None = None) -> int:
         elif args.cmd == "incident":
             return start_incident(ui, domain=args.domain, tag=args.topic, sid=args.id)
         elif args.cmd == "lab":
-            run_lab(ui, sc.find(args.id))
+            s = sc.find(args.id)
+            if args.variant is not None:
+                if not 1 <= args.variant <= max(1, len(s.variants)):
+                    ui.out(ui.red(f"{s.id} has {len(s.variants) or 1} variant(s)."))
+                    return 1
+                s = s.variant(args.variant - 1) if s.variants else s
+            run_lab(ui, s)
         elif args.cmd == "mock":
             run_mock(ui, labs_only=args.labs_only)
         elif args.cmd == "exam":

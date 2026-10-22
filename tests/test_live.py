@@ -5,10 +5,9 @@ import time
 from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.document import Document
 
-from conftest import ScriptedUI
+from conftest import ScriptedUI, concrete
 from greenray.app import lab
 from greenray.app.console import LabCompleter
-from greenray.content import scenarios as sc
 from greenray.core import clock
 from greenray.core.shell import Shell
 from greenray.core.state import make_cluster
@@ -78,6 +77,6 @@ def test_clear_only_on_a_terminal():
 def test_exam_status_line():
     ui = ScriptedUI(["back"])
     lab.run_exam_lab(
-        ui, lab.LabSession(sc.find("tsh-power-cap-persistence")), time.time() + 600, status=lambda: "Q 3/30"
+        ui, lab.LabSession(concrete("tsh-power-cap-persistence")), time.time() + 600, status=lambda: "Q 3/30"
     )
     assert any("left · Q 3/30]" in p for p in ui.prompts)

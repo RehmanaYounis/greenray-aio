@@ -1,6 +1,7 @@
 import pytest
 
 from greenray.app.ui import UI
+from greenray.content import scenarios as sc
 from greenray.content import solutions
 
 requires_solutions = pytest.mark.skipif(not solutions.available(), reason="no solutions available")
@@ -33,3 +34,9 @@ class ScriptedUI(UI):
     @property
     def text(self):
         return "\n".join(self.output)
+
+
+def concrete(scenario_id: str, variant: int = 0) -> sc.Scenario:
+    """The first variant of a scenario, so tests can rely on fixed hosts and ids."""
+    s = sc.find(scenario_id)
+    return s.variant(variant) if s.variants else s

@@ -3,9 +3,9 @@ solution:
   - kubectl get pods -o wide
   - kubectl describe pod bert-pretrain
   - kubectl get nodes
-  - kubectl describe node dgx-03 | grep -A 12 "Allocated resources"
-  - "sed -i 's#nvidia.com/gpu: 10#nvidia.com/gpu: 8#' /root/bert-pretrain.yaml"
-  - kubectl uncordon dgx-01 dgx-02
+  - kubectl describe node {f1} | grep -A 12 "Allocated resources"
+  - "sed -i 's#nvidia.com/gpu: {bad}#nvidia.com/gpu: 8#' /root/bert-pretrain.yaml"
+  - kubectl uncordon {c1} {c2}
   - kubectl delete pod bert-pretrain
   - kubectl apply -f /root/bert-pretrain.yaml
   - kubectl get pods -o wide
@@ -15,13 +15,13 @@ explanation: |
   {node-role.kubernetes.io/control-plane: }, 2 Insufficient nvidia.com/gpu,
   2 node(s) were unschedulable".
   There were two problems at once:
-    1. The pod asked for 10 GPUs. Extended resources such as nvidia.com/gpu can't
+    1. The pod asked for {bad} GPUs. Extended resources such as nvidia.com/gpu can't
        span nodes, and an H100 DGX advertises at most 8, so no node could ever fit
        it. torchrun --nproc_per_node=8 shows the intent was 8.
-    2. Even with 8, dgx-03 and dgx-04 each have 4 GPUs allocated to inference
+    2. Even with 8, {f1} and {f2} each have 4 GPUs allocated to inference
        replicas. The only empty nodes were still cordoned after the firmware work.
   After fixing the request and uncordoning, the scheduler picks an empty node
-  (dgx-01/dgx-02) and the pod starts. Most pod spec fields, including resources, are
+  ({c1}/{c2}) and the pod starts. Most pod spec fields, including resources, are
   immutable. That is why the edited manifest has to be re-created rather than re-applied.
 edge_cases:
   - "Extended resources are whole integers: nvidia.com/gpu: 0.5 is rejected by validation. Use MIG or time-slicing for GPU sharing."

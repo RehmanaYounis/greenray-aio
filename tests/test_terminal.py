@@ -1,8 +1,7 @@
 """Terminal realism: working directory, relative paths, prompt, login banner, real-tool colours."""
 
-from conftest import ScriptedUI
+from conftest import ScriptedUI, concrete
 from greenray.app import lab
-from greenray.content import scenarios as sc
 from greenray.core.shell import Shell
 from greenray.core.state import make_cluster
 
@@ -64,6 +63,6 @@ def test_styled_prompt_uses_ubuntu_colours():
 
 def test_plain_ui_has_no_escape_codes():
     ui = ScriptedUI(["quit"])
-    lab.run_lab(ui, sc.find("tsh-power-cap-persistence"), incident=True)
+    lab.run_lab(ui, concrete("tsh-power-cap-persistence"), incident=True)
     assert ESC not in ui.text and all(ESC not in p for p in ui.prompts)
     assert "Incident report INC" in ui.text

@@ -1,21 +1,21 @@
 id: tsh-xid79-drained-node
-title: dgx-02 drained overnight and a fine-tuning job died
+title: "{node} drained overnight and a fine-tuning job died"
 domain: Troubleshooting and Optimization
 difficulty: medium
 time_limit_min: 15
 tags: [slurm, xid, dcgm, nhc, drain]
 briefing: |
-  Alice's 8-GPU fine-tuning job (1500) failed at 02:13. When the team checked
-  this morning, dgx-02 had been drained by the node health check. Users are asking
+  "{user}'s 8-GPU training job ({job}) failed at 02:13. When the team checked"
+  this morning, {node} had been drained by the node health check. Users are asking
   for the node back.
-  Find out what happened to dgx-02 and decide whether the drain was justified.
+  Find out what happened to {node} and decide whether the drain was justified.
   If the node can be repaired here, return it to service, but only after you
   have proof that its GPUs are healthy.
 objectives:
   - Diagnose the failure from the node's own logs
   - Recover the missing GPU
-  - Pass a DCGM diagnostic (level 2 or higher) on dgx-02 before it goes back into service
-  - dgx-02 is back in Slurm and accepting jobs
+  - Pass a DCGM diagnostic (level 2 or higher) on {node} before it goes back into service
+  - "{node} is back in Slurm and accepting jobs"
 setup:
   - python: |
       head = state.nodes['bcm-head']
@@ -23,50 +23,57 @@ setup:
           "HealthCheckProgram=/usr/sbin/nhc\n"
           "HealthCheckInterval=300\n"
           "HealthCheckNodeState=ANY\n")
-      g = state.nodes['dgx-02'].gpus[3]
+      g = state.nodes['{node}'].gpus[{gpu}]
       g.fallen_off_bus = True
       g.xid = 79
       g.healthy = False
-      state.nodes['dgx-02'].dmesg.extend([
-          "[183720.551210] NVRM: GPU at PCI:0000:5d:00: GPU-7f3a0203-1c2e-4b5a-9d0e-0203a1b2c3d4",
-          "[183720.551214] NVRM: GPU Board Serial Number: 1652302003417",
-          "[183720.551219] NVRM: Xid (PCI:0000:5d:00): 79, pid='<unknown>', name=<unknown>, GPU has fallen off the bus.",
-          "[183720.551230] NVRM: GPU 0000:5d:00.0: GPU has fallen off the bus.",
+      state.nodes['{node}'].dmesg.extend([
+          "[183720.551210] NVRM: GPU at PCI:0000:{busl}:00: {uuid}",
+          "[183720.551214] NVRM: GPU Board Serial Number: {serial}",
+          "[183720.551219] NVRM: Xid (PCI:0000:{busl}:00): 79, pid='<unknown>', name=<unknown>, GPU has fallen off the bus.",
+          "[183720.551230] NVRM: GPU 0000:{busl}:00.0: GPU has fallen off the bus.",
           "[183720.551302] NVRM: A GPU crash dump has been created. If possible, please run",
           "                NVRM: nvidia-bug-report.sh as root to collect this data before",
           "                NVRM: the NVIDIA kernel module is unloaded.",
-          "[183721.004113] pcieport 0000:5c:00.0: AER: Uncorrected (Fatal) error received: 0000:5c:00.0",
+          "[183721.004113] pcieport 0000:{up}:00.0: AER: Uncorrected (Fatal) error received: 0000:{up}:00.0",
       ])
-      sn = state.slurm.nodes['dgx-02']
+      sn = state.slurm.nodes['{node}']
       sn.state = 'DRAIN'
-      sn.reason = 'NHC: check_nv_gpu: GPU 00000000:5D:00.0 GPU fell off the bus (Xid 79)'
+      sn.reason = 'NHC: check_nv_gpu: GPU 00000000:{bus}:00.0 GPU fell off the bus (Xid 79)'
       sn.reason_user = 'root'
-      state.slurm.users['alice'] = {'name': 'alice', 'default_account': 'root'}
+      state.slurm.users['{user}'] = {'name': '{user}', 'default_account': 'root'}
       state.slurm.jobs.append({
-          'id': 1500, 'name': 'llama-ft', 'user': 'alice', 'partition': 'defq', 'state': 'FAILED',
-          'exit_code': '1:0', 'num_nodes': 1, 'gpus_per_node': 8, 'nodelist': ['dgx-02'],
+          'id': {job}, 'name': '{jobname}', 'user': '{user}', 'partition': 'defq', 'state': 'FAILED',
+          'exit_code': '1:0', 'num_nodes': 1, 'gpus_per_node': 8, 'nodelist': ['{node}'],
           'submit_time': 0, 'start_time': 0, 'end_time': 0, 'batch': True,
-          'command': '/home/alice/llama-ft.sbatch', 'reason': 'NonZeroExitCode'})
-      state.slurm.next_job_id = 1501
+          'command': '/home/{user}/{jobname}.sbatch', 'reason': 'NonZeroExitCode'})
+      state.slurm.next_job_id = {job} + 1
 checks:
-  - desc: you read the kernel log on dgx-02 (the Xid tells you what failed)
-    expr: ran(r'^(dmesg|journalctl -k|journalctl --dmesg)', 'dgx-02')
-  - desc: all 8 GPUs on dgx-02 are visible again
-    expr: not any(g.fallen_off_bus for g in nodes['dgx-02'].gpus)
-  - desc: a DCGM diagnostic of level 2+ passed on dgx-02
-    expr: dcgm.diag_results.get('dgx-02', {}).get('result') == 'Pass' and dcgm.diag_results['dgx-02'].get('level', 0) >= 2
+  - desc: you read the kernel log on {node} (the Xid tells you what failed)
+    expr: ran(r'^(dmesg|journalctl -k|journalctl --dmesg)', '{node}')
+  - desc: you read the logs before rebooting or power-cycling the node
+    kind: evidence
+    expr: ran_before(r'^(dmesg|journalctl)', r'^(reboot|scontrol reboot|cmsh .*power|ipmitool .*power)')
+  - desc: all 8 GPUs on {node} are visible again
+    expr: not any(g.fallen_off_bus for g in nodes['{node}'].gpus)
+  - desc: a DCGM diagnostic of level 2+ passed on {node}
+    expr: dcgm.diag_results.get('{node}', {}).get('result') == 'Pass' and dcgm.diag_results['{node}'].get('level', 0) >= 2
   - desc: the diagnostic had passed before you resumed the node
-    expr: slurm.nodes['dgx-02'].get('last_resume_diag') == 'Pass'
-  - desc: slurmd on dgx-02 reports all 8 GPUs
-    expr: slurm.nodes['dgx-02'].get('gres_reported') == 8
-  - desc: dgx-02 is back in service
-    expr: slurm.nodes['dgx-02'].state == 'IDLE'
+    expr: slurm.nodes['{node}'].get('last_resume_diag') == 'Pass'
+  - desc: slurmd on {node} reports all 8 GPUs
+    expr: slurm.nodes['{node}'].get('gres_reported') == 8
+  - desc: "{node} is back in service"
+    expr: slurm.nodes['{node}'].state == 'IDLE'
 hints:
-  - "sinfo -R shows why a node is drained and who drained it. sacct -j 1500 shows how the job ended."
-  - "Log in to dgx-02 and check the kernel ring buffer for NVRM Xid messages: dmesg | grep -i xid. Then compare with what nvidia-smi can still see."
+  - "sinfo -R shows why a node is drained and who drained it. sacct -j {job} shows how the job ended."
+  - "Log in to {node} and check the kernel ring buffer for NVRM Xid messages: dmesg | grep -i xid. Then compare with what nvidia-smi can still see."
   - "Xid 79 means the GPU fell off the bus. The driver can't talk to it, so nvidia-smi -r won't work. Only a reboot or power cycle brings it back. The drain was correct."
-  - "After the reboot, run a DCGM diagnostic on dgx-02 (dcgmi diag at level 2 or 3). The node stays DRAIN until you resume it with scontrol update, and you should only do that after the diag passes."
+  - "After the reboot, run a DCGM diagnostic on {node} (dcgmi diag at level 2 or 3). The node stays DRAIN until you resume it with scontrol update, and you should only do that after the diag passes."
 references:
   - NVIDIA GPU Xid Errors documentation (Xid 79)
   - NVIDIA DCGM User Guide - Diagnostics (run levels)
   - Slurm scontrol man page (update NodeName State=RESUME, reboot)
+variants:
+  - {"node": "dgx-02", "gpu": 3, "bus": "5D", "busl": "5d", "up": "5c", "uuid": "GPU-7f3a0203-1c2e-4b5a-9d0e-0203a1b2c3d4", "serial": "1652302003417", "job": 1500, "user": "alice", "jobname": "llama-ft"}
+  - {"node": "dgx-04", "gpu": 6, "bus": "BA", "busl": "ba", "up": "b9", "uuid": "GPU-7f3a0406-1c2e-4b5a-9d0e-0406a1b2c3d4", "serial": "1652304006417", "job": 2317, "user": "dave", "jobname": "vit-pretrain"}
+  - {"node": "dgx-01", "gpu": 0, "bus": "18", "busl": "18", "up": "17", "uuid": "GPU-7f3a0100-1c2e-4b5a-9d0e-0100a1b2c3d4", "serial": "1652301000417", "job": 1744, "user": "carol", "jobname": "sd-finetune"}

@@ -1,64 +1,67 @@
 id: tsh-first-look-at-logs
-title: bob's training job disappeared overnight
+title: "{user}'s training job disappeared overnight"
 domain: Troubleshooting and Optimization
 difficulty: easy
 time_limit_min: 10
 tags: [slurm, logs, journalctl, sacct, oom, on-ramp]
 briefing: |
-  Ticket 4471 from bob (ML engineer):
+  Ticket {ticket} from {user} (ML engineer):
 
-    "My job 2210 (resnet-train) was running on dgx-02 when I left last night.
+    "My job {job} ({jobname}) was running on {node} when I left last night.
     This morning it is gone from squeue, there is no error in my output file,
     and the checkpoint is 3 hours old. Did the node crash?"
 
-  Nothing is wrong with dgx-02 right now. Find out what ended the job and
-  reply to the ticket. Write your answer to /root/ticket-4471.txt with at
+  Nothing is wrong with {node} right now. Find out what ended the job and
+  reply to the ticket. Write your answer to /root/ticket-{ticket}.txt with at
   least two things in it: the job id, and the cause as Slurm reports it.
 objectives:
-  - Find the final state of job 2210 in Slurm accounting
+  - Find the final state of job {job} in Slurm accounting
   - Find the detail behind that state in the logs of the node that ran the job
-  - /root/ticket-4471.txt names the job id and the cause
+  - /root/ticket-{ticket}.txt names the job id and the cause
 setup:
   - python: |
-      state.slurm.users['bob'] = {'name': 'bob', 'default_account': 'root'}
+      state.slurm.users['{user}'] = {'name': '{user}', 'default_account': 'root'}
       state.slurm.jobs.append({
-          'id': 2210, 'name': 'resnet-train', 'user': 'bob', 'partition': 'defq', 'state': 'OUT_OF_MEMORY',
-          'exit_code': '0:125', 'num_nodes': 1, 'gpus_per_node': 8, 'nodelist': ['dgx-02'],
+          'id': {job}, 'name': '{jobname}', 'user': '{user}', 'partition': 'defq', 'state': 'OUT_OF_MEMORY',
+          'exit_code': '0:125', 'num_nodes': 1, 'gpus_per_node': 8, 'nodelist': ['{node}'],
           'submit_time': -43200, 'start_time': -43000, 'end_time': -31200, 'batch': True,
-          'command': '/home/bob/resnet/train.sbatch', 'stdout': '/home/bob/resnet/slurm-2210.out'})
-      state.slurm.next_job_id = 2211
-      d = state.nodes['dgx-02']
-      d.files['/home/bob/resnet/slurm-2210.out'] = (
+          'command': '/home/{user}/{jobname}/train.sbatch', 'stdout': '/home/{user}/{jobname}/slurm-{job}.out'})
+      state.slurm.next_job_id = {job} + 1
+      d = state.nodes['{node}']
+      d.files['/home/{user}/{jobname}/slurm-{job}.out'] = (
           "Epoch 7/90  loss 1.8421  acc 0.531  lr 0.1000\n"
           "Epoch 8/90  loss 1.7902  acc 0.548  lr 0.1000\n"
-          "saved checkpoint /home/bob/resnet/ckpt-epoch8.pt\n"
+          "saved checkpoint /home/{user}/{jobname}/ckpt-epoch8.pt\n"
           "Epoch 9/90  loss 1.7488  acc 0.561  lr 0.1000\n")
-      state.nodes['bcm-head'].files['/home/bob/resnet/slurm-2210.out'] = d.files['/home/bob/resnet/slurm-2210.out']
+      state.nodes['bcm-head'].files['/home/{user}/{jobname}/slurm-{job}.out'] = d.files['/home/{user}/{jobname}/slurm-{job}.out']
       d.journal['slurmd'] = [
-          "2026-10-20 18:02:11 dgx-02 slurmd[4211]: slurmd: launch task StepId=2210.batch request from UID:1002 GID:1002 HOST:10.141.255.254 PORT:38514",
-          "2026-10-20 18:02:11 dgx-02 slurmd[4211]: slurmd: task/affinity: lllp_distribution: JobId=2210 binding: cores, dist 1",
-          "2026-10-21 03:14:02 dgx-02 slurmstepd[48201]: error: Detected 1 oom_kill event in StepId=2210.batch. Some of the step tasks have been OOM Killed.",
-          "2026-10-21 03:14:02 dgx-02 slurmstepd[48201]: done with job",
+          "2026-10-20 18:02:11 {node} slurmd[4211]: slurmd: launch task StepId={job}.batch request from UID:1002 GID:1002 HOST:10.141.255.254 PORT:38514",
+          "2026-10-20 18:02:11 {node} slurmd[4211]: slurmd: task/affinity: lllp_distribution: JobId={job} binding: cores, dist 1",
+          "2026-10-21 03:14:02 {node} slurmstepd[48201]: error: Detected 1 oom_kill event in StepId={job}.batch. Some of the step tasks have been OOM Killed.",
+          "2026-10-21 03:14:02 {node} slurmstepd[48201]: done with job",
       ]
       d.dmesg.extend([
           "[112440.118331] python invoked oom-killer: gfp_mask=0xcc0(GFP_KERNEL), order=0, oom_score_adj=0",
-          "[112440.118402] oom-kill:constraint=CONSTRAINT_MEMCG,nodemask=(null),cpuset=step_batch,mems_allowed=0-1,oom_memcg=/slurm/uid_1002/job_2210,task_memcg=/slurm/uid_1002/job_2210/step_batch,task=python,pid=48213,uid=1002",
+          "[112440.118402] oom-kill:constraint=CONSTRAINT_MEMCG,nodemask=(null),cpuset=step_batch,mems_allowed=0-1,oom_memcg=/slurm/uid_1002/job_{job},task_memcg=/slurm/uid_1002/job_{job}/step_batch,task=python,pid=48213,uid=1002",
           "[112440.118455] Memory cgroup out of memory: Killed process 48213 (python) total-vm:412055216kB, anon-rss:201326592kB, file-rss:0kB, shmem-rss:0kB, UID:1002 pgtables:409600kB oom_score_adj:0",
       ])
       state.nodes['bcm-head'].journal['slurmctld'] = [
-          "2026-10-20 18:02:10 bcm-head slurmctld[2211]: sched: Allocate JobId=2210 NodeList=dgx-02 #CPUs=224 Partition=defq",
-          "2026-10-21 03:14:03 bcm-head slurmctld[2211]: _job_complete: JobId=2210 WEXITSTATUS 125",
-          "2026-10-21 03:14:03 bcm-head slurmctld[2211]: _job_complete: JobId=2210 done",
+          "2026-10-20 18:02:10 bcm-head slurmctld[2211]: sched: Allocate JobId={job} NodeList={node} #CPUs=224 Partition=defq",
+          "2026-10-21 03:14:03 bcm-head slurmctld[2211]: _job_complete: JobId={job} WEXITSTATUS 125",
+          "2026-10-21 03:14:03 bcm-head slurmctld[2211]: _job_complete: JobId={job} done",
       ]
 checks:
   - desc: you looked the job up in Slurm accounting (sacct) or scontrol
     expr: ran(r'^(sacct|scontrol show job)')
-  - desc: you read the slurmd journal or the kernel log on dgx-02
-    expr: ran(r'^(journalctl|dmesg)', 'dgx-02')
-  - desc: /root/ticket-4471.txt names job 2210
-    expr: "'2210' in file('bcm-head', '/root/ticket-4471.txt')"
-  - desc: /root/ticket-4471.txt names the cause (out of memory / OOM)
-    expr: "re.search(r'out.of.memory|oom', file('bcm-head', '/root/ticket-4471.txt'), re.I) is not None"
+  - desc: you read the slurmd journal or the kernel log on {node}
+    expr: ran(r'^(journalctl|dmesg)', '{node}')
+  - desc: nothing was restarted, rebooted or changed in Slurm (this was read-only work)
+    kind: safety
+    expr: not ran(r'^(reboot|scontrol update|scancel|systemctl (restart|stop|start))')
+  - desc: /root/ticket-{ticket}.txt names job {job}
+    expr: "'{job}' in file('bcm-head', '/root/ticket-{ticket}.txt')"
+  - desc: /root/ticket-{ticket}.txt names the cause (out of memory / OOM)
+    expr: "re.search(r'out.of.memory|oom', file('bcm-head', '/root/ticket-{ticket}.txt'), re.I) is not None"
 hints:
   - "A job that is gone from squeue is finished. Slurm accounting keeps its final state: sacct with -u for a user or -j for a job id, and --format to pick columns such as State, ExitCode and NodeList."
   - "The State column tells you what Slurm decided. The reason behind it is logged on the node that ran the job, in the slurmd journal (journalctl -u slurmd) and in the kernel ring buffer (dmesg). Grep for the job id or for 'oom'."
@@ -67,3 +70,7 @@ references:
   - Slurm sacct man page (State and ExitCode fields)
   - Slurm cgroup.conf man page (ConstrainRAMSpace and OOM handling)
   - journalctl(1) and dmesg(1)
+variants:
+  - {"user": "bob", "job": 2210, "jobname": "resnet-train", "node": "dgx-02", "ticket": 4471}
+  - {"user": "alice", "job": 3187, "jobname": "llama-ft", "node": "dgx-04", "ticket": 4502}
+  - {"user": "dave", "job": 2954, "jobname": "vit-pretrain", "node": "dgx-01", "ticket": 4488}

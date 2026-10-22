@@ -85,6 +85,8 @@ class LabSession:
     started: float = field(default_factory=time.time)
 
     def __post_init__(self):
+        if self.scenario and self.scenario.variants and self.scenario.variant_index is None:
+            self.scenario = sc.pick_variant(self.scenario)
         self.reset()
 
     def reset(self) -> None:
@@ -96,7 +98,14 @@ class LabSession:
             self.shell.ctx.live_delay = 1.0
 
     def new_attempt(self) -> None:
-        """Fresh attempt: cluster, timer and guidance counters all start over."""
+        """Fresh attempt: cluster, timer and guidance counters all start over, on another variant if there is one."""
+        if self.scenario and self.scenario.variants:  # cycle, so every retry is a different variant
+            raw = sc.find(self.scenario.id)
+            self.scenario = (
+                raw.variant((self.scenario.variant_index or 0) + 1)
+                if (self.scenario.variant_index or 0) + 1 < len(raw.variants)
+                else raw.variant(0)
+            )
         self.reset()
         self.hints_used = 0
         self.objectives_revealed = False
@@ -162,25 +171,38 @@ def show_briefing(
     else:
         title = s.title
         subtitle = s.domain if exam else f"{s.domain} · {s.difficulty} · ~{s.time_limit_min} min"
+        if s.variant_label and not exam:
+            subtitle += f" · {s.variant_label}"
     ui.out("")
     ui.out(ui.panel("\n".join(body), title=title, subtitle=subtitle, style="yellow" if incident else "green"))
     ui.out(ui.dim("Type 'help' for lab commands, 'explain <command>' to learn a command.\n"))
 
 
-def show_results(ui: UI, results: list[tuple[str, bool, str]], hide_unmet: bool = False) -> None:
-    """Print check results. ``hide_unmet`` keeps unmet criteria secret (incident mode)."""
+KIND_TAG = {"safety": "safe practice", "evidence": "evidence"}
+
+
+def show_results(
+    ui: UI, results: list[tuple[str, bool, str]], hide_unmet: bool = False, kinds: list[str] | None = None
+) -> None:
+    """Print check results. ``hide_unmet`` keeps unmet criteria secret (incident mode).
+
+    ``kinds`` (one per result) tags evidence and safe-practice rows so the learner sees what kind
+    of judgment each one rewards.
+    """
     debug = config.debug()
+    kinds = kinds or ["outcome"] * len(results)
     rows, styles, unmet = [], [], 0
-    for desc, ok, err in results:
+    for (desc, ok, err), kind in zip(results, kinds):
         if hide_unmet and not ok:
             unmet += 1
             continue
-        detail = f"  ({err})" if err and debug else ""
+        tag = KIND_TAG.get(kind)
+        label = desc + (f"  ({err})" if err and debug else "")
         if ui.color:
-            rows.append(["✓" if ok else "✗", desc + detail])
+            rows.append(["✓" if ok else "✗", f"[{tag}] {label}" if tag else label])
             styles.append("green" if ok else "red")
         else:
-            ui.out(f"  {'PASS' if ok else 'FAIL'}  {desc}{detail}")
+            ui.out(f"  {'PASS' if ok else 'FAIL'}  {f'[{tag}] ' if tag else ''}{label}")
     if unmet:
         noun = "criterion" if unmet == 1 else "criteria"
         line = f"{unmet} more success {noun} not met yet"
@@ -221,6 +243,8 @@ def show_debrief(ui: UI, session: LabSession, passed: bool, identity_hidden: boo
     s = session.scenario_required
     if identity_hidden:
         ui.out(ui.bold(f"\nThis incident was: {s.title}") + ui.dim(f"  ({s.id}, ticket {ticket_number(s)})"))
+    if s.variant_label:
+        ui.out(ui.dim(f"You had {s.variant_label}; `retry` or a new run gives you another."))
     show_solution(ui, s, title="Debrief: reference solution and edge cases" if passed else "Reference solution")
     mine = your_commands(session)
     if mine:
@@ -290,6 +314,7 @@ def _record(session: LabSession, passed: bool, gave_up: bool, incident: bool) ->
         gave_up,
         objectives_revealed=session.objectives_revealed,
         mode="incident" if incident else "guided",
+        variant=session.scenario_required.variant_index,
     )
 
 
@@ -356,7 +381,7 @@ def run_lab(ui: UI, s: Scenario | None, incident: bool = False, hide_identity: b
                 break
         elif s and cmd == "check":
             results = session.grade()
-            show_results(ui, results, hide_unmet=incident and not session.objectives_revealed)
+            show_results(ui, results, hide_unmet=incident and not session.objectives_revealed, kinds=s.kinds)
             mins = (time.time() - session.started) / 60
             if all(ok for _, ok, _ in results):
                 passed = True

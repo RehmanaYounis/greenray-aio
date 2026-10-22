@@ -15,15 +15,19 @@ COVERAGE_DOC = Path(__file__).resolve().parents[3] / "docs" / "coverage.md"
 
 
 def check_scenario(s: sc.Scenario) -> str | None:
-    """``None`` if the scenario starts unsolved and its reference solution solves it.
+    """``None`` if every variant starts unsolved and its reference solution solves it.
 
     Any exception (bad setup op, broken check, replay crash) is reported, not raised,
     so one broken scenario cannot hide the results for the others.
     """
-    try:
-        return _check_scenario(s)
-    except Exception as e:
-        return f"raised {type(e).__name__}: {e}"
+    for v in s.all_variants():
+        try:
+            err = _check_scenario(v)
+        except Exception as e:
+            err = f"raised {type(e).__name__}: {e}"
+        if err:
+            return f"{v.variant_label}: {err}" if v.variant_label else err
+    return None
 
 
 def _check_scenario(s: sc.Scenario) -> str | None:
@@ -56,14 +60,17 @@ def fix_steps(s: sc.Scenario) -> list[str]:
 def hint_leaks(scenarios: list[sc.Scenario] | None = None) -> list[str]:
     """Hints that quote a fix command verbatim. Naming a tool is fine; handing over the command is not."""
     problems = []
-    for s in scenarios or sc.load_all():
-        if not s.has_solution:
-            continue
-        fixes = [f for f in fix_steps(s) if " " in f]  # a bare command name is a pointer, not a recipe
-        for i, hint in enumerate(s.hints, 1):
-            for f in fixes:
-                if f in hint:
-                    problems.append(f"{s.id}: hint {i} quotes the fix step {f!r}")
+    for raw in scenarios or sc.load_all():
+        for s in raw.all_variants():
+            if not s.has_solution:
+                continue
+            fixes = [f for f in fix_steps(s) if " " in f]  # a bare command name is a pointer, not a recipe
+            for i, hint in enumerate(s.hints, 1):
+                for f in fixes:
+                    if f in hint:
+                        problems.append(
+                            f"{s.id} {s.variant_label}: hint {i} quotes the fix step {f!r}".replace("  ", " ")
+                        )
     return problems
 
 

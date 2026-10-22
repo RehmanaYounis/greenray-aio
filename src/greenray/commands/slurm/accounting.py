@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from .. import command
 from .common import (
     _USER,
@@ -174,6 +176,8 @@ def sacct(ctx, args):
         raise _err("sacct: error: Problem talking to the database: Connection refused")
     _begin(ctx)
     ids = _opt(args, "-j", "--jobs")
+    if ids and not all(re.fullmatch(r"\d+(\.\w+)?", x) for x in ids.split(",")):
+        raise _err(f"sacct: error: Invalid job id: {ids}")
     fmt = _opt(args, "-o", "--format")
     user = _opt(args, "-u", "--user")
     states = _opt(args, "-s", "--state")
