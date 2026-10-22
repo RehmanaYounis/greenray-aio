@@ -1,39 +1,22 @@
-"""Runtime settings from the environment.
-
-Every setting is read from ``GREENRAY_<NAME>`` first and falls back to the legacy
-``AIOLAB_<NAME>`` (the project's former name), so existing setups keep working.
-"""
+"""Runtime settings from ``GREENRAY_<NAME>`` environment variables."""
 
 from __future__ import annotations
 
 import os
-import shutil
 from pathlib import Path
 
 PREFIX = "GREENRAY_"
-LEGACY_PREFIX = "AIOLAB_"
 
 
 def env(name: str, default: str | None = None) -> str | None:
-    """Value of ``GREENRAY_<name>``, else ``AIOLAB_<name>``, else ``default``."""
-    for prefix in (PREFIX, LEGACY_PREFIX):
-        value = os.environ.get(prefix + name)
-        if value:
-            return value
-    return default
+    """Value of ``GREENRAY_<name>``, else ``default``. Empty values count as unset."""
+    return os.environ.get(PREFIX + name) or default
 
 
 def home() -> Path:
-    """Directory for local progress (``~/.greenray``), created on first use.
-
-    If only the legacy ``~/.aiolab`` exists, its contents are copied over once.
-    """
+    """Directory for local progress and history (``~/.greenray``), created on first use."""
     explicit = env("HOME")
     base = Path(explicit) if explicit else Path.home() / ".greenray"
-    if not explicit and not base.exists():
-        legacy = Path.home() / ".aiolab"
-        if legacy.is_dir():
-            shutil.copytree(legacy, base)
     base.mkdir(parents=True, exist_ok=True)
     return base
 

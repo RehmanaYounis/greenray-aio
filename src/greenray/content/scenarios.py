@@ -2,7 +2,7 @@
 
 Public scenario files live in ``greenray/data/scenarios/<id>.yaml``. Their reference
 solution, explanation and edge cases live in the private solutions repository
-(see :mod:`greenray.content.solutions`). Format: ``docs/SCENARIO_FORMAT.md``.
+(see :mod:`greenray.content.solutions`). Format: ``docs/scenario-format.md``.
 """
 
 from __future__ import annotations

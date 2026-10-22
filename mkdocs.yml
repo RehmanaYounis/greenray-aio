@@ -1,0 +1,63 @@
+site_name: GreenRay AIO
+site_description: Hands-on lab simulator and mock exam for the NVIDIA NCP-AIO certification.
+site_url: https://rehmanayounis.github.io/greenray-aio/
+repo_url: https://github.com/RehmanaYounis/greenray-aio
+repo_name: RehmanaYounis/greenray-aio
+edit_uri: edit/main/docs/
+copyright: Copyright 2026 Rehmana Younis. Apache-2.0. Not affiliated with NVIDIA.
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Using the lab: usage.md
+  - Study path: study-path.md
+  - The simulated cluster: cluster.md
+  - Exam coverage: coverage.md
+  - Writing scenarios: scenario-format.md
+  - Architecture: architecture.md
+  - Contributing: contributing.md
+  - Security: security.md
+  - Changelog: changelog.md
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.footer
+    - content.code.copy
+    - search.suggest
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: green
+      accent: green
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: green
+      accent: green
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - pymdownx.tabbed:
+      alternate_style: true
+
+# Pages with `include:` front matter are filled from the root Markdown files, so each text lives once.
+hooks:
+  - docs/_include.py
+
+exclude_docs: |
+  _include.py
+  __pycache__/
+
+strict: true

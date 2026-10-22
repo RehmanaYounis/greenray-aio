@@ -11,7 +11,7 @@ htmlcov/
 build/
 dist/
 
-# Private solutions are never committed here (see README: Solutions)
+# An external solutions directory (see content/solutions.py) stays out of the repo
 /solutions/
 /greenray-aio-solutions/
-/NVIDIA-NCP-AIO-Prep-solutions/
+site/

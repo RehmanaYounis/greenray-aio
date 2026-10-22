@@ -1,6 +1,6 @@
 [project]
 name = "greenray-aio"
-version = "0.6.0"
+version = "0.7.0"
 description = "GreenRay AIO: hands-on lab simulator and mock exam for the NVIDIA NCP-AIO (AI Operations) certification"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -35,6 +35,8 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/RehmanaYounis/greenray-aio"
+Documentation = "https://rehmanayounis.github.io/greenray-aio/"
+Changelog = "https://github.com/RehmanaYounis/greenray-aio/blob/main/CHANGELOG.md"
 Issues = "https://github.com/RehmanaYounis/greenray-aio/issues"
 
 [project.scripts]
@@ -48,6 +50,9 @@ dev = [
     "pytest-cov>=7.1.0",
     "ruff>=0.6",
     "types-pyyaml>=6.0.12.20260906",
+]
+docs = [
+    "mkdocs-material>=9.5",
 ]
 
 [tool.uv.build-backend]

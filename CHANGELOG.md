@@ -2,6 +2,23 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] - 2026-10-22
+
+Ready for a public audience.
+
+### Added
+- A documentation site built with MkDocs and published to GitHub Pages: getting started, using the lab, the study path, the simulated cluster, exam coverage, the scenario format, architecture, contributing, security and this changelog.
+- CI builds the site on every push; Dependabot groups GitHub Actions updates into one pull request.
+
+### Changed
+- The README is a front page: what the tool is, how to install it, how it teaches, and links into the documentation. The manual moved to the site.
+- `docs/COVERAGE.md` and `docs/SCENARIO_FORMAT.md` are now `docs/coverage.md` and `docs/scenario-format.md`.
+
+### Removed
+- Compatibility with the project's former name: the `AIOLAB_*` environment variables, the `~/.aiolab` progress migration and the old solutions-directory names.
+- Bundled solutions for real-hardware labs that are not part of this repository.
+- The code of conduct file; its content rule lives in CONTRIBUTING.
+
 ## [0.6.0] - 2026-10-21
 
 Teaches better.
@@ -10,7 +27,7 @@ Teaches better.
 - Six on-ramp scenarios for the first week: reading Slurm accounting and node logs, editing slurm.conf and reconfiguring, a first GPU batch job, a Pending pod with a wrong node selector, a read-only cmsh inventory, and mapping a GPU's bus id to its index, UUID and serial.
 - `greenray next` recommends what to practise from your progress; `greenray plan` prints a four-week schedule covering every scenario, with passed labs ticked.
 - `greenray mock --labs-only`: the three labs alone in 40 minutes. Every mock now ends with a report card: per-domain bars over questions and labs, and a practise-next list.
-- A recording kit for the README demo under `docs/demo/`, a code of conduct and Dependabot configuration.
+- A code of conduct and Dependabot configuration.
 
 ### Changed
 - Hints name the tool and the setting instead of quoting the fix command; `greenray validate` and the test-suite reject a hint that quotes a state-changing solution step.

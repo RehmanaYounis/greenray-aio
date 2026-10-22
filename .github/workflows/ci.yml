@@ -34,12 +34,20 @@ jobs:
           python-version: ${{ matrix.python }}
           enable-cache: true
       - run: uv sync --locked
-      # The private solutions repo is not available in CI: solution replays are skipped;
-      # structure, parsers, scenario setup, grading, help pages and the UI are still tested.
       - run: uv run pytest --cov --cov-report=term --cov-report=xml
       - run: uv run greenray validate
       - run: uv build
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked --group docs
+      - run: uv run mkdocs build
 
   docker:
     runs-on: ubuntu-latest

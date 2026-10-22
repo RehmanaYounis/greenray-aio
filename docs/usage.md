@@ -1,0 +1,71 @@
+# Using the lab
+
+Installed with uv tool, pipx or Docker, the command is `greenray`. From a source checkout use `uv run greenray`. `greenray` on its own opens an interactive menu; `--no-color` (or the `NO_COLOR` variable) switches to plain output.
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `greenray next` | What to practise next: the on-ramp first, then the easiest unpassed lab in your weakest exam domain, then guided passes to redo as unguided incidents |
+| `greenray plan` | A four-week schedule covering every scenario, with your passes ticked off |
+| `greenray list` | All scenarios by exam domain, with your pass marks |
+| `greenray lab <id>` | A scenario in guided mode: title, objectives and hints are available |
+| `greenray incident [-d DOMAIN] [-t TOPIC]` | A random scenario as an incident: only the incident report is shown, and the id, title and success criteria stay hidden until the debrief. `-t` is a scenario tag such as `slurm`, `kubernetes`, `bcm`, `mig` or `infiniband` |
+| `greenray incident --id <id>` | A specific scenario as an incident, for a fresh independent attempt |
+| `greenray sandbox` | A healthy cluster to explore; nothing is graded |
+| `greenray mock` | The full mock exam: 30 questions and 3 labs (one Slurm, one Kubernetes, one BCM) in 120 minutes, graded at the end |
+| `greenray mock --labs-only` | The three labs alone in 40 minutes, for exam-day pacing |
+| `greenray exam [-n N] [-m MIN] [-d DOMAIN]` | A question drill: 60 questions in 120 minutes by default, weighted like the blueprint; `-d` restricts it to one domain |
+| `greenray progress` | Passed labs per domain, exam history and your weakest domain |
+| `greenray validate` | Self-test: every scenario starts broken, its reference solution fixes it, and no hint quotes a fix command |
+| `greenray doctor` | Version, Python, terminal, editor, solutions source and progress path |
+
+## Inside a lab
+
+These meta-commands sit alongside the simulated cluster commands:
+
+| Command | What it does |
+| --- | --- |
+| `task` | Show the briefing again |
+| `check` | Grade your work. In incident mode, unmet criteria are counted but not named |
+| `explain <cmd>` | What a command is for, its useful options, what to look for in its output, and common errors. It never describes a scenario's fix |
+| `hint` | The next hint. Hints get more specific, and the last one asks for confirmation because it is close to the answer |
+| `objectives` | Incident mode only: reveal the success criteria. The attempt then counts as guided |
+| `retry` | Incident mode only: a fresh attempt. Cluster, timer, hints and objectives all reset |
+| `solution` | Give up and see the answer, the explanation and the edge cases |
+| `reset` | Put the cluster back to the broken state within the same attempt; hints used and the timer carry over |
+| `commands` | List the simulated tools |
+| `quit` | Leave the lab |
+
+Ctrl-C cancels the current line, as in bash. Tab completes commands, hostnames and paths on the simulated node; the up arrow and Ctrl-R search your history.
+
+When you pass, you get the **debrief**: the reference solution, why it works, the edge cases and exam traps, your own commands for comparison, and a related scenario to practise next. Read it even when you passed.
+
+## Guided or independent
+
+`greenray progress` keeps three counts per domain:
+
+- **passed**: all objectives met, in any mode;
+- **without hints**: passed with no hints and no revealed objectives;
+- **as an incident, unguided**: passed in incident mode with no hints and no revealed objectives.
+
+A good routine is to learn a topic in guided mode first, then prove it with `greenray incident -t <topic>`.
+
+## What the grader can and cannot judge
+
+- It grades the **end state** of the cluster, so any valid fix passes. `nvidia-smi -pm 1` and `systemctl enable --now nvidia-persistenced` are both accepted for persistence mode.
+- Evidence checks confirm that you **ran** the diagnostic commands. Unless a check says otherwise, they do not check that you ran them before changing anything. Diagnose first anyway; the debrief reminds you.
+- It does not generally detect unnecessary changes. Some scenarios guard against specific harmful ones, such as raising a power limit to hide a thermal fault or killing a user's job, and say so in their objectives.
+- If a command crashes inside the simulator, which is a bug, the cluster is restored to its state before that command and you are told so. Please report it.
+
+## Files and settings
+
+Progress lives in `~/.greenray/progress.json`, command history in `~/.greenray/history`. The mock exam never writes answers to the history.
+
+| Variable | Effect |
+| --- | --- |
+| `GREENRAY_HOME` | Directory for progress and history instead of `~/.greenray` |
+| `GREENRAY_SOLUTIONS` | A directory of reference solutions that overrides the bundled ones, file by file |
+| `GREENRAY_DEBUG` | Show the Python error behind a failed check in `check` output |
+| `NO_COLOR` | Plain output, the same as `--no-color` |
+| `VISUAL`, `EDITOR` | The editor `nano`, `vi` and `vim` open inside a lab; otherwise the first of nano, vim, vi on your PATH, else a built-in line editor |
