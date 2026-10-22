@@ -154,6 +154,8 @@ def show_briefing(
     if not s:
         ui.out(ui.panel("A healthy 4-node DGX H100 cluster managed by BCM. Nothing is graded.", title="Sandbox"))
         return
+    if s.variants and s.variant_index is None:
+        raise ValueError(f"{s.id}: a variant must be picked before the briefing is shown")
     body = [s.briefing.rstrip()]
     if s.objectives and (not incident or objectives_revealed):
         body += ["", ui.bold("Objectives:"), *(f"  • {o}" for o in s.objectives)]
@@ -321,6 +323,7 @@ def _record(session: LabSession, passed: bool, gave_up: bool, incident: bool) ->
 def run_lab(ui: UI, s: Scenario | None, incident: bool = False, hide_identity: bool = False) -> None:
     """Practice a scenario (guided by default, or as an incident); the result is saved to progress."""
     session = LabSession(s, color=ui.color, ui=ui)
+    s = session.scenario  # the session may have picked a variant; everything shown must be that one
     ui.set_completer(_completion_words(), lambda: session.shell.ctx)
     incident = incident and s is not None
     gave_up = passed = False
@@ -345,6 +348,7 @@ def run_lab(ui: UI, s: Scenario | None, incident: bool = False, hide_identity: b
         elif s and incident and cmd == "retry":
             _record(session, False, False, incident)
             session.new_attempt()
+            s = session.scenario_required
             ui.out(ui.yellow(f"Fresh attempt #{session.attempt}: cluster, timer, hints and objectives reset."))
             show_briefing(ui, s, incident=True)
         elif s and incident and cmd == "objectives":

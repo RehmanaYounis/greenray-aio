@@ -1,5 +1,5 @@
 id: tsh-ib-port-down
-title: One compute-fabric port on {node} is down
+title: "One compute-fabric port on a DGX node is down"
 domain: Troubleshooting and Optimization
 difficulty: medium
 time_limit_min: 15

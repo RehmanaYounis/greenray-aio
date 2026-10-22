@@ -1,5 +1,5 @@
 id: tsh-ecc-row-remap
-title: Uncorrectable ECC on {node} - row remap pending
+title: "Uncorrectable ECC on a DGX node - row remap pending"
 domain: Troubleshooting and Optimization
 difficulty: medium
 time_limit_min: 15

@@ -1,5 +1,5 @@
 id: tsh-thermal-throttle
-title: One slow GPU — thermal slowdown on {node}
+title: "One slow GPU - thermal slowdown on a DGX node"
 domain: Troubleshooting and Optimization
 difficulty: medium
 time_limit_min: 15

@@ -1,5 +1,5 @@
 id: tsh-which-gpu-is-which
-title: The BMC reports PCIe errors on {bus}:00.0 of {node}. Which GPU is that?
+title: "The BMC reports PCIe errors on a bus id. Which GPU is that?"
 domain: Troubleshooting and Optimization
 difficulty: easy
 time_limit_min: 10

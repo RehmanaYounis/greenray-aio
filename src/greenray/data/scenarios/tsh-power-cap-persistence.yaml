@@ -1,5 +1,5 @@
 id: tsh-power-cap-persistence
-title: Training is slow on {node} — find the clock limiter
+title: "Training is slow on one DGX node - find the clock limiter"
 domain: Troubleshooting and Optimization
 difficulty: easy
 time_limit_min: 10

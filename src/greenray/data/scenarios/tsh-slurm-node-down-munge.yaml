@@ -1,5 +1,5 @@
 id: tsh-slurm-node-down-munge
-title: "{node} is DOWN \"Not responding\" after its disk swap"
+title: "A DGX node is DOWN \"Not responding\" after its disk swap"
 domain: Troubleshooting and Optimization
 difficulty: medium
 time_limit_min: 15
