@@ -39,9 +39,12 @@ Large families (`slurm`, `kubectl`) are packages with one module per concern and
 ## Scenarios and grading
 A scenario is a YAML file: `setup` ops applied to the healthy tree, `checks` as Python
 expressions over the resulting tree, hints, and a reference solution kept separately.
-Checks grade the end state, so any valid fix passes; `ran()` only requires that
-evidence was gathered. `content/validate.py` proves every scenario starts broken and
-that its solution fixes it.
+Checks grade the end state, so any valid fix passes; `ran()` requires that evidence was
+gathered, `ran_before()` that it came before a change, and `audit()` reads the log of
+destructive operations that commands record in `core/audit.py` (a reboot with jobs on
+the node, another user's job cancelled). A scenario may list variants; placeholders in
+the problem and the solution are filled per variant. `content/validate.py` proves every
+variant starts broken and that its solution fixes it, and that no hint quotes a fix.
 
 ## Trust boundary
 Scenario files are code (`eval` for checks, `exec` for `python:` setup). They come only
@@ -49,7 +52,8 @@ from this repository and the solutions source. What the learner types never reac
 `eval`/`exec`; it is parsed by the emulated tools.
 
 ## App
-`app/lab.py` runs an attempt (guided or incident mode) and the debrief. `app/exam.py` and
+`app/lab.py` runs an attempt (guided or incident mode), the debrief and the offer to reflect;
+`app/reflect.py` keeps those answers as notes. `app/exam.py` and
 `app/mock.py` run question drills and the mock exam (full or labs-only) and print the report
 card. `app/study.py` turns progress into a recommendation (`next`) and a four-week schedule
 (`plan`); `app/progress.py` stores results in `~/.greenray`. `app/ui.py` renders panels and

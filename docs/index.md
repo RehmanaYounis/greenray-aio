@@ -19,7 +19,7 @@ root@dgx-03:~# check
 
 | | |
 | --- | --- |
-| [Getting started](getting-started.md) | Install in one command and finish your first lab in ten minutes |
+| [Getting started](getting-started.md) | Install or update in one command and finish your first lab in ten minutes |
 | [Using the lab](usage.md) | Every `greenray` command, the lab meta-commands, and what the grader does and does not judge |
 | [Study path](study-path.md) | The on-ramp, `greenray next`, the four-week plan, the mock exam and its report card |
 | [The simulated cluster](cluster.md) | Hosts, tools and known limits |
