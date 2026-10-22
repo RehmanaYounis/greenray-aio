@@ -1,22 +1,22 @@
 id: tsh-slurm-node-down-munge
-title: dgx-02 is DOWN "Not responding" after its disk swap
+title: "{node} is DOWN \"Not responding\" after its disk swap"
 domain: Troubleshooting and Optimization
 difficulty: medium
 time_limit_min: 15
 tags: [slurm, munge, authentication, slurmd, node-state]
 briefing: |
-  dgx-02 came back yesterday after hardware support replaced its system disk.
+  "{node} came back yesterday after hardware support replaced its system disk."
   The technician reinstalled the OS packages that were missing.
   Since then Slurm shows the node as DOWN* "Not responding", even though you
   can ssh to it and `systemctl status slurmd` says active (running).
-  carol's job that was running there when the node went away was killed.
+  "{user}'s job that was running there when the node went away was killed."
 
-  Get dgx-02 back into service. Fix this node only: the other three DGX nodes
+  Get {node} back into service. Fix this node only: the other three DGX nodes
   are running fine, and nobody wants their authentication touched.
 objectives:
-  - Find out why slurmctld cannot talk to dgx-02, using the logs or a credential test
-  - Make dgx-02 authenticate with the same MUNGE key as the rest of the cluster
-  - dgx-02 is IDLE in Slurm and responding
+  - Find out why slurmctld cannot talk to {node}, using the logs or a credential test
+  - Make {node} authenticate with the same MUNGE key as the rest of the cluster
+  - "{node} is IDLE in Slurm and responding"
   - The cluster-wide key on the head node and the other nodes is unchanged
 setup:
   - python: |
@@ -26,7 +26,7 @@ setup:
           n.services['munge'] = 'active'
           n.files['/etc/munge/munge.key'] = good
           n['munge_key_loaded'] = good
-      d = state.nodes['dgx-02']
+      d = state.nodes['{node}']
       d.files['/etc/munge/munge.key'] = bad
       d['munge_key_loaded'] = bad
       state.nodes['bcm-head'].files['/cm/images/dgx-os-6.2-h100-image/etc/munge/munge.key'] = good
@@ -36,52 +36,56 @@ setup:
           "Install: munge:amd64 (0.5.14-6), libmunge2:amd64 (0.5.14-6)\n"
           "End-Date: 2026-10-18  16:02:19\n")
       d.journal['munge'] = [
-          "2026-10-18 16:02:18 dgx-02 systemd[1]: Starting MUNGE authentication service...",
-          "2026-10-18 16:02:19 dgx-02 systemd[1]: Started MUNGE authentication service.",
+          "2026-10-18 16:02:18 {node} systemd[1]: Starting MUNGE authentication service...",
+          "2026-10-18 16:02:19 {node} systemd[1]: Started MUNGE authentication service.",
       ]
       d.journal['slurmd'] = [
-          "2026-10-18 16:05:40 dgx-02 slurmd[4211]: slurmd: slurmd version 23.11.6 started",
-          "2026-10-18 16:05:40 dgx-02 slurmd[4211]: slurmd: CPUs=224 Boards=1 Sockets=2 Cores=56 Threads=2 Memory=2063000 TmpDisk=0",
-          "2026-10-18 16:05:41 dgx-02 slurmd[4211]: slurmd: error: Unable to register: Zero Bytes were transmitted or received",
-          "2026-10-18 16:06:12 dgx-02 slurmd[4211]: slurmd: error: Munge decode failed: Invalid credential",
-          "2026-10-18 16:06:12 dgx-02 slurmd[4211]: slurmd: error: slurm_unpack_received_msg: auth_g_verify: REQUEST_PING has authentication error: Invalid authentication credential",
-          "2026-10-18 16:06:12 dgx-02 slurmd[4211]: slurmd: error: slurm_unpack_received_msg: Protocol authentication error",
+          "2026-10-18 16:05:40 {node} slurmd[4211]: slurmd: slurmd version 23.11.6 started",
+          "2026-10-18 16:05:40 {node} slurmd[4211]: slurmd: CPUs=224 Boards=1 Sockets=2 Cores=56 Threads=2 Memory=2063000 TmpDisk=0",
+          "2026-10-18 16:05:41 {node} slurmd[4211]: slurmd: error: Unable to register: Zero Bytes were transmitted or received",
+          "2026-10-18 16:06:12 {node} slurmd[4211]: slurmd: error: Munge decode failed: Invalid credential",
+          "2026-10-18 16:06:12 {node} slurmd[4211]: slurmd: error: slurm_unpack_received_msg: auth_g_verify: REQUEST_PING has authentication error: Invalid authentication credential",
+          "2026-10-18 16:06:12 {node} slurmd[4211]: slurmd: error: slurm_unpack_received_msg: Protocol authentication error",
       ]
       state.nodes['bcm-head'].journal['slurmctld'] = [
           "2026-10-18 16:05:41 bcm-head slurmctld[2211]: error: Munge decode failed: Invalid credential",
           "2026-10-18 16:05:41 bcm-head slurmctld[2211]: error: slurm_unpack_received_msg: auth_g_verify: MESSAGE_NODE_REGISTRATION_STATUS has authentication error: Invalid authentication credential",
-          "2026-10-18 16:05:41 bcm-head slurmctld[2211]: error: slurm_unpack_received_msg: [[dgx-02]:44610] Protocol authentication error",
-          "2026-10-18 16:10:41 bcm-head slurmctld[2211]: error: Nodes dgx-02 not responding, setting DOWN",
+          "2026-10-18 16:05:41 bcm-head slurmctld[2211]: error: slurm_unpack_received_msg: [[{node}]:44610] Protocol authentication error",
+          "2026-10-18 16:10:41 bcm-head slurmctld[2211]: error: Nodes {node} not responding, setting DOWN",
       ]
-      sn = state.slurm.nodes['dgx-02']
+      sn = state.slurm.nodes['{node}']
       sn.state = 'DOWN'
       sn.reason = 'Not responding'
       sn.reason_user = 'slurm'
       sn.reason_time = '2026-10-18T16:10:41'
-      state.slurm.users['carol'] = {'name': 'carol', 'default_account': 'root'}
+      state.slurm.users['{user}'] = {'name': '{user}', 'default_account': 'root'}
       state.slurm.jobs.append({
-          'id': 3101, 'name': 'sd-finetune', 'user': 'carol', 'partition': 'defq', 'state': 'NODE_FAIL',
-          'exit_code': '0:0', 'num_nodes': 1, 'gpus_per_node': 8, 'nodelist': ['dgx-02'],
+          'id': {job}, 'name': '{jobname}', 'user': '{user}', 'partition': 'defq', 'state': 'NODE_FAIL',
+          'exit_code': '0:0', 'num_nodes': 1, 'gpus_per_node': 8, 'nodelist': ['{node}'],
           'submit_time': -90000, 'start_time': -86000, 'end_time': -60000, 'batch': True,
-          'command': '/home/carol/sd.sbatch'})
-      state.slurm.next_job_id = 3102
+          'command': '/home/{user}/{jobname}.sbatch'})
+      state.slurm.next_job_id = {job} + 1
 checks:
   - desc: you gathered evidence (slurmd/slurmctld/munge logs, or a munge -n | unmunge test)
     expr: ran(r'^journalctl') or ran(r'^unmunge')
-  - desc: dgx-02 has the cluster's MUNGE key
-    expr: file('dgx-02', '/etc/munge/munge.key') == file('bcm-head', '/etc/munge/munge.key')
-  - desc: munged on dgx-02 is running with that key (restarted after the copy)
-    expr: nodes['dgx-02'].services['munge'] == 'active' and nodes['dgx-02'].get('munge_key_loaded') == nodes['bcm-head'].get('munge_key_loaded')
-  - desc: the cluster-wide key was not rotated (head node and dgx-01/03/04 unchanged)
-    expr: all(nodes[h].get('munge_key_loaded') == "munge-key:4f1d8c2a9e07b6d35a1c2e9f80b7d4c6e1a3f5b7092c4d6e8f0a1b3c5d7e9f102\n" and file(h, '/etc/munge/munge.key') == nodes[h].get('munge_key_loaded') for h in ('bcm-head', 'dgx-01', 'dgx-03', 'dgx-04'))
-  - desc: dgx-02 is IDLE and responding in Slurm
-    expr: slurm.nodes['dgx-02'].state == 'IDLE' and not slurm.nodes['dgx-02'].get('not_responding')
+  - desc: "{node} has the cluster's MUNGE key"
+    expr: file('{node}', '/etc/munge/munge.key') == file('bcm-head', '/etc/munge/munge.key')
+  - desc: munged on {node} is running with that key (restarted after the copy)
+    expr: nodes['{node}'].services['munge'] == 'active' and nodes['{node}'].get('munge_key_loaded') == nodes['bcm-head'].get('munge_key_loaded')
+  - desc: the cluster-wide key was not rotated (head node and {others_text} unchanged)
+    expr: all(nodes[h].get('munge_key_loaded') == "munge-key:4f1d8c2a9e07b6d35a1c2e9f80b7d4c6e1a3f5b7092c4d6e8f0a1b3c5d7e9f102\n" and file(h, '/etc/munge/munge.key') == nodes[h].get('munge_key_loaded') for h in ('bcm-head', {others}))
+  - desc: "{node} is IDLE and responding in Slurm"
+    expr: slurm.nodes['{node}'].state == 'IDLE' and not slurm.nodes['{node}'].get('not_responding')
 hints:
-  - "sinfo -R gives the reason, and the * after the state means slurmctld cannot reach slurmd. ssh works, so look at the conversation between the two daemons: journalctl -u slurmd on dgx-02 and journalctl -u slurmctld on the head node."
-  - "'Invalid credential' and 'Protocol authentication error' come from MUNGE. munge -n | unmunge on one host only proves that host agrees with itself. Encode on dgx-02 and decode on the head: ssh dgx-02 munge -n | unmunge."
-  - "Every host in a Slurm cluster must share the same /etc/munge/munge.key. Compare checksums (md5sum) on the head and on dgx-02. Installing the munge package creates a fresh random key."
-  - "Copy the head node's key to dgx-02 (scp, or imageupdate from the software image that already contains it), restart munge, then slurmd, on dgx-02. A node that went DOWN stays DOWN until you resume it with scontrol update (nodename=dgx-02, state=resume)."
+  - "sinfo -R gives the reason, and the * after the state means slurmctld cannot reach slurmd. ssh works, so look at the conversation between the two daemons: journalctl -u slurmd on {node} and journalctl -u slurmctld on the head node."
+  - "'Invalid credential' and 'Protocol authentication error' come from MUNGE. munge -n | unmunge on one host only proves that host agrees with itself. Encode on {node} and decode on the head: ssh {node} munge -n | unmunge."
+  - "Every host in a Slurm cluster must share the same /etc/munge/munge.key. Compare checksums (md5sum) on the head and on {node}. Installing the munge package creates a fresh random key."
+  - "Copy the head node's key to {node} (scp, or imageupdate from the software image that already contains it), restart munge, then slurmd, on {node}. A node that went DOWN stays DOWN until you resume it with scontrol update (nodename={node}, state=resume)."
 references:
   - Slurm Quick Start Administrator Guide (MUNGE authentication)
   - MUNGE Installation Guide (munge.key distribution, munge -n | unmunge)
   - Slurm slurm.conf man page (ReturnToService, SlurmdTimeout)
+variants:
+  - {"node": "dgx-02", "others": "'dgx-01', 'dgx-03', 'dgx-04'", "others_text": "dgx-01/03/04", "user": "carol", "job": 3101, "jobname": "sd-finetune"}
+  - {"node": "dgx-04", "others": "'dgx-01', 'dgx-02', 'dgx-03'", "others_text": "dgx-01/02/03", "user": "bob", "job": 2766, "jobname": "resnet-train"}
+  - {"node": "dgx-01", "others": "'dgx-02', 'dgx-03', 'dgx-04'", "others_text": "dgx-02/03/04", "user": "alice", "job": 3350, "jobname": "llama-ft"}

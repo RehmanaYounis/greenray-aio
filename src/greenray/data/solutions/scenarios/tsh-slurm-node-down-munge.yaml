@@ -1,24 +1,24 @@
 # Private solution for scenario tsh-slurm-node-down-munge
 solution:
   - sinfo -R
-  - scontrol show node dgx-02
+  - scontrol show node {node}
   - journalctl -u slurmctld
-  - ssh dgx-02
+  - ssh {node}
   - systemctl status slurmd
   - journalctl -u slurmd
   - munge -n | unmunge
   - cat /var/log/apt/history.log
   - md5sum /etc/munge/munge.key
   - exit
-  - ssh dgx-02 munge -n | unmunge
+  - ssh {node} munge -n | unmunge
   - md5sum /etc/munge/munge.key
-  - scp /etc/munge/munge.key dgx-02:/etc/munge/munge.key
-  - ssh dgx-02 md5sum /etc/munge/munge.key
-  - ssh dgx-02 systemctl restart munge
-  - ssh dgx-02 systemctl restart slurmd
-  - ssh dgx-02 munge -n | unmunge
-  - scontrol update nodename=dgx-02 state=resume
-  - sinfo -N -n dgx-02
+  - scp /etc/munge/munge.key {node}:/etc/munge/munge.key
+  - ssh {node} md5sum /etc/munge/munge.key
+  - ssh {node} systemctl restart munge
+  - ssh {node} systemctl restart slurmd
+  - ssh {node} munge -n | unmunge
+  - scontrol update nodename={node} state=resume
+  - sinfo -N -n {node}
 explanation: |
   Slurm authenticates every RPC between slurmctld, slurmd and the client
   commands with MUNGE (AuthType=auth/munge). MUNGE credentials are encrypted and
@@ -28,19 +28,19 @@ explanation: |
   shows munge being installed on 2026-10-18, right before the errors start).
   From then on:
 
-  * slurmd on dgx-02 starts and looks healthy locally (systemctl says running),
+  * slurmd on {node} starts and looks healthy locally (systemctl says running),
   * but slurmctld cannot decode its registration ("Munge decode failed: Invalid
     credential ... Protocol authentication error"), and slurmd cannot decode the
     controller's pings either,
   * after SlurmdTimeout slurmctld marks the node DOWN with reason "Not
     responding", and its running job ends with NODE_FAIL.
 
-  munge -n | unmunge on dgx-02 alone succeeds, because the node agrees with
+  munge -n | unmunge on {node} alone succeeds, because the node agrees with
   itself. The test that proves the problem crosses hosts:
-  ssh dgx-02 munge -n | unmunge (encode on dgx-02, decode on the head) gives
+  ssh {node} munge -n | unmunge (encode on {node}, decode on the head) gives
   "Invalid credential". md5sum of the key on both hosts confirms it.
 
-  The fix is to bring the cluster key to dgx-02 (scp from the head node, or
+  The fix is to bring the cluster key to {node} (scp from the head node, or
   imageupdate from the BCM software image, which already holds the right key),
   restart munged so it loads the key (munged reads it only at start-up), and then
   restart slurmd so it registers again. ReturnToService=0 (the default)

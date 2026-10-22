@@ -1,6 +1,6 @@
 # Private solution for scenario tsh-fabricmanager-down
 solution:
-  - ssh dgx-01
+  - ssh {node}
   - deviceQuery
   - systemctl status nvidia-fabricmanager
   - journalctl -u nvidia-fabricmanager

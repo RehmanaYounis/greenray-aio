@@ -1,43 +1,47 @@
 id: tsh-power-cap-persistence
-title: Training is slow on dgx-03 — find the clock limiter
+title: Training is slow on {node} — find the clock limiter
 domain: Troubleshooting and Optimization
 difficulty: easy
 time_limit_min: 10
 tags: [nvidia-smi, power, performance]
 briefing: |
-  A ResNet benchmark runs about 40% slower on dgx-03 than on dgx-01.
+  A ResNet benchmark runs about 40% slower on {node} than on {peer}.
   Temperatures look normal. Someone was "testing energy savings" on that node
   last week. They also complained that the first nvidia-smi call after idle
   takes several seconds.
-  Find out why the GPUs are slow and return dgx-03 to the standard DGX configuration.
+  Find out why the GPUs are slow and return {node} to the standard DGX configuration.
 objectives:
-  - All GPUs on dgx-03 are back to their default power limit
+  - All GPUs on {node} are back to their default power limit
   - The clocks are no longer limited by a software power cap
-  - Persistence mode is enabled on all GPUs on dgx-03
+  - Persistence mode is enabled on all GPUs on {node}
 setup:
   - python: |
-      for g in state.nodes['dgx-03'].gpus:
-          g.power_limit_w = 350
+      for g in state.nodes['{node}'].gpus:
+          g.power_limit_w = {cap}
           g.persistence_mode = False
           g.utilization = 100
-          g.power_draw_w = 349.0
+          g.power_draw_w = {cap} - 1.0
           g.sm_clock_mhz = 1260
           g.throttle_reasons = ["SW Power Cap"]
       # the "energy-saving test" also stopped and disabled the persistence daemon
-      state.nodes['dgx-03'].services['nvidia-persistenced'] = 'inactive'
-      state.nodes['dgx-03'].services_enabled['nvidia-persistenced'] = False
+      state.nodes['{node}'].services['nvidia-persistenced'] = 'inactive'
+      state.nodes['{node}'].services_enabled['nvidia-persistenced'] = False
 checks:
-  - desc: power limit is 700 W on every dgx-03 GPU
-    expr: all(g.power_limit_w == g.power_default_w for g in nodes['dgx-03'].gpus)
-  - desc: no SW Power Cap throttling on dgx-03
-    expr: not any('SW Power Cap' in g.throttle_reasons for g in nodes['dgx-03'].gpus)
-  - desc: persistence mode enabled on every dgx-03 GPU
-    expr: all(g.persistence_mode for g in nodes['dgx-03'].gpus)
+  - desc: power limit is 700 W on every {node} GPU
+    expr: all(g.power_limit_w == g.power_default_w for g in nodes['{node}'].gpus)
+  - desc: no SW Power Cap throttling on {node}
+    expr: not any('SW Power Cap' in g.throttle_reasons for g in nodes['{node}'].gpus)
+  - desc: persistence mode enabled on every {node} GPU
+    expr: all(g.persistence_mode for g in nodes['{node}'].gpus)
   - desc: you looked at the clock event reasons
-    expr: ran(r'nvidia-smi.*(-q.*PERFORMANCE|-d PERFORMANCE|clocks_(event|throttle)_reasons|-q$)', 'dgx-03') or ran(r'nvidia-smi -q', 'dgx-03')
+    expr: ran(r'nvidia-smi.*(-q.*PERFORMANCE|-d PERFORMANCE|clocks_(event|throttle)_reasons|-q$)', '{node}') or ran(r'nvidia-smi -q', '{node}')
 hints:
   - "Compare power.draw with power.limit: nvidia-smi --query-gpu=index,power.draw,power.limit,clocks.sm --format=csv"
   - "nvidia-smi -q -d PERFORMANCE shows the active clock event (throttle) reasons."
   - Without -i, -pl and -pm apply to all GPUs. The first-call delay is the driver unloading when no client is attached.
 references:
   - nvidia-smi documentation (clocks_event_reasons)
+variants:
+  - {"node": "dgx-03", "peer": "dgx-01", "cap": 350}
+  - {"node": "dgx-02", "peer": "dgx-04", "cap": 400}
+  - {"node": "dgx-04", "peer": "dgx-02", "cap": 300}

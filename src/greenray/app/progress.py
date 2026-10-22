@@ -45,6 +45,7 @@ def record_scenario(
     gave_up: bool,
     objectives_revealed: bool = False,
     mode: str = "guided",
+    variant: int | None = None,
 ) -> None:
     """Record one attempt.
 
@@ -58,6 +59,10 @@ def record_scenario(
     rec.setdefault("independent_passes", 0)
     rec["attempts"] += 1
     rec["last"] = _now()
+    if variant is not None:
+        rec.setdefault("variants_seen", [])
+        if variant not in rec["variants_seen"]:
+            rec["variants_seen"].append(variant)
     if passed and not gave_up:
         rec["passed"] = True
         if hints_used == 0 and not objectives_revealed:

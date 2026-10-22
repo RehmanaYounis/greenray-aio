@@ -62,6 +62,20 @@ edge_cases:
   - Exam traps, variations, and what changes on other hardware.
 ```
 
+## Variants
+
+A scenario may carry a `variants:` list so that a repeat is a different problem: another node, GPU, job id or user.
+
+```yaml
+variants:
+  - {node: dgx-02, gpu: 3, bus: 5D, job: 1500, user: alice}
+  - {node: dgx-04, gpu: 6, bus: BA, job: 2317, user: dave}
+```
+
+Every variant must have the same keys. `{node}`, `{gpu}` and the other names are substituted in the title, briefing, objectives, setup, checks and hints, and in the solution file's solution, explanation and edge cases. Only names that exist in the variant are replaced, so Python dict literals and regex quantifiers such as `\D{0,4}` in checks are left alone. A plain scalar in YAML may not start with `{`, so quote values that begin with a placeholder.
+
+`greenray lab <id>` picks a variant at random, `--variant N` chooses one, and `retry` in incident mode moves to the next. `greenray validate` and the test-suite replay every variant.
+
 ## How scenarios are presented
 
 - `greenray lab <id>` (guided) shows the title, briefing and objectives.

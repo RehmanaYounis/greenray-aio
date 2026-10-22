@@ -1,27 +1,27 @@
 # Private solution for scenario tsh-xid79-drained-node
 solution:
   - sinfo -R
-  - sacct -j 1500
-  - ssh dgx-02
+  - sacct -j {job}
+  - ssh {node}
   - dmesg | grep -i xid
   - nvidia-smi
   - reboot
-  - ssh dgx-02
+  - ssh {node}
   - nvidia-smi -L
   - dcgmi diag -r 2
   - exit
-  - scontrol update nodename=dgx-02 state=resume
+  - scontrol update nodename={node} state=resume
   - sinfo
 explanation: |
-  The health check drained dgx-02 for the right reason. dmesg shows
-  "Xid 79 ... GPU has fallen off the bus" for 0000:5d:00 (GPU 3), plus a PCIe AER
+  The health check drained {node} for the right reason. dmesg shows
+  "Xid 79 ... GPU has fallen off the bus" for 0000:{busl}:00 (GPU {gpu}), plus a PCIe AER
   fatal error on the upstream port. nvidia-smi can't get a handle for that GPU,
   and with AutoDetect=nvml slurmd would report only 7 GPUs. Any 8-GPU job sent
-  there would fail, which is what happened to job 1500.
+  there would fail, which is what happened to job {job}.
 
   A GPU that has fallen off the bus can't be reset in place. nvidia-smi -r needs
   the driver to reach the device. The fix is a node reboot or a cold power cycle
-  through the BMC. Because dgx-02 was drained beforehand, the reboot did not
+  through the BMC. Because {node} was drained beforehand, the reboot did not
   put it back into service: Slurm keeps DRAIN across slurmd restarts and reboots
   until an admin runs `scontrol update ... state=resume`. That gap is where
   validation belongs. dcgmi diag -r 2 exercises PCIe/NVLink and GPU memory on all

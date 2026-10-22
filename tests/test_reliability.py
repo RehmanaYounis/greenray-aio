@@ -5,7 +5,7 @@ import pickle
 
 import pytest
 
-from conftest import ScriptedUI
+from conftest import ScriptedUI, concrete
 from greenray import commands
 from greenray.app import lab, progress
 from greenray.content import scenarios as sc
@@ -43,7 +43,7 @@ def test_internal_error_restores_state_and_keeps_session(boom_command):
 
 
 def test_unrestorable_crash_blocks_grading(boom_command, monkeypatch):
-    s = sc.find("tsh-power-cap-persistence")
+    s = concrete("tsh-power-cap-persistence")
     sh = Shell(s.build_state())
     for line in ["ssh dgx-03", "nvidia-smi -q -d PERFORMANCE", "nvidia-smi -pl 700", "nvidia-smi -pm 1"]:
         sh.run(line)
@@ -117,7 +117,7 @@ def test_power_limit_reports_previous_value():
 
 def test_ctrl_c_cancels_the_line_not_the_lab():
     ui = ScriptedUI([KeyboardInterrupt(), "hostname", "quit"])
-    lab.run_lab(ui, sc.find("tsh-power-cap-persistence"))
+    lab.run_lab(ui, concrete("tsh-power-cap-persistence"))
     assert "^C" in ui.output and "bcm-head" in ui.output
     assert progress.load()["scenarios"]["tsh-power-cap-persistence"]["attempts"] == 1
 

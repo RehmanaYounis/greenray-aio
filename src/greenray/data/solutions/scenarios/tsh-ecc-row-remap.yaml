@@ -1,19 +1,19 @@
 # Private solution for scenario tsh-ecc-row-remap
 solution:
-  - ssh dgx-04
-  - nvidia-smi -q -d ROW_REMAPPER -i 6
+  - ssh {node}
+  - nvidia-smi -q -d ROW_REMAPPER -i {gpu}
   - dmesg | grep -i xid
   - exit
-  - scontrol update nodename=dgx-04 state=drain reason="GPU6 row remap pending (Xid 63) - GPU reset"
-  - squeue -w dgx-04
-  - scontrol requeue 3101
+  - scontrol update nodename={node} state=drain reason="GPU{gpu} row remap pending (Xid 63) - GPU reset"
+  - squeue -w {node}
+  - scontrol requeue {job}
   - squeue
-  - ssh dgx-04
+  - ssh {node}
   - nvidia-smi
-  - nvidia-smi -r -i 6
+  - nvidia-smi -r -i {gpu}
   - nvidia-smi --query-gpu=index,remapped_rows.pending,remapped_rows.failure --format=csv
   - exit
-  - scontrol update nodename=dgx-04 state=resume
+  - scontrol update nodename={node} state=resume
   - sinfo
 explanation: |
   On A100/H100, HBM uses row remapping instead of the older page retirement.
@@ -26,7 +26,7 @@ explanation: |
   The safe procedure is the standard maintenance loop: drain, evacuate, reset,
   verify, resume. Draining stops new work. Requeuing the checkpointed job frees
   the GPUs without losing its progress (Slurm reschedules it on another node).
-  nvidia-smi -r -i 6 then succeeds because no process holds the GPU, and the
+  nvidia-smi -r -i {gpu} then succeeds because no process holds the GPU, and the
   remap pending flag clears. Resume only after the query shows Pending: No.
 edge_cases:
   - "'Remapping Failure Occurred: Yes' (Xid 64) means the bank has run out of spare rows. A reset won't help. Keep the node drained, collect nvidia-bug-report.sh plus dcgmi diag -r 3, and RMA the GPU."

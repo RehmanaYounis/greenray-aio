@@ -10,6 +10,7 @@ Installed with uv tool, pipx or Docker, the command is `greenray`. From a source
 | `greenray plan` | A four-week schedule covering every scenario, with your passes ticked off |
 | `greenray list` | All scenarios by exam domain, with your pass marks |
 | `greenray lab <id>` | A scenario in guided mode: title, objectives and hints are available |
+| `greenray lab <id> --variant N` | A specific variant of a scenario that has several (another node, GPU or job); without the flag one is picked at random |
 | `greenray incident [-d DOMAIN] [-t TOPIC]` | A random scenario as an incident: only the incident report is shown, and the id, title and success criteria stay hidden until the debrief. `-t` is a scenario tag such as `slurm`, `kubernetes`, `bcm`, `mig` or `infiniband` |
 | `greenray incident --id <id>` | A specific scenario as an incident, for a fresh independent attempt |
 | `greenray sandbox` | A healthy cluster to explore; nothing is graded |

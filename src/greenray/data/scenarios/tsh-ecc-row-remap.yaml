@@ -1,65 +1,69 @@
 id: tsh-ecc-row-remap
-title: Uncorrectable ECC on dgx-04 - row remap pending
+title: Uncorrectable ECC on {node} - row remap pending
 domain: Troubleshooting and Optimization
 difficulty: medium
 time_limit_min: 15
 tags: [ecc, row-remapping, xid, nvidia-smi, slurm, drain]
 briefing: |
-  Monitoring raised an alert overnight: "dgx-04 GPU 6: uncorrectable ECC error,
-  row remapping pending". Alice's 8-GPU training job 3101 is still running on
-  dgx-04. It survived because her code checkpoints and retries, but the job log
+  Monitoring raised an alert overnight: "{node} GPU {gpu}: uncorrectable ECC error,
+  row remapping pending". {user}'s 8-GPU training job {job} is still running on
+  "{node}. It survived because her code checkpoints and retries, but the job log"
   shows a CUDA error and a restart from checkpoint.
 
-  Confirm what the GPU reports. Get dgx-04 healthy again without throwing away
-  Alice's work (the job is requeue-safe: it restarts from its last checkpoint),
+  Confirm what the GPU reports. Get {node} healthy again without throwing away
+  "{user}'s work (the job is requeue-safe: it restarts from its last checkpoint),"
   and put the node back into service.
 objectives:
-  - Confirm the row-remapper state of GPU 6 on dgx-04
-  - Stop new jobs from landing on dgx-04, and move Alice's job off it cleanly
+  - Confirm the row-remapper state of GPU {gpu} on {node}
+  - Stop new jobs from landing on {node}, and move {user}'s job off it cleanly
   - Activate the pending row remap
-  - dgx-04 back in service with no remap pending
+  - "{node} back in service with no remap pending"
 setup:
   - python: |
-      n = state.nodes['dgx-04']
-      g = n.gpus[6]
+      n = state.nodes['{node}']
+      g = n.gpus[{gpu}]
       g.remap_pending = True
       g.remapped_rows_uncorrectable = 1
       g.ecc_volatile_dbe = 1
       g.ecc_aggregate_dbe = 1
       g.xid = 63
       n.dmesg.extend([
-          "[521004.118211] NVRM: Xid (PCI:0000:ba:00): 94, pid=93811, name=python, Contained: SM (0x1). RST: No, D-RST: No",
-          "[521004.118502] NVRM: Xid (PCI:0000:ba:00): 63, pid='<unknown>', name=<unknown>, Row Remapper: New row (0x0000000000a1b2c0) was marked for remapping, reset gpu to activate.",
+          "[521004.118211] NVRM: Xid (PCI:0000:{busl}:00): 94, pid=93811, name=python, Contained: SM (0x1). RST: No, D-RST: No",
+          "[521004.118502] NVRM: Xid (PCI:0000:{busl}:00): 63, pid='<unknown>', name=<unknown>, Row Remapper: New row (0x0000000000a1b2c0) was marked for remapping, reset gpu to activate.",
       ])
       st = state.slurm
-      st.users['alice'] = {'name': 'alice', 'default_account': 'root'}
-      st.jobs.append({'id': 3101, 'name': 'gpt-train', 'user': 'alice', 'partition': 'defq', 'state': 'RUNNING',
-                      'num_nodes': 1, 'gpus_per_node': 8, 'ntasks_per_node': 8, 'nodelist': ['dgx-04'],
-                      'alloc_gpus': {'dgx-04': list(range(8))}, 'start_time': 0, 'submit_time': 0,
-                      'duration': None, 'command': '/home/alice/gpt.sbatch'})
+      st.users['{user}'] = {'name': '{user}', 'default_account': 'root'}
+      st.jobs.append({'id': {job}, 'name': '{jobname}', 'user': '{user}', 'partition': 'defq', 'state': 'RUNNING',
+                      'num_nodes': 1, 'gpus_per_node': 8, 'ntasks_per_node': 8, 'nodelist': ['{node}'],
+                      'alloc_gpus': {'{node}': list(range(8))}, 'start_time': 0, 'submit_time': 0,
+                      'duration': None, 'command': '/home/{user}/{jobname}.sbatch'})
       for x in n.gpus:
           x.processes.append({'pid': 93800 + x.index, 'name': 'python train.py', 'used_mib': 64000,
-                              'user': 'alice', 'slurm_job': 3101})
+                              'user': '{user}', 'slurm_job': {job}})
           x.memory_used_mib = 64000
           x.utilization = 97
-      st.next_job_id = 3102
+      st.next_job_id = {job} + 1
 checks:
-  - desc: you checked the row remapper / ECC state on dgx-04
-    expr: ran(r'nvidia-smi .*(ROW_REMAPPER|remapped_rows|-d ECC|-q)', 'dgx-04') or ran(r'dcgmi (diag|health)', 'dgx-04')
-  - desc: dgx-04 was drained for the maintenance
-    expr: len(slurm.nodes['dgx-04'].get('drain_log', [])) > 0
-  - desc: GPU 6 has no pending row remap (remap activated by a GPU reset or reboot)
-    expr: not nodes['dgx-04'].gpus[6].remap_pending and not nodes['dgx-04'].gpus[6].remap_failure
-  - desc: Alice's job 3101 was requeued (not simply killed)
-    expr: jobs(id=3101)[0].get('restarts', 0) > 0 and jobs(id=3101)[0].state in ('PENDING', 'RUNNING', 'COMPLETED')
-  - desc: dgx-04 is back in service
-    expr: slurm.nodes['dgx-04'].state in ('IDLE', 'MIXED', 'ALLOCATED') and not slurm.nodes['dgx-04'].get('drain')
+  - desc: you checked the row remapper / ECC state on {node}
+    expr: ran(r'nvidia-smi .*(ROW_REMAPPER|remapped_rows|-d ECC|-q)', '{node}') or ran(r'dcgmi (diag|health)', '{node}')
+  - desc: "{node} was drained for the maintenance"
+    expr: len(slurm.nodes['{node}'].get('drain_log', [])) > 0
+  - desc: GPU {gpu} has no pending row remap (remap activated by a GPU reset or reboot)
+    expr: not nodes['{node}'].gpus[{gpu}].remap_pending and not nodes['{node}'].gpus[{gpu}].remap_failure
+  - desc: "{user}'s job {job} was requeued (not simply killed)"
+    expr: jobs(id={job})[0].get('restarts', 0) > 0 and jobs(id={job})[0].state in ('PENDING', 'RUNNING', 'COMPLETED')
+  - desc: "{node} is back in service"
+    expr: slurm.nodes['{node}'].state in ('IDLE', 'MIXED', 'ALLOCATED') and not slurm.nodes['{node}'].get('drain')
 hints:
-  - "On dgx-04: nvidia-smi -q -d ROW_REMAPPER (or --query-gpu=index,remapped_rows.pending,remapped_rows.failure --format=csv). Pending: Yes means the spare row is reserved but only takes effect after a GPU reset."
-  - "A reset needs the GPU to be idle. Drain the node first so no new job lands on it: scontrol update nodename=dgx-04 state=drain reason=\"...\"."
-  - "The job is requeue-safe. Requeueing job 3101 with scontrol frees the node and the job restarts elsewhere from its checkpoint. scancel would throw the allocation away."
-  - "Once the GPU is idle: reset GPU 6 on dgx-04 with nvidia-smi (-r together with -i), check that Pending is No, then resume the node with scontrol update."
+  - "On {node}: nvidia-smi -q -d ROW_REMAPPER (or --query-gpu=index,remapped_rows.pending,remapped_rows.failure --format=csv). Pending: Yes means the spare row is reserved but only takes effect after a GPU reset."
+  - "A reset needs the GPU to be idle. Drain the node first so no new job lands on it: scontrol update nodename={node} state=drain reason=\"...\"."
+  - "The job is requeue-safe. Requeueing job {job} with scontrol frees the node and the job restarts elsewhere from its checkpoint. scancel would throw the allocation away."
+  - "Once the GPU is idle: reset GPU {gpu} on {node} with nvidia-smi (-r together with -i), check that Pending is No, then resume the node with scontrol update."
 references:
   - NVIDIA GPU Memory Error Management (row remapping) documentation
   - NVIDIA GPU Xid Errors documentation (Xid 63, 64, 94, 95)
   - Slurm scontrol man page (requeue, update NodeName State=DRAIN)
+variants:
+  - {"node": "dgx-04", "gpu": 6, "busl": "ba", "job": 3101, "user": "alice", "jobname": "gpt-train"}
+  - {"node": "dgx-01", "gpu": 2, "busl": "3a", "job": 2880, "user": "bob", "jobname": "resnet-train"}
+  - {"node": "dgx-03", "gpu": 5, "busl": "ab", "job": 4012, "user": "carol", "jobname": "sd-finetune"}

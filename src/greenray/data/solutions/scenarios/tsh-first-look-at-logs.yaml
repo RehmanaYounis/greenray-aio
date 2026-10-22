@@ -1,19 +1,19 @@
 # Private solution for scenario tsh-first-look-at-logs
 solution:
-  - sacct -u bob
-  - sacct -j 2210 --format=JobID,JobName,State,ExitCode,NodeList
-  - ssh dgx-02
-  - journalctl -u slurmd | grep 2210
+  - sacct -u {user}
+  - sacct -j {job} --format=JobID,JobName,State,ExitCode,NodeList
+  - ssh {node}
+  - journalctl -u slurmd | grep {job}
   - dmesg | grep -i -B1 -A1 'out of memory'
   - exit
   - |
-    cat > /root/ticket-4471.txt <<EOF
-    Job 2210 (resnet-train) ended at 03:14 with state OUT_OF_MEMORY, exit code 0:125.
-    Cause: the job used more RAM than it asked for. slurmstepd on dgx-02 logged an oom_kill event in
-    step 2210.batch and the kernel killed python (pid 48213) inside the job's memory cgroup.
+    cat > /root/ticket-{ticket}.txt <<EOF
+    Job {job} ({jobname}) ended at 03:14 with state OUT_OF_MEMORY, exit code 0:125.
+    Cause: the job used more RAM than it asked for. slurmstepd on {node} logged an oom_kill event in
+    step {job}.batch and the kernel killed python (pid 48213) inside the job's memory cgroup.
     The node is fine. Resubmit with a larger --mem, or reduce the dataloader's memory footprint.
     EOF
-  - cat /root/ticket-4471.txt
+  - cat /root/ticket-{ticket}.txt
 explanation: |
   squeue only shows jobs that are pending or running, so the first stop for a job
   that "disappeared" is the accounting database: sacct keeps every job's final State
@@ -21,10 +21,10 @@ explanation: |
   memory cgroup hit its limit and the kernel OOM killer ended a task.
 
   The evidence behind that verdict lives on the node that ran the job. slurmstepd
-  reports "Detected 1 oom_kill event in StepId=2210.batch", and the kernel ring
-  buffer shows the oom-killer firing inside /slurm/uid_1002/job_2210 and killing
+  reports "Detected 1 oom_kill event in StepId={job}.batch", and the kernel ring
+  buffer shows the oom-killer firing inside /slurm/uid_1002/job_{job} and killing
   python. The job's own output file says nothing because the process was killed,
-  not asked to exit, which is why bob saw no error.
+  not asked to exit, which is why {user} saw no error.
 
   Writing the answer to the ticket is part of the job: the id, the state Slurm
   reports, and what to do next.
