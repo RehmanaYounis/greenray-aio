@@ -52,7 +52,7 @@ Every mock ends with a **report card**: a bar per domain combining your question
 | --- | --- |
 | 1 | The on-ramp and the easy labs, guided. A first domain drill at the end. |
 | 2 | Installation and Deployment, then Administration, guided. Domain drills on the way. |
-| 3 | Workload Management, then Troubleshooting and Optimization, guided. |
+| 3 | Workload Management, then Troubleshooting and Optimization, guided, ending with the cross-system incidents. |
 | 4 | Everything again as incidents, `greenray mock`, the weakest domain, `greenray mock --labs-only`, a final mock. |
 
 `greenray plan` prints the day-by-day version with your progress on it.

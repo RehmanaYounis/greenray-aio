@@ -1,0 +1,48 @@
+# Private solution for scenario tsh-node-lost-driver-after-category-change
+solution:
+  - sinfo -R
+  - ssh {node}
+  - nvidia-smi
+  - lsmod | grep nvidia
+  - dpkg -l | grep nvidia-driver
+  - uname -r
+  - journalctl -u cmd
+  - exit
+  - cmsh -c "device; use {node}; show"
+  - cmsh -c "device; use dgx-03; show"
+  - cmsh -c "device; list"
+  - cmsh -c "category; list"
+  - cmsh -c "device; use {node}; set category dgx-h100; commit"
+  - cmsh -c "device; power reset -n {node}"
+  - ssh {node} nvidia-smi -L
+  - ssh {node} systemctl status slurmd
+  - scontrol update nodename={node} state=resume
+  - sinfo
+explanation: |
+  The node is the symptom, BCM is the cause. On the node everything that needs
+  the NVIDIA driver is missing at once: no nvidia modules, no nvidia-driver
+  package, no NVRM lines in dmesg, slurmd not even installed. A node does not
+  lose packages by rebooting; it boots whatever the node-installer copied onto
+  it, and the cmd journal says that image was default-image.
+
+  Which image a node receives is a property of its category. cmsh shows that
+  {node} sits in the default category while the healthy DGX nodes are in
+  dgx-h100, and the event log shows the change was made the afternoon before the
+  maintenance. The reboot only made it visible: the first provisioning after the
+  change installed the generic image, which has no driver and no slurmclient
+  role, so slurmd never started and slurmctld marked the node DOWN.
+
+  The fix is the node's category, not the category's image: changing
+  default-image to carry the DGX stack would alter every future node in the
+  default category, and changing dgx-h100 would not help a node that is not in
+  it. After the commit the node still runs the wrong image until it is
+  provisioned again, so it needs a reboot or power reset through cmsh (or
+  imageupdate followed by a reboot). The slurmclient role comes back with the
+  category, slurmd starts, and the last step is to resume the node in Slurm,
+  which keeps a node DOWN until an administrator clears it.
+edge_cases:
+  - "imageupdate syncs the image onto a running node without a reboot, but a kernel or driver change still needs the reboot to take effect. For a node that booted the wrong image, a reprovisioning reboot is the clean path."
+  - "Setting the software image directly on the device (set softwareimage) would also fix this node, but leaves it in the wrong category with the wrong roles and fsmounts. Fix the category; everything else follows."
+  - "Check the category's install mode and the node's next install mode before rebooting: a FULL install re-partitions the local disks and wipes /raid."
+  - "If the same event log showed the change coming from a script, look for other nodes it touched. Here the script changed one node, but onboarding scripts often loop."
+  - "Slurm shows a node that stopped responding as DOWN*, not DRAIN. ReturnToService=0 keeps it DOWN after it comes back until scontrol update state=resume; ReturnToService=1 would have returned it automatically."

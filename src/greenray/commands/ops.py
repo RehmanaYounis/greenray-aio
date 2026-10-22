@@ -185,6 +185,7 @@ def reseat_cable(ctx, args):
     from .ib import _link_up
 
     port.cable_ok = True
+    port.rate_gbps = port.expected_rate_gbps  # a reseated or replaced cable trains at full speed again
     was_active = port.state == "Active"
     up = _link_up(port) if node.up else False
     if up and not was_active:

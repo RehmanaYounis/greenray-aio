@@ -19,6 +19,16 @@ Six short scenarios, ten minutes each, for the first week. They practise the Lin
 | Reading device, category and image settings in `cmsh` | `adm-bcm-cmsh-inventory` |
 | Mapping PCI bus id, index, UUID and serial of a GPU (`nvidia-smi`) | `tsh-which-gpu-is-which` |
 
+## Cross-system incidents
+
+Three hard scenarios where the symptom sits in one system and the cause in another, as it does on the exam's live clusters. Each has three variants and belongs to the mock-exam pool.
+
+| Symptom | Cause | Scenario |
+| --- | --- | --- |
+| A DGX node is DOWN in Slurm with no NVIDIA driver after a reboot | Its BCM category was changed, so the node-installer provisioned the wrong image | `tsh-node-lost-driver-after-category-change` |
+| A two-node training run is eight times slower | The updated software image lost the GPUDirect RDMA module, and one IB link trained at 100G | `tsh-nccl-slow-after-image-update` |
+| A Deployment replica stays Pending on a labelled node pool | One pool node was switched to MIG and no longer advertises whole GPUs | `wkl-k8s-replica-pending-after-mig` |
+
 ## Installation and Deployment (31%)
 
 | Topic | Hands-on scenarios |
@@ -38,12 +48,12 @@ Six short scenarios, ten minutes each, for the first week. They practise the Lin
 | Topic | Hands-on scenarios |
 | --- | --- |
 | BCM monitoring, node status, power control | `adm-bcm-power-and-status`, `adm-bcm-cmsh-inventory` |
-| BCM patching and image synchronisation (grabimage / imageupdate) | `ins-bcm-softwareimage-update`, `adm-bcm-grabimage-sync` |
+| BCM patching and image synchronisation (grabimage / imageupdate) | `ins-bcm-softwareimage-update`, `adm-bcm-grabimage-sync`, `tsh-node-lost-driver-after-category-change` |
 | BCM users and roles | `adm-bcm-user-role` |
 | Slurm partitions, QOS and limits | `adm-slurm-partition-qos`, `adm-slurm-partition-time-limit` |
 | Slurm accounts and fairshare | `adm-slurm-fairshare-accounts` |
 | MIG configuration | `adm-mig-h100-1g` |
-| MIG in Kubernetes | `adm-k8s-mig-mixed-strategy` |
+| MIG in Kubernetes | `adm-k8s-mig-mixed-strategy`, `wkl-k8s-replica-pending-after-mig` |
 | GPU sharing in Kubernetes (time-slicing) | `adm-k8s-time-slicing` |
 | Run:ai projects, quotas and resource allocation between teams | `adm-runai-project-quota` |
 | DCGM health watches and policies | `adm-dcgm-health-policy` |
@@ -71,7 +81,7 @@ Six short scenarios, ten minutes each, for the first week. They practise the Lin
 | Thermal and power throttling | `tsh-thermal-throttle`, `tsh-power-cap-persistence` |
 | Fabric Manager / NVSwitch | `tsh-fabricmanager-down` |
 | InfiniBand link problems | `tsh-ib-port-down` |
-| NCCL and multi-node performance | `tsh-nccl-ib-hca` |
+| NCCL and multi-node performance | `tsh-nccl-ib-hca`, `tsh-nccl-slow-after-image-update` |
 | GPUDirect RDMA (Magnum IO) | `tsh-gpudirect-peermem` |
 | Storage performance (Magnum IO / GPUDirect Storage) | `tsh-storage-io-bottleneck` |
 | CPU/GPU NUMA placement | `tsh-numa-affinity` |

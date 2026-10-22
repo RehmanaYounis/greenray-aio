@@ -38,7 +38,7 @@ Python 3.10 or newer on Linux, WSL, macOS or Windows. See [Getting started](http
 
 ## How it works
 
-- **45 scenarios** cover every topic of the exam blueprint ([coverage map](https://rehmanayounis.github.io/greenray-aio/coverage/)), from a six-lab on-ramp for the basics to multi-node incidents.
+- **48 scenarios** cover every topic of the exam blueprint ([coverage map](https://rehmanayounis.github.io/greenray-aio/coverage/)), from a six-lab on-ramp for the basics to multi-node incidents.
 - **Guided or incident mode.** Guided shows the objectives and hints. Incident mode shows only the ticket; the root cause stays hidden until the debrief, which then gives you the reference solution, the edge cases and your own commands side by side.
 - **A grader that reads state.** Any valid fix passes. Evidence checks confirm you diagnosed before you changed things.
 - **A study path.** `greenray next` says what to practise, `greenray plan` lays out four weeks, and every mock exam ends with a report card.
