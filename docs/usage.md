@@ -1,6 +1,6 @@
 # Using the lab
 
-Installed with uv tool, pipx or Docker, the command is `greenray`. From a source checkout use `uv run greenray`. `greenray` on its own opens an interactive menu; `--no-color` (or the `NO_COLOR` variable) switches to plain output.
+Installed with uv tool, pipx or Docker, the command is `greenray`. From a source checkout use `uv run greenray`. `greenray` on its own opens a menu: type the number of an entry or its name (`next`, `plan`, `lab <id>`, ...), and `help` explains the commands. `--no-color` (or the `NO_COLOR` variable) switches to plain output.
 
 ## Commands
 
