@@ -15,6 +15,7 @@ What 1.0 contains, for someone arriving fresh: a simulated four-node DGX H100 cl
 
 ### Changed
 - After every objective is met, the lab offers the debrief and then the reflection instead of printing both at once, so the result stays on screen. Enter accepts, `n` skips.
+- Documentation reviewed against the current behaviour: updating instructions, the menu, the offered debrief, safe practice and variants in the README and the architecture page.
 
 ## [0.9.2] - 2026-10-22
 

@@ -38,13 +38,14 @@ Or with Docker, keeping your progress in a named volume:
 docker run -it --rm -v greenray:/home/lab/.greenray ghcr.io/rehmanayounis/greenray-aio
 ```
 
-Python 3.10 or newer on Linux, WSL, macOS or Windows. See [Getting started](https://rehmanayounis.github.io/greenray-aio/getting-started/) for the details and your first lab.
+Python 3.10 or newer on Linux, WSL, macOS or Windows. Update later with `uv tool upgrade --refresh greenray-aio`. See [Getting started](https://rehmanayounis.github.io/greenray-aio/getting-started/) for the details and your first lab.
 
 ## How it works
 
 - **48 scenarios** cover every topic of the exam blueprint ([coverage map](https://rehmanayounis.github.io/greenray-aio/coverage/)), from a six-lab on-ramp for the basics to multi-node incidents.
 - **Guided or incident mode.** Guided shows the objectives and hints. Incident mode shows only the ticket; the root cause stays hidden until the debrief, which then gives you the reference solution, the edge cases and your own commands side by side.
-- **A grader that reads state.** Any valid fix passes. Evidence checks confirm you diagnosed before you changed things.
+- **A grader that reads state, evidence and judgment.** Any valid fix passes. Evidence checks confirm you diagnosed before you changed things, and safe-practice checks catch the shortcuts an operations team would not accept: a reboot with a user's job still on the node, a node set DOWN instead of drained, a power limit raised to hide a thermal fault.
+- **Variants.** Scenarios change their node, GPU, job or user between attempts, so a repeat tests understanding, not memory.
 - **A study path.** `greenray next` says what to practise, `greenray plan` lays out four weeks, and every mock exam ends with a report card.
 - **A mock exam in the current format**: 30 questions plus 3 labs on Slurm, Kubernetes and BCM in 120 minutes, and a labs-only mode for pacing.
 - **A terminal that behaves like a node**: `--help` and `man` pages, your real editor for `nano` and `vim`, tab completion, history, `watch`, live `dmon` samples.
