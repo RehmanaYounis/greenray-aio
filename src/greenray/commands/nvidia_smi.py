@@ -5,6 +5,7 @@ from __future__ import annotations
 from ..core import live
 from ..core.errors import CommandError
 from . import HOOKS_REBOOT, HOOKS_SERVICE, command
+from .common import opt as _opt
 
 # H100 80GB MIG GPU-instance profiles: name -> (profile id, compute slices, memory slices, max count)
 MIG_PROFILES = {
@@ -51,18 +52,6 @@ def _require_driver(ctx):
             "Make sure that the latest NVIDIA driver is installed and running.",
             9,
         )
-
-
-def _opt(args, *names, default=None):
-    for i, a in enumerate(args):
-        for n in names:
-            if a == n and i + 1 < len(args):
-                return args[i + 1]
-            if n.startswith("--") and a.startswith(n + "="):
-                return a.split("=", 1)[1]
-            if not n.startswith("--") and a.startswith(n) and len(a) > len(n) and a[len(n)] != "-":
-                return a[len(n) :]
-    return default
 
 
 def _selected(ctx, args):

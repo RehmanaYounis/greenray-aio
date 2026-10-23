@@ -6,7 +6,7 @@ from greenray import commands
 # loads every module when the registry is empty, so load them all explicitly first.
 commands._load_all()
 
-from greenray.commands.cmsh import _split_cmds, expand_nodes  # noqa: E402
+from greenray.commands.cmsh.model import _split_cmds, expand_nodes  # noqa: E402
 from greenray.commands.ib import match_list, nccl_conf  # noqa: E402
 from greenray.core.shell import Shell  # noqa: E402
 from greenray.core.state import make_cluster  # noqa: E402

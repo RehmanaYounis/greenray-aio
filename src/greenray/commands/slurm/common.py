@@ -6,7 +6,7 @@ import contextlib
 import datetime as _dt
 import re
 
-from ...core.errors import CommandError
+from ..common import err, has, opt
 
 SLURM_VERSION = "23.11.6"
 BASE_TIME = _dt.datetime(2026, 10, 19, 9, 0, 0)
@@ -36,6 +36,8 @@ _GUARD = {"depth": 0}
 # user identity of the current command (``su - alice -c "sbatch ..."``); root by default
 _USER: list = ["root"]
 # local task id of the job step task being executed (for per-task CPU binding)
+_err, _has, _opt = err, has, opt  # the names the slurm modules share
+
 _TASK: dict = {"local": None, "per_node": 1}
 MUNGE_KEY = "/etc/munge/munge.key"
 CORES_PER_SOCKET = 56
@@ -224,10 +226,6 @@ def _kv(tokens) -> list[tuple[str, str]]:
     return out
 
 
-def _err(msg, code=1):
-    return CommandError(msg, code)
-
-
 def _find_job(state, jid):
     jid = str(jid).split(".")[0].split("_")[0]
     for j in state.slurm.jobs:
@@ -268,23 +266,6 @@ def _render(fmt, rows, header_map, noheader=False):
             line += lit + cell(r.get(letter, ""), right, width)
         out.append((line + tail).rstrip())
     return "\n".join(out) + "\n"
-
-
-def _opt(args, *names, default=None):
-    """Value of -x VAL / -xVAL / --long=VAL / --long VAL."""
-    for i, a in enumerate(args):
-        for n in names:
-            if a == n and i + 1 < len(args):
-                return args[i + 1]
-            if n.startswith("--") and a.startswith(n + "="):
-                return a.split("=", 1)[1]
-            if not n.startswith("--") and len(n) == 2 and a.startswith(n) and len(a) > 2 and not a.startswith("--"):
-                return a[2:]
-    return default
-
-
-def _has(args, *flags):
-    return any(a in flags for a in args)
 
 
 def _ranges(nums):

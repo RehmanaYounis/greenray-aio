@@ -29,6 +29,8 @@ from ..core import live
 from ..core.errors import CommandError
 from ..core.state import AttrDict
 from . import HOOKS_REBOOT, HOOKS_SERVICE, command
+from .common import err as _err
+from .common import opt as _opt
 
 DCGM_VERSION = "3.3.6"
 SERVICE = "nvidia-dcgm"
@@ -100,20 +102,6 @@ HEALTH_SYSTEMS = {
     "v": "NVSwitch",
 }
 LINE = "+---------------------------+------------------------------------------------+"
-
-
-def _err(msg, code=1):
-    return CommandError(msg, code)
-
-
-def _opt(args, *names, default=None):
-    for i, a in enumerate(args):
-        for n in names:
-            if a == n and i + 1 < len(args):
-                return args[i + 1]
-            if n.startswith("--") and a.startswith(n + "="):
-                return a.split("=", 1)[1]
-    return default
 
 
 def _host(ctx, args):

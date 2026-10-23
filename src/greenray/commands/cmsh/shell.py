@@ -1,448 +1,40 @@
-"""NVIDIA Base Command Manager (BCM) cluster management shell: ``cmsh``.
-
-Only the one-shot forms are supported because the lab shell is line based:
-
-    cmsh -c "device; use dgx-01; set category dgx-h100; commit"
-    cmsh -f /root/commands.cmsh
-
-Modes: device, category, softwareimage, partition, user, group, profile, main.
-Submodes: roles, bmcsettings, fsmounts (category/device).
-Changes are *staged* in ``state.bcm.uncommitted`` until ``commit``, exactly as
-in real cmsh (forgetting ``commit`` is the classic mistake). Staged changes are
-kept for the whole lab session so that a later ``cmsh -c "device; commit"``
-still finds them.
-
-Software images live on the head node as files under ``/cm/images/<name>/``
-(``bcm-head`` file entries with that prefix). ``imageupdate`` and
-(re)provisioning copy those files and the image's package list to the node.
-
-Also here: ``chroot`` / ``cm-chroot-sw-img`` into a software image and ``cmha``.
-"""
+"""The cmsh shell itself: modes, staged changes, commit and the device actions."""
 
 from __future__ import annotations
 
 import copy
-import fnmatch
-import re
 import shlex
 
-from ..core import audit
-from ..core.errors import CommandError
-from ..core.state import HEAD, wrap
-from . import HOOKS_REBOOT, command
-
-NOW = "Mon Oct 19 10:15:13 2026"
-
-# ---------------------------------------------------------------- package model
-
-BASE_PKGS = {
-    "linux-image-5.15.0-1042-nvidia": "5.15.0-1042.42",
-    "openssh-server": "1:8.9p1-3ubuntu0.10",
-    "rdma-core": "2307mlnx47-1.2310055",
-    "cm-node-installer": "10.0-100124",
-}
-DGX_PKGS = {
-    **BASE_PKGS,
-    "nvidia-driver-550-server": "550.90.07-0ubuntu1",
-    "nvidia-fabricmanager-550": "550.90.07-1",
-    "datacenter-gpu-manager": "1:3.3.6",
-    "nvidia-container-toolkit": "1.14.6-1",
-    "nvidia-container-toolkit-base": "1.14.6-1",
-    "mlnx-ofed-kernel-utils": "24.01.OFED.24.01.0.3.3.1-1",
-    "slurm23.02-client": "23.02.7-100124",
-}
-# what the (simulated) apt repositories offer
-REPO = {
-    "nvidia-container-toolkit": ["1.14.6-1", "1.15.0-1", "1.16.2-1"],
-    "nvidia-container-toolkit-base": ["1.14.6-1", "1.15.0-1", "1.16.2-1"],
-    "linux-image-5.15.0-1053-nvidia": ["5.15.0-1053.59"],
-    "linux-image-5.15.0-1042-nvidia": ["5.15.0-1042.42"],
-    "datacenter-gpu-manager": ["1:3.3.5", "1:3.3.6", "1:3.3.7"],
-    "nvidia-fabricmanager-550": ["550.54.15-1", "550.90.07-1"],
-    "htop": ["3.0.5-7build2"],
-    "iperf3": ["3.9-1"],
-    "nvtop": ["1.2.2-1"],
-}
-INSTALL_MODES = ("AUTO", "FULL", "MAIN", "NOSYNC")
-
-KIND_COLL = {
-    "device": "devices",
-    "category": "categories",
-    "softwareimage": "softwareimages",
-    "partition": "partitions",
-    "user": "users",
-    "group": "groups",
-    "profile": "profiles",
-}
-KIND_TITLE = {
-    "device": "Devices",
-    "category": "Categories",
-    "softwareimage": "SoftwareImages",
-    "partition": "Partitions",
-    "user": "Users",
-    "group": "Groups",
-    "profile": "Profiles",
-}
-MODES = ("device", "category", "softwareimage", "partition", "user", "group", "profile", "main")
-EXCLUDE_LISTS = (
-    "excludelistgrab",
-    "excludelistgrabnew",
-    "excludelistupdate",
-    "excludelistsyncinstall",
-    "excludelistfullinstall",
+from ...core import audit
+from ...core.errors import CommandError
+from ...core.state import HEAD, wrap
+from .. import command
+from ..common import dashed_table
+from .model import (
+    DEFAULT_EXCLUDE,
+    EXCLUDE_LISTS,
+    FSMOUNT_PROPS,
+    INSTALL_MODES,
+    KIND_COLL,
+    MODES,
+    NOW,
+    PROPS,
+    READONLY,
+    _dots,
+    _kernels,
+    _split_cmds,
+    bcm_init,
+    effective_bmc,
+    effective_fsmounts,
+    effective_image,
+    exclude_patterns,
+    expand_nodes,
+    image_files,
+    is_excluded,
+    node_packages,
+    provision,
+    sync_image,
 )
-DEFAULT_EXCLUDE = (
-    "# no-new-files: entries keep files that exist, but never add new ones\n"
-    "- /proc/*\n- /sys/*\n- /dev/*\n- /run/*\n- /tmp/*\n- /var/tmp/*\n- /lost+found\n"
-    "- /etc/hostname\n- /raid/*\n- /home/*\n- /cm/shared/*\n- /var/log/*\n- /var/spool/slurm/*\n"
-    "- /var/lib/docker/*\n- /var/lib/containerd/*\n"
-)
-DEFAULT_PROFILES = {
-    "admin": "Full access to everything in the cluster management daemon",
-    "cmhealth": "Health check scripts (push health data)",
-    "cmpam": "PAM module (cm-pam) access checks",
-    "litenode": "Lite daemon on non-provisioned devices",
-    "monitoringpush": "Push monitoring data",
-    "node": "Compute node CMDaemon",
-    "portal": "User portal: read jobs, workload and monitoring data",
-    "power": "Power control only",
-    "readonly": "Read-only access to all objects (no changes, no power, no exec)",
-}
-FSMOUNT_PROPS = ("mountpoint", "device", "filesystem", "mountoptions", "dump", "fsck")
-
-# cmsh property name -> state field, per kind
-PROPS = {
-    "device": {
-        "category": "category",
-        "softwareimage": "softwareimage",
-        "installmode": "installmode",
-        "nextinstallmode": "nextinstallmode",
-        "ip": "ip",
-        "mac": "mac",
-        "hostname": "hostname",
-        "type": "type",
-        "status": "status",
-    },
-    "category": {
-        "name": "name",
-        "softwareimage": "softwareimage",
-        "installmode": "installmode",
-        "disksetup": "disksetup",
-        **{x: x for x in EXCLUDE_LISTS},
-    },
-    "softwareimage": {
-        "name": "name",
-        "path": "path",
-        "kernelversion": "kernel",
-        "kernelparameters": "kernelparameters",
-        "revision": "version",
-    },
-    "partition": {"name": "name", "clustername": "clustername", "headnode": "headnode"},
-    "user": {
-        "name": "name",
-        "id": "uid",
-        "uid": "uid",
-        "password": "password",
-        "email": "email",
-        "loginshell": "shell",
-        "homedirectory": "home",
-        "surname": "surname",
-        "profile": "profile",
-    },
-    "group": {"name": "name", "id": "gid", "groupid": "gid", "members": "members"},
-    "profile": {"name": "name", "description": "description"},
-}
-READONLY = {
-    "device": {"type", "status", "hostname"},
-    "softwareimage": {"name", "revision"},
-    "category": {"name"},
-    "partition": {"name", "headnode"},
-    "user": {"name"},
-    "group": {"name"},
-    "profile": {"name"},
-}
-
-
-# ---------------------------------------------------------------- lazy state helpers
-
-
-def bcm_init(state):
-    """Fill in the BCM fields this module needs but state.make_bcm() does not create."""
-    bcm = state.bcm
-    if "partitions" not in bcm:
-        bcm.partitions = {
-            "base": {
-                "name": "base",
-                "clustername": "superpod",
-                "headnode": HEAD,
-                "bmcsettings": {"username": "bright", "password": "Bmc!Superpod24", "userid": 4},
-            }
-        }
-    bcm.setdefault("bmc_actual_password", bcm.partitions.base.bmcsettings.password)
-    bcm.setdefault("synclog", {})
-    bcm.setdefault("dryruns", [])
-    bcm.setdefault("events", [])
-    for name, img in bcm.softwareimages.items():
-        if "packages" not in img:
-            img.packages = dict(DGX_PKGS if "dgx" in name else BASE_PKGS)
-        img.setdefault("kernelparameters", "")
-    from .storage import DEFAULT_FSMOUNTS
-
-    for cat in bcm.categories.values():
-        cat.setdefault("installmode", "AUTO")
-        cat.setdefault("disksetup", "default.xml")
-        cat.setdefault("roles", [])
-        cat.setdefault("bmcsettings", {})
-        cat.setdefault("fsmounts", copy.deepcopy(DEFAULT_FSMOUNTS))
-        for x in EXCLUDE_LISTS:
-            cat.setdefault(x, DEFAULT_EXCLUDE)
-    if "groups" not in bcm:
-        bcm.groups = {"root": {"name": "root", "gid": 0, "members": []}}
-        for u in bcm.users.values():
-            if u.name != "root":
-                bcm.groups.setdefault(u.name, {"name": u.name, "gid": u.get("uid", 1000), "members": []})
-    if "profiles" not in bcm:
-        bcm.profiles = {n: {"name": n, "description": d, "builtin": True} for n, d in DEFAULT_PROFILES.items()}
-    bcm.setdefault("grab_dryruns", [])
-    for name, dev in bcm.devices.items():
-        dev.setdefault("fsmounts", [])
-        dev.setdefault("roles", [])
-        dev.setdefault("bmcsettings", {})
-        dev.setdefault("nextinstallmode", None)
-        if dev.type != "HeadNode":
-            dev.setdefault("installmode", None)
-            dev.setdefault("synced_image", effective_image(state, name))
-            dev.setdefault("reboots", 0)
-            dev.setdefault("provisioned_image_version", 1)
-    return bcm
-
-
-def effective_image(state, dev_name):
-    dev = state.bcm.devices[dev_name]
-    if dev.get("softwareimage"):
-        return dev.softwareimage
-    cat = state.bcm.categories.get(dev.get("category") or "")
-    return cat.softwareimage if cat else None
-
-
-def effective_roles(state, dev_name):
-    dev = state.bcm.devices[dev_name]
-    cat = state.bcm.categories.get(dev.get("category") or "") or {}
-    return sorted(set(dev.get("roles", [])) | set(cat.get("roles", [])))
-
-
-def effective_installmode(state, dev_name):
-    dev = state.bcm.devices[dev_name]
-    if dev.get("nextinstallmode"):
-        return dev.nextinstallmode
-    if dev.get("installmode"):
-        return dev.installmode
-    cat = state.bcm.categories.get(dev.get("category") or "") or {}
-    return cat.get("installmode") or "AUTO"
-
-
-def effective_bmc(state, dev_name):
-    part = state.bcm.partitions.base.bmcsettings
-    dev = state.bcm.devices[dev_name]
-    cat = state.bcm.categories.get(dev.get("category") or "") or {}
-    out = dict(part)
-    for layer in (cat.get("bmcsettings") or {}, dev.get("bmcsettings") or {}):
-        out.update({k: v for k, v in layer.items() if v not in (None, "")})
-    return out
-
-
-def effective_fsmounts(state, dev_name) -> list:
-    """Category fsmounts overlaid with the device's own entries (same mountpoint wins)."""
-    dev = state.bcm.devices[dev_name]
-    cat = state.bcm.categories.get(dev.get("category") or "") or {}
-    out = {e.get("mountpoint"): dict(e) for e in cat.get("fsmounts", [])}
-    for e in dev.get("fsmounts", []) or []:
-        out[e.get("mountpoint")] = dict(e)
-    return list(out.values())
-
-
-def exclude_patterns(text) -> list[str]:
-    out = []
-    for raw in str(text or "").splitlines():
-        line = raw.split("#", 1)[0].strip()
-        if line.startswith("no-new-files:"):
-            line = line[len("no-new-files:") :].strip()
-        if line.startswith("- "):
-            out.append(line[2:].strip())
-        elif line.startswith("-"):
-            out.append(line[1:].strip())
-    return [p for p in out if p]
-
-
-def is_excluded(path, patterns) -> bool:
-    for pat in patterns:
-        if fnmatch.fnmatch(path, pat):
-            return True
-        base = pat[:-2] if pat.endswith("/*") else pat
-        if path == base or path.startswith(base.rstrip("/") + "/"):
-            return True
-    return False
-
-
-def image_files(state, img_name):
-    """Files of a software image: {path_inside_image: content}."""
-    img = state.bcm.softwareimages[img_name]
-    prefix = img.path.rstrip("/") + "/"
-    head = state.nodes[HEAD].files
-    return {"/" + k[len(prefix) :]: v for k, v in head.items() if k.startswith(prefix)}
-
-
-def node_packages(state, host):
-    node = state.nodes[host]
-    if "packages" not in node:
-        dev = state.bcm.devices.get(host)
-        img = dev.get("synced_image") if dev else None
-        src = state.bcm.softwareimages.get(img or "")
-        node.packages = dict(src.packages) if src and "packages" in src else dict(DGX_PKGS)
-    return node.packages
-
-
-def _has_driver(pkgs):
-    return any(p.startswith("nvidia-driver-") for p in pkgs)
-
-
-def _kernels(pkgs):
-    return sorted(p[len("linux-image-") :] for p in pkgs if p.startswith("linux-image-"))
-
-
-def sync_image(state, host, full=False):
-    """Copy the node's effective software image onto it (files + packages)."""
-    bcm = bcm_init(state)
-    img_name = effective_image(state, host)
-    img = bcm.softwareimages[img_name]
-    node = state.nodes[host]
-    node.packages = dict(img.packages)
-    for path, content in image_files(state, img_name).items():
-        node.files[path] = content
-    if full:  # FULL install re-partitions local disks: anything on /raid is gone
-        for p in [p for p in node.files if p.startswith("/raid/")]:
-            del node.files[p]
-    dev = bcm.devices[host]
-    dev.synced_image = img_name
-    dev.provisioned_image_version = dev.get("provisioned_image_version", 1) + 1
-    return img_name
-
-
-def provision(ctx, host, reason="reboot"):
-    """Node (re)boots: PXE boot, node-installer syncs the image, roles are applied."""
-    state = ctx.state
-    bcm = bcm_init(state)
-    dev = bcm.devices[host]
-    node = state.nodes[host]
-    mode = effective_installmode(state, host)
-    node.power = "on"
-    node.up = True
-    for fn in HOOKS_REBOOT:
-        fn(ctx, node)
-    img_name = effective_image(state, host)
-    if mode != "NOSYNC":
-        sync_image(state, host, full=(mode == "FULL"))
-    img = bcm.softwareimages[img_name if mode != "NOSYNC" else dev.synced_image]
-    node.kernel = img.kernel
-    if _has_driver(node_packages(state, host)):
-        node.driver_loaded = True
-        for svc in ("nvidia-persistenced", "nvidia-dcgm", "nvidia-fabricmanager"):
-            if svc in node.services and node.services_enabled.get(svc, True):
-                node.services[svc] = "active"
-    else:
-        node.driver_loaded = False
-        node.modules = [m for m in node.modules if not m.startswith("nvidia")]
-        for svc in ("nvidia-persistenced", "nvidia-dcgm", "nvidia-fabricmanager"):
-            if svc in node.services:
-                node.services[svc] = "inactive"
-    roles = effective_roles(state, host)
-    if "slurmclient" in roles:
-        node.services["slurmd"] = "active"
-        if host not in state.slurm.nodes:
-            state.slurm.nodes[host] = {
-                "name": host,
-                "state": "IDLE",
-                "reason": "",
-                "gres": "gpu:h100:8",
-                "gres_used": "gpu:h100:0",
-                "cpus": node.cpus,
-                "alloc_cpus": 0,
-                "real_memory": 2063000,
-                "features": "",
-                "weight": 1,
-            }
-    if "mounts" in node:
-        from .storage import apply_fsmounts
-
-        apply_fsmounts(state, host, effective_fsmounts(state, host))
-    dev.nextinstallmode = None
-    dev.status = "UP"
-    dev.reboots = dev.get("reboots", 0) + 1
-    bcm.events.append(f"{NOW} [notice] {host}: node provisioned ({reason}, install mode {mode}, image {img_name})")
-    return mode, img_name
-
-
-# ---------------------------------------------------------------- node lists
-
-
-def expand_nodes(spec: str) -> list[str]:
-    out = []
-    for part in spec.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        if ".." in part:
-            a, b = part.split("..", 1)
-            ma, mb = re.match(r"^(.*?)(\d+)$", a), re.match(r"^(.*?)(\d+)$", b)
-            if not ma or not mb:
-                raise CommandError(f"Invalid node range: {part}")
-            width = len(ma.group(2))
-            for i in range(int(ma.group(2)), int(mb.group(2)) + 1):
-                out.append(f"{ma.group(1)}{i:0{width}d}")
-            continue
-        m = re.match(r"^(.*)\[(\d+)-(\d+)\](.*)$", part)
-        if m:
-            width = len(m.group(2))
-            for i in range(int(m.group(2)), int(m.group(3)) + 1):
-                out.append(f"{m.group(1)}{i:0{width}d}{m.group(4)}")
-            continue
-        out.append(part)
-    return out
-
-
-def _split_cmds(text: str) -> list[str]:
-    """Split a cmsh command string on ';' and newlines, honouring quotes."""
-    out, buf, quote = [], [], None
-    for ch in text:
-        if quote:
-            buf.append(ch)
-            if ch == quote:
-                quote = None
-        elif ch in "'\"":
-            quote = ch
-            buf.append(ch)
-        elif ch in ";\n":
-            out.append("".join(buf).strip())
-            buf = []
-        else:
-            buf.append(ch)
-    out.append("".join(buf).strip())
-    return [c for c in out if c and not c.startswith("#")]
-
-
-def _table(headers, rows, widths=None):
-    widths = widths or [
-        max(len(str(h)), *(len(str(r[i])) for r in rows)) if rows else len(str(h)) for i, h in enumerate(headers)
-    ]
-    widths = [max(w, len(h)) for w, h in zip(widths, headers)]
-    line = " ".join(f"{h:<{w}}" for h, w in zip(headers, widths)).rstrip()
-    sep = " ".join("-" * w for w in widths)
-    body = [" ".join(f"{str(c):<{w}}" for c, w in zip(r, widths)).rstrip() for r in rows]
-    return "\n".join([line, sep, *body])
-
-
-def _dots(name, status, extra=""):
-    return f"{name} {'.' * max(3, 26 - len(name))} [{status:^10}]" + (f" {extra}" if extra else "")
 
 
 class CmshError(Exception):
@@ -560,7 +152,7 @@ class Cmsh:
             return self.refresh(args)
         if cmd == "modified":
             rows = [(v.kind, v.name, v.op, ",".join(v.fields)) for v in self.bcm.uncommitted.values()]
-            self.p(_table(["Type", "Name", "Operation", "Changed"], rows) if rows else "No modified objects")
+            self.p(dashed_table(["Type", "Name", "Operation", "Changed"], rows) if rows else "No modified objects")
             return
         if self.mode is None:
             if cmd in ("versioninfo", "licenseinfo"):
@@ -682,7 +274,7 @@ class Cmsh:
                         f"[{self._status(n):^8}]",
                     )
                 )
-            self.p(_table(["Type", "Hostname (key)", "MAC", "Category", "Ip", "Network", "Status"], rows))
+            self.p(dashed_table(["Type", "Hostname (key)", "MAC", "Category", "Ip", "Network", "Status"], rows))
         elif kind == "category":
             rows = [
                 (
@@ -692,33 +284,33 @@ class Cmsh:
                 )
                 for n in names
             ]
-            self.p(_table(["Name (key)", "Software image", "Nodes"], rows, [24, 30, 6]))
+            self.p(dashed_table(["Name (key)", "Software image", "Nodes"], rows, [24, 30, 6]))
         elif kind == "softwareimage":
             rows = []
             for n in names:
                 v = self.view(kind, n)
                 users = sum(1 for d in self.bcm.devices if d != HEAD and effective_image(self.state, d) == n)
                 rows.append((n, v.get("path", ""), v.get("kernel", ""), users))
-            self.p(_table(["Name (key)", "Path", "Kernel version", "Nodes"], rows))
+            self.p(dashed_table(["Name (key)", "Path", "Kernel version", "Nodes"], rows))
         elif kind == "partition":
             rows = [
                 (n, self.view(kind, n).get("clustername", ""), self.view(kind, n).get("headnode", "")) for n in names
             ]
-            self.p(_table(["Name (key)", "Cluster name", "Head node"], rows))
+            self.p(dashed_table(["Name (key)", "Cluster name", "Head node"], rows))
         elif kind == "user":
             rows = []
             for n in names:
                 u = self.view(kind, n)
                 rows.append((n, u.get("uid", ""), n if n != "root" else "root", ",".join(self._member_of(n))))
-            self.p(_table(["Name (key)", "ID", "Primary group", "Secondary groups"], rows))
+            self.p(dashed_table(["Name (key)", "ID", "Primary group", "Secondary groups"], rows))
         elif kind == "group":
             rows = [
                 (n, self.view(kind, n).get("gid", ""), ",".join(self.view(kind, n).get("members", []))) for n in names
             ]
-            self.p(_table(["Name (key)", "ID", "Members"], rows))
+            self.p(dashed_table(["Name (key)", "ID", "Members"], rows))
         elif kind == "profile":
             rows = [(n, "yes" if self.view(kind, n).get("builtin") else "no") for n in names]
-            self.p(_table(["Name (key)", "Built-in"], rows))
+            self.p(dashed_table(["Name (key)", "Built-in"], rows))
 
     def use(self, args):
         self._need_mode()
@@ -844,7 +436,7 @@ class Cmsh:
                 ("Non user", "no"),
                 ("Built-in", "yes" if v.get("builtin") else "no"),
             ]
-        self.p(_table(["Parameter", "Value"], rows, [32, 48]))
+        self.p(dashed_table(["Parameter", "Value"], rows, [32, 48]))
 
     def _prop(self, prop):
         fields = PROPS[self.mode]
@@ -1113,7 +705,7 @@ class Cmsh:
             rows += [
                 ("Device", d, "category") for d, v in sorted(self.bcm.devices.items()) if v.get("category") == name
             ]
-        self.p(_table(["Entity", "Name", "Property"], rows))
+        self.p(dashed_table(["Entity", "Name", "Property"], rows))
 
     # ------------------------------------------------ commit
     def commit(self, args):
@@ -1192,7 +784,7 @@ class Cmsh:
     def roles_cmd(self, cmd, args):
         roles = list(self.view(self.mode, self.obj).get("roles", []))
         if cmd == "list":
-            self.p(_table(["Name (key)"], [(r,) for r in roles]))
+            self.p(dashed_table(["Name (key)"], [(r,) for r in roles]))
         elif cmd in ("assign", "add"):
             if not args:
                 self.err("Usage: assign <role>")
@@ -1218,7 +810,7 @@ class Cmsh:
         elif cmd == "commit":
             self.commit(args)
         elif cmd == "show":
-            self.p(_table(["Parameter", "Value"], [("Roles", ", ".join(roles))], [32, 48]))
+            self.p(dashed_table(["Parameter", "Value"], [("Roles", ", ".join(roles))], [32, 48]))
         else:
             self.err(f"Unknown command in roles submode: {cmd}")
 
@@ -1239,7 +831,7 @@ class Cmsh:
                     val = "*********"
                 inherited = "" if val not in (None, "") else "(inherited)"
                 rows.append((label, val if val not in (None, "") else inherited))
-            self.p(_table(["Parameter", "Value"], rows, [32, 48]))
+            self.p(dashed_table(["Parameter", "Value"], rows, [32, 48]))
         elif cmd == "get":
             if not args:
                 self.err("Usage: get <username|password|userid>")
@@ -1285,7 +877,7 @@ class Cmsh:
                 (e.get("device", ""), e.get("mountpoint", ""), e.get("filesystem", ""), e.get("mountoptions", ""))
                 for e in entries
             ]
-            self.p(_table(["Device", "Mountpoint (key)", "Filesystem", "Mount options"], rows))
+            self.p(dashed_table(["Device", "Mountpoint (key)", "Filesystem", "Mount options"], rows))
             return
         if cmd == "add":
             if not args:
@@ -1332,7 +924,7 @@ class Cmsh:
                 rows = [
                     (k.capitalize() if k != "mountoptions" else "Mount options", e.get(k, "")) for k in FSMOUNT_PROPS
                 ]
-                self.p(_table(["Parameter", "Value"], rows, [32, 48]))
+                self.p(dashed_table(["Parameter", "Value"], rows, [32, 48]))
                 return
             if not args or args[0] not in FSMOUNT_PROPS:
                 self.err(f"Usage: {cmd} <{'|'.join(FSMOUNT_PROPS)}>{' <value>' if cmd == 'set' else ''}")
@@ -1356,7 +948,7 @@ class Cmsh:
         self.err(f"Unknown command in fsmounts submode: {cmd}")
 
     def _push_fsmounts(self, kind, name):
-        from .storage import apply_fsmounts
+        from ..storage import apply_fsmounts
 
         if kind == "category":
             hosts = sorted(d for d, v in self.bcm.devices.items() if v.get("category") == name and d != HEAD)
@@ -1632,7 +1224,7 @@ class Cmsh:
                 sl["drain"] = False
                 sl["down"] = False
                 rows.append(("slurm", n, "Ok", ""))
-        self.p(_table(["Engine", "Node", "Status", "Reason"], rows, [24, 24, 16, 24]))
+        self.p(dashed_table(["Engine", "Node", "Status", "Reason"], rows, [24, 24, 16, 24]))
 
     def dev_drain(self, args):
         self._slurm_drain(args, True)
@@ -1673,7 +1265,7 @@ class Cmsh:
             ("Head node", HEAD),
         ]
         self.p("Version Information")
-        self.p(_table(["Component", "Value"], rows, [24, 48]))
+        self.p(dashed_table(["Component", "Value"], rows, [24, 48]))
 
     def main_licenseinfo(self):
         nodes = len([d for d in self.bcm.devices.values() if d.type == "PhysicalNode"])
@@ -1685,7 +1277,7 @@ class Cmsh:
             ("Expiration date", "31/Dec/2027"),
             ("MAC address", "52:54:00:AA:00:FE"),
         ]
-        self.p(_table(["Parameter", "Value"], rows, [24, 48]))
+        self.p(dashed_table(["Parameter", "Value"], rows, [24, 48]))
 
     # ------------------------------------------------ end of session
     def finish(self):
@@ -1733,231 +1325,3 @@ def cmsh(ctx, args):
 
 
 # ---------------------------------------------------------------- chroot into a software image
-
-
-class _ImgNode(dict):
-    def __getattr__(self, k):
-        try:
-            return self[k]
-        except KeyError:
-            raise AttributeError(k) from None
-
-
-class _ImgCtx:
-    """A minimal Context whose filesystem is a software image directory."""
-
-    def __init__(self, ctx, files):
-        self.state = ctx.state
-        self.host = ctx.host
-        self.stdin = ctx.stdin
-        self.cwd = "/"
-        self.executed = ctx.executed
-        self.host_stack = []
-        self.node = _ImgNode(
-            files=files,
-            env={},
-            up=True,
-            gpus=[],
-            ib=[],
-            services={},
-            modules=[],
-            kernel=ctx.node.kernel,
-            hostname=ctx.host,
-        )
-
-
-def _apt(img, args):
-    pkgs = img.packages
-    action = next((a for a in args if not a.startswith("-")), "")
-    names = [a for a in args if not a.startswith("-")][1:]
-    if action in ("update",):
-        return (
-            "Hit:1 http://archive.ubuntu.com/ubuntu jammy InRelease\n"
-            "Hit:2 https://repo.download.nvidia.com/baseos/ubuntu/jammy/x86_64 dgx InRelease\n"
-            "Reading package lists... Done\n"
-        )
-    if action == "list":
-        return "".join(f"{p}/jammy,now {v} amd64 [installed]\n" for p, v in sorted(pkgs.items()))
-    if action in ("install", "upgrade"):
-        out = ["Reading package lists... Done", "Building dependency tree... Done"]
-        changes = []
-        for spec in names:
-            name, _, ver = spec.partition("=")
-            if name not in REPO:
-                raise CommandError("\n".join(out + [f"E: Unable to locate package {name}"]), 100)
-            versions = REPO[name]
-            ver = ver or versions[-1]
-            if ver not in versions:
-                raise CommandError("\n".join(out + [f"E: Version '{ver}' for '{name}' was not found"]), 100)
-            changes.append((name, pkgs.get(name), ver))
-            if name == "nvidia-container-toolkit" and "nvidia-container-toolkit-base" in pkgs:
-                changes.append(("nvidia-container-toolkit-base", pkgs.get("nvidia-container-toolkit-base"), ver))
-        if not changes or all(o == n for _, o, n in changes):
-            return "\n".join(out + ["0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded."]) + "\n"
-        up = [c for c in changes if c[1] and c[1] != c[2]]
-        new = [c for c in changes if not c[1]]
-        if up:
-            out += ["The following packages will be upgraded:", "  " + " ".join(c[0] for c in up)]
-        if new:
-            out += ["The following NEW packages will be installed:", "  " + " ".join(c[0] for c in new)]
-        out.append(f"{len(up)} upgraded, {len(new)} newly installed, 0 to remove and 0 not upgraded.")
-        for name, old, ver in changes:
-            out.append(f"Unpacking {name} ({ver}){' over (' + old + ')' if old else ''} ...")
-        for name, _old, ver in changes:
-            pkgs[name] = ver
-            out.append(f"Setting up {name} ({ver}) ...")
-            if name.startswith("linux-image-"):
-                kver = name[len("linux-image-") :]
-                out.append(f"update-initramfs: Generating /boot/initrd.img-{kver}")
-                out.append(
-                    "W: Not updating the boot loader inside a chroot; BCM generates the ramdisk "
-                    "when the image's kernelversion is set and committed"
-                )
-        return "\n".join(out) + "\n"
-    if action in ("remove", "purge"):
-        for n in names:
-            pkgs.pop(n, None)
-        return f"Removing {' '.join(names)} ...\n"
-    raise CommandError(f"E: Invalid operation {action}", 100)
-
-
-@command(
-    "chroot", "cm-chroot-sw-img", help="chroot /cm/images/<image> <command> — run a command inside a BCM software image"
-)
-def chroot(ctx, args):
-    if not args:
-        raise CommandError("chroot: missing operand\nUsage: chroot NEWROOT COMMAND [ARG]...", 125)
-    path = args[0].rstrip("/")
-    bcm = bcm_init(ctx.state)
-    img_name = next((n for n, i in bcm.softwareimages.items() if i.path.rstrip("/") == path), None)
-    if ctx.host != HEAD or img_name is None:
-        raise CommandError(f"chroot: cannot change root directory to '{args[0]}': No such file or directory", 125)
-    img = bcm.softwareimages[img_name]
-    cmd = args[1:]
-    if not cmd:
-        raise CommandError(
-            "chroot: interactive shells are not supported in the lab; give the command to run, e.g.\n"
-            f"  cm-chroot-sw-img {path} apt-get install -y <package>",
-            1,
-        )
-    name = cmd[0]
-    if name in ("bash", "sh") and len(cmd) >= 3 and cmd[1] == "-c":
-        cmd = shlex.split(cmd[2])
-        name = cmd[0]
-    if name in ("apt-get", "apt"):
-        return _apt(img, cmd[1:])
-    if name in ("dpkg", "dpkg-query"):
-        pat = next((a for a in cmd[1:] if not a.startswith("-")), "")
-        rows = [
-            "Desired=Unknown/Install/Remove/Purge/Hold",
-            "||/ Name                              Version                       Architecture Description",
-            "+++-=================================-=============================-============-===========",
-        ]
-        hits = [
-            f"ii  {p:<33} {v:<29} amd64        "
-            for p, v in sorted(img.packages.items())
-            if not pat or re.search(pat.replace("*", ".*"), p)
-        ]
-        if pat and not hits:
-            raise CommandError(f"dpkg-query: no packages found matching {pat}", 1)
-        return "\n".join(rows + hits) + "\n"
-    if name == "uname":
-        # classic trap: uname inside a chroot reports the *running* (head node) kernel
-        return (ctx.node.kernel if "-r" in cmd else f"Linux {ctx.host} {ctx.node.kernel} x86_64 GNU/Linux") + "\n"
-    if name == "ls" and len(cmd) > 1 and cmd[-1].rstrip("/") == "/lib/modules":
-        return "\n".join(_kernels(img.packages)) + "\n"
-    if name == "nvidia-ctk" and "--version" in cmd:
-        v = img.packages.get("nvidia-container-toolkit", "").split("-")[0]
-        if not v:
-            raise CommandError("bash: nvidia-ctk: command not found", 127)
-        return f"NVIDIA Container Toolkit CLI version {v}\ncommit: 4f6dbd4\n"
-    if name == "exit":
-        return ""
-    # generic file tools operate on the image's files
-    from . import dispatch
-
-    prefix = img.path.rstrip("/")
-    head = ctx.state.nodes[HEAD].files
-    before = image_files(ctx.state, img_name)
-    view = dict(before)
-    sub = _ImgCtx(ctx, view)
-    out = dispatch(sub, cmd)
-    for p in set(before) - set(view):
-        head.pop(prefix + p, None)
-    for p, c in view.items():
-        if before.get(p) != c:
-            head[prefix + p] = c
-    return out
-
-
-@command("cmha", help="cmha status — BCM head node high-availability status")
-def cmha(ctx, args):
-    if ctx.host != HEAD:
-        raise CommandError("bash: cmha: command not found", 127)
-    if args[:1] == ["status"] or not args:
-        return (
-            "Node Status: running in active master mode\n\n"
-            "Failover status:\n"
-            f"{HEAD}* -> (no passive head node configured)\n"
-            "  HA is not configured on this cluster. Run cmha-setup to add a passive head node.\n"
-        )
-    raise CommandError("usage: cmha status")
-
-
-# ---------------------------------------------------------------- LDAP-backed identity lookups
-
-
-def _ldap_user(state, name):
-    bcm = bcm_init(state)
-    return bcm.users.get(name)
-
-
-def _groups_of(state, name):
-    bcm = bcm_init(state)
-    return sorted((g for g in bcm.groups.values() if name in g.get("members", [])), key=lambda g: g.get("gid", 0))
-
-
-@command("id", help="id [user] — uid, gid and groups (BCM users come from LDAP on every node)")
-def id_cmd(ctx, args):
-    from .slurm import _USER
-
-    names = [a for a in args if not a.startswith("-")]
-    name = names[0] if names else _USER[-1]
-    if name == "root":
-        return "uid=0(root) gid=0(root) groups=0(root)\n"
-    u = _ldap_user(ctx.state, name)
-    if u is None:
-        raise CommandError(f"id: '{name}': no such user", 1)
-    uid = u.get("uid", 1000)
-    prim = ctx.state.bcm.groups.get(name, {}).get("gid", uid)
-    groups = [f"{prim}({name})"] + [f"{g.get('gid')}({g.name})" for g in _groups_of(ctx.state, name) if g.name != name]
-    return f"uid={uid}({name}) gid={prim}({name}) groups={','.join(groups)}\n"
-
-
-@command("getent", help="getent passwd|group [name] — look up users/groups (LDAP)")
-def getent_cmd(ctx, args):
-    if not args or args[0] not in ("passwd", "group"):
-        raise CommandError("Usage: getent passwd|group [key]", 1)
-    bcm = bcm_init(ctx.state)
-    keys = args[1:]
-    out = []
-    if args[0] == "passwd":
-        users = [("root", {"uid": 0, "home": "/root", "shell": "/bin/bash"})] + [
-            (n, u) for n, u in bcm.users.items() if n != "root"
-        ]
-        for n, u in users:
-            if keys and n not in keys:
-                continue
-            uid = u.get("uid", 0)
-            gid = bcm.groups.get(n, {}).get("gid", uid)
-            out.append(
-                f"{n}:x:{uid}:{gid}:{u.get('surname', '') or n}:{u.get('home', '/home/' + n)}:{u.get('shell', '/bin/bash')}"
-            )
-    else:
-        for n, g in bcm.groups.items():
-            if keys and n not in keys:
-                continue
-            out.append(f"{n}:x:{g.get('gid', 0)}:{','.join(g.get('members', []))}")
-    if keys and not out:
-        raise CommandError("", 2)
-    return "\n".join(out) + "\n"
