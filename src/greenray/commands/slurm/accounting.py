@@ -184,6 +184,8 @@ def sacct(ctx, args):
     noheader = _has(args, "-n", "--noheader")
     parsable = _has(args, "-p", "--parsable", "-P", "--parsable2")
     allocs = _has(args, "-X", "--allocations")
+    if not user and not _has(args, "-a", "--allusers"):
+        user = _USER[-1]  # like the real tool, root sees other users' jobs only with -a
     cols = [
         c.strip() for c in (fmt or "JobID,JobName,Partition,Account,AllocCPUS,State,ExitCode").split(",") if c.strip()
     ]

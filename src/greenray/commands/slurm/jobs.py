@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 import shlex
 
 from ...core import audit
@@ -294,7 +295,93 @@ def _build_job(ctx, prog, opts, extra_check=True):
     ok_flags = {"enforce-binding", "disable-binding", "one-task-per-sharing", "multiple-tasks-per-sharing"}
     if any(f not in ok_flags for f in str(job["gres_flags"]).split(",") if f):
         raise _err(f"{prog}: error: Invalid --gres-flags specification")
+    job.update(_specification(prog, opts, state, pnodes, tl, fail))
     return job
+
+
+HINTS = {"compute_bound", "memory_bound", "multithread", "nomultithread", "help"}
+DISTRIBUTIONS = {"block", "cyclic", "plane", "arbitrary", "*"}
+MEM_BINDS = {"none", "local", "map_mem", "mask_mem", "prefer", "quiet", "verbose", "nosort", "sort"}
+MPI_TYPES = {"pmix", "pmi2", "none", "cray_shasta", "list"}
+
+
+def _mem_mb(prog, flag, value):
+    m = re.fullmatch(r"(\d+)([kKmMgGtT]?)", str(value))
+    if not m:
+        raise _err(f"{prog}: error: Invalid {flag} specification")
+    scale = {"": 1, "k": 1 / 1024, "m": 1, "g": 1024, "t": 1024 * 1024}[m.group(2).lower()]
+    return int(int(m.group(1)) * scale)
+
+
+def _specification(prog, opts, state, pnodes, time_limit, fail):
+    """The parts of a submission slurmctld keeps on the job record, validated as it would."""
+    s = state.slurm
+    spec = {
+        "comment": opts.get("comment", ""),
+        "features": opts.get("constraint", ""),
+        "reservation": opts.get("reservation", ""),
+        "export": opts.get("export", "ALL"),
+        "hint": opts.get("hint", ""),
+        "distribution": opts.get("distribution", ""),
+        "mem_bind": opts.get("mem_bind", ""),
+        "mpi": opts.get("mpi", ""),
+        "signal": opts.get("signal", ""),
+        "requeue": not opts.get("no-requeue"),
+        "stderr": opts.get("error", ""),
+        "container_mounts": opts.get("container_mounts", ""),
+        "container_name": opts.get("container_name", ""),
+        "container_workdir": opts.get("container_workdir", ""),
+        "container_env": opts.get("container_env", ""),
+        "container_flags": sorted(k for k in opts if k.startswith(("container-", "no-container-")) and opts[k] is True),
+    }
+    if spec["features"]:
+        known = {f for n in pnodes for f in str(s.nodes[n].get("features") or "").split(",") if f}
+        wanted = {f for f in re.split(r"[&|,()]", spec["features"]) if f}
+        if not wanted <= known:
+            raise fail("Invalid feature specification")
+    if spec["reservation"] and spec["reservation"] not in (s.get("reservations") or {}):
+        raise fail("Requested reservation is invalid")
+    if spec["hint"] and spec["hint"] not in HINTS:
+        raise _err(f"{prog}: error: Invalid --hint specification: {spec['hint']}")
+    if spec["distribution"] and spec["distribution"].split(":")[0] not in DISTRIBUTIONS:
+        raise _err(f"{prog}: error: Invalid --distribution specification: {spec['distribution']}")
+    if spec["mem_bind"] and spec["mem_bind"].split(":")[0] not in MEM_BINDS:
+        raise _err(f"{prog}: error: Invalid --mem-bind specification: {spec['mem_bind']}")
+    if spec["mpi"] and spec["mpi"] not in MPI_TYPES:
+        raise _err(f"{prog}: error: Invalid MPI type '{spec['mpi']}', --mpi=list for available types")
+    if spec["signal"] and not re.fullmatch(r"([RB]:)?[A-Za-z0-9]+(@\d+)?", spec["signal"]):
+        raise _err(f"{prog}: error: Invalid signal specification: {spec['signal']}")
+    for key, flag in (("mem", "--mem"), ("mem_per_gpu", "--mem-per-gpu")):
+        if key in opts:
+            spec["min_memory_mb"] = _mem_mb(prog, flag, opts[key])
+    for key, flag in (("sockets_per_node", "--sockets-per-node"), ("cpus_per_gpu", "--cpus-per-gpu")):
+        if key in opts:
+            if not str(opts[key]).isdigit():
+                raise _err(f'{prog}: error: Invalid numeric value "{opts[key]}" for {flag}.')
+            spec[key] = int(opts[key])
+    if "ntasks_per_gpu" in opts:
+        if not str(opts["ntasks_per_gpu"]).isdigit():
+            raise _err(f'{prog}: error: Invalid numeric value "{opts["ntasks_per_gpu"]}" for --ntasks-per-gpu.')
+        spec["ntasks_per_gpu"] = int(opts["ntasks_per_gpu"])
+    if "time_min" in opts:
+        tmin = parse_time(opts["time_min"])
+        if tmin is None or (time_limit is not None and tmin > time_limit):
+            raise fail("Requested time limit is invalid (missing or exceeds some limit)")
+        spec["time_min"] = tmin
+    if "nice" in opts and not re.fullmatch(r"-?\d+", str(opts["nice"])):
+        raise _err(f"{prog}: error: Invalid --nice value: {opts['nice']}")
+    return spec
+
+
+def _verbose_block(prog, opts):
+    """What ``-v`` prints before the submission: the options that were set."""
+    if not (opts.get("v") or opts.get("verbose")):
+        return ""
+    rows = [f"{prog}: defined options", f"{prog}: -------------------- --------------------"]
+    for key, val in sorted(opts.items()):
+        rows.append(f"{prog}: {key.replace('_', '-'):<20}: {1 if val is True else val}")
+    rows += [f"{prog}: -------------------- --------------------", f"{prog}: end of defined options"]
+    return "\n".join(rows) + "\n"
 
 
 def _new_job(state, job):
@@ -372,8 +459,8 @@ def sbatch(ctx, args):
         j.stdout = j.work_dir.rstrip("/") + "/" + j.stdout
     schedule(state)
     if opts.get("parsable"):
-        return f"{j.id}\n"
-    return f"Submitted batch job {j.id}\n"
+        return _verbose_block("sbatch", opts) + f"{j.id}\n"
+    return _verbose_block("sbatch", opts) + f"Submitted batch job {j.id}\n"
 
 
 def _alloc_now(ctx, prog, opts):
@@ -448,7 +535,12 @@ def srun(ctx, args):
     schedule(state)
     if rc:
         raise CommandError(out, rc)
-    return out + ("\n" if out else "")
+    if opts.get("output"):  # -o sends the tasks' stdout to a file instead of the terminal
+        path = _expand_pattern(opts["output"], j)
+        path = path if path.startswith("/") else j.work_dir.rstrip("/") + "/" + path
+        ctx.node.files[path] = out + ("\n" if out else "")
+        out = ""
+    return _verbose_block("srun", opts) + out + ("\n" if out else "")
 
 
 @command("salloc", help="get an interactive allocation: salloc -N1 --gres=gpu:8 (then srun ...; scancel to release)")
@@ -462,8 +554,10 @@ def salloc(ctx, args):
     j.name = opts.get("name") or "interactive"
     ctx.node.env["SLURM_JOB_ID"] = str(j.id)
     ctx.node.env["SLURM_JOB_NODELIST"] = compress_hostlist(j.nodelist)
+    if opts.get("Q") or opts.get("quiet"):
+        return ""
     return (
-        f"salloc: Granted job allocation {j.id}\n"
+        _verbose_block("salloc", opts) + f"salloc: Granted job allocation {j.id}\n"
         f"salloc: Nodes {compress_hostlist(j.nodelist)} are ready for job\n"
         f"(SLURM_JOB_ID={j.id} exported; run 'srun ...' for steps, 'scancel {j.id}' to release)\n"
     )

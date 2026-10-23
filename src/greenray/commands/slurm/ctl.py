@@ -131,8 +131,10 @@ def _show_job(state, j, details=False):
         f"   UserId={j.user}({0 if j.user == 'root' else 1000 + sum(map(ord, j.user)) % 500}) GroupId={j.user}({0 if j.user == 'root' else 1000}) MCS_label=N/A",
         f"   Priority={j.priority} Nice={j.nice} Account={j.account} QOS={j.qos}",
         f"   JobState={j.state} Reason={j.reason if j.state == 'PENDING' else 'None'} Dependency={j.dependency or '(null)'}",
-        f"   Requeue=1 Restarts={j.restarts} BatchFlag={1 if j.batch else 0} Reboot=0 ExitCode={j.exit_code}",
-        f"   RunTime={fmt_elapsed(run, long=True)} TimeLimit={fmt_limit_upper(tl)} TimeMin=N/A",
+        f"   Requeue={1 if j.get('requeue', True) else 0} Restarts={j.restarts} BatchFlag={1 if j.batch else 0} "
+        f"Reboot=0 ExitCode={j.exit_code}",
+        f"   RunTime={fmt_elapsed(run, long=True)} TimeLimit={fmt_limit_upper(tl)} "
+        f"TimeMin={fmt_limit_upper(j.time_min) if j.get('time_min') is not None else 'N/A'}",
         f"   SubmitTime={_ts(state, j.submit_time)} EligibleTime={_ts(state, j.submit_time)}",
         f"   StartTime={_ts(state, j.start_time) if j.start_time is not None else 'Unknown'} "
         f"EndTime={_ts(state, j.end_time) if j.end_time is not None else 'Unknown'} Deadline=N/A",
@@ -158,10 +160,14 @@ def _show_job(state, j, details=False):
             lines.append(f"     Nodes={n} CPU_IDs={cpu_ids} Mem=0{gres}")
     if j.container_image:
         lines.append(f"   Comment=pyxis container-image={j.container_image}")
+    elif j.get("comment"):
+        lines.append(f"   Comment={j.comment}")
     lines += [
+        f"   MinMemoryNode={j.get('min_memory_mb', 0)}M Features={j.get('features') or '(null)'} "
+        f"Reservation={j.get('reservation') or '(null)'}",
         f"   Command={j.command or '(null)'}",
         f"   WorkDir={j.work_dir}",
-        f"   StdErr={j.stdout or '/dev/null'}",
+        f"   StdErr={j.get('stderr') or j.stdout or '/dev/null'}",
         "   StdIn=/dev/null",
         f"   {out}",
     ]

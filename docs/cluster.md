@@ -27,6 +27,6 @@ You start on `bcm-head` as root. `ssh dgx-01` moves your shell to a compute node
 
 ## Limits
 
-Outputs are realistic but simplified. Only the options that matter for the exam are implemented, and a command that does not parse usually works in its canonical form. The grader reads the end state of the cluster, so what matters is what you changed, not the exact flags you used to change it.
+Outputs are realistic but simplified. Only the options that matter for the exam are implemented, and a command that does not parse usually works in its canonical form. A tool's `--help` page lists exactly the options the simulator honours: the test-suite runs every one of them and fails if an option changes nothing. The grader reads the end state of the cluster, so what matters is what you changed, not the exact flags you used to change it.
 
-If a real tool behaves differently from the simulator, trust the real one and please [open an issue](https://github.com/RehmanaYounis/greenray-aio/issues) with the command and what the real tool does.
+If a real tool behaves differently from the simulator, trust the real one and please [open an issue](https://github.com/RehmanaYounis/greenray-aio/issues/new?template=tool_difference.md) with the command and what the real tool does.

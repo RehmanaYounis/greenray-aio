@@ -84,6 +84,14 @@ ALIASES = {
 }
 
 
+def reject_names_with_selection(names: list[str], opts: dict) -> None:
+    """kubectl refuses explicit names next to --all or a selector; both pick the set of objects."""
+    if names and opts.get("selector"):
+        raise CommandError("error: name cannot be provided when a selector is specified", 1)
+    if names and opts.get("all"):
+        raise CommandError("error: cannot use --all together with a resource name", 1)
+
+
 def parse_args(args: list[str], verb: str) -> tuple[list[str], dict, list[str]]:
     pos, opts, cmd = [], {}, []
     i = 0
@@ -101,6 +109,12 @@ def parse_args(args: list[str], verb: str) -> tuple[list[str], dict, list[str]]:
         elif a.startswith("--") and "=" in a:
             key, val = a[2:].split("=", 1)
             if "--" + key in MULTI:
+                opts.setdefault(key, []).append(val)
+            else:
+                opts[key] = val
+        elif len(a) > 3 and a[2] == "=" and a[:2] in VALUE_FLAGS:  # -n=kube-system, as pflag allows
+            key, val = ALIASES.get(a[:2], a[1]), a[3:]
+            if a[:2] in MULTI:
                 opts.setdefault(key, []).append(val)
             else:
                 opts[key] = val
@@ -246,6 +260,7 @@ def kubectl(ctx, args: list[str]) -> str:
         else:
             targets = split_targets(pos)
             for kind, names in targets:
+                reject_names_with_selection(names, opts)
                 if not names and (opts.get("all") or opts.get("selector")):
                     names = [i.get("name") for i in list_objects(state, kind, opts)]
                     if not names:

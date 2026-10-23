@@ -137,11 +137,21 @@ def cp(ctx, args):
 
 @command("mkdir")
 def mkdir(ctx, args):
+    parents = any(a in ("-p", "--parents") for a in args)
     dirs = ctx.node.setdefault("dirs", [])
     for a in args:
+        if a.startswith("-"):
+            continue
         path = ctx.abspath(a)
-        if not a.startswith("-") and path not in dirs:
-            dirs.append(path)
+        existing = known_dirs(ctx)
+        if path in existing or path in ctx.node.files:
+            if not parents:
+                raise CommandError(f"mkdir: cannot create directory ‘{a}’: File exists", 1)
+            continue
+        parent = path.rsplit("/", 1)[0] or "/"
+        if parent not in existing and not parents:
+            raise CommandError(f"mkdir: cannot create directory ‘{a}’: No such file or directory", 1)
+        dirs.append(path)
     return ""
 
 
@@ -374,9 +384,21 @@ def uptime(ctx, args):
 
 @command("uname")
 def uname(ctx, args):
-    if "-r" in args:
-        return ctx.node.kernel + "\n"
-    return f"Linux {ctx.host} {ctx.node.kernel} x86_64 GNU/Linux\n"
+    fields = {
+        "s": "Linux",
+        "n": ctx.host,
+        "r": ctx.node.kernel,
+        "v": "#42-Ubuntu SMP PREEMPT_DYNAMIC Tue Sep 10 11:07:16 UTC 2024",
+        "m": "x86_64",
+        "o": "GNU/Linux",
+    }
+    want = "".join(a[1:] for a in args if a.startswith("-") and not a.startswith("--"))
+    if "a" in want or "--all" in args:
+        want = "snrvmo"
+    bad = set(want) - set(fields)
+    if bad:
+        raise CommandError(f"uname: invalid option -- '{bad.pop()}'\nTry 'uname --help' for more information.", 1)
+    return " ".join(fields[k] for k in "snrvmo" if k in (want or "s")) + "\n"
 
 
 @command("export", help="export VAR=value")
@@ -555,7 +577,7 @@ KNOWN_MODULES = frozenset(
 
 @command("modprobe", help="modprobe [-r] <module>")
 def modprobe(ctx, args):
-    remove = "-r" in args
+    remove = "-r" in args or "--remove" in args
     # the kernel treats '-' and '_' in module names as the same character
     mods = [a.replace("-", "_") for a in args if not a.startswith("-")]
     if not mods:
@@ -634,12 +656,30 @@ def ipmitool(ctx, args):
 @command("ping")
 def ping(ctx, args):
     host = next((a for a in args if not a.startswith("-") and not a.isdigit()), None)
+    count = 1
+    for i, a in enumerate(args):
+        if a == "-c" and i + 1 < len(args):
+            if not args[i + 1].isdigit() or int(args[i + 1]) < 1:
+                raise CommandError(
+                    f"ping: invalid argument: '{args[i + 1]}': out of range: 1 <= value <= 2147483647", 1
+                )
+            count = int(args[i + 1])
     node = ctx.state.nodes.get(host)
     if node is None:
         raise CommandError(f"ping: {host}: Name or service not known", 2)
     if not node.up:
         raise CommandError(f"PING {host}: Destination Host Unreachable", 1)
-    return f"64 bytes from {host} ({node.ip}): icmp_seq=1 ttl=64 time=0.112 ms\n"
+    lines = [f"PING {host} ({node.ip}) 56(84) bytes of data."]
+    lines += [
+        f"64 bytes from {host} ({node.ip}): icmp_seq={i} ttl=64 time=0.{112 + 7 * i % 40:03d} ms"
+        for i in range(1, count + 1)
+    ]
+    lines += [
+        "",
+        f"--- {host} ping statistics ---",
+        f"{count} packets transmitted, {count} received, 0% packet loss, time {(count - 1) * 1000}ms",
+    ]
+    return "\n".join(lines) + "\n"
 
 
 @command("free")
