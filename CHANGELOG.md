@@ -2,6 +2,15 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.2.2] - 2026-10-23
+
+### Fixed
+- `srun --pty bash` inside an existing allocation opened no shell and reported "execve(): bash: No such file"; it now moves you onto the allocated node, and `exit` returns to the allocation without ending it.
+- `salloc` accepted `--pty`, which is an `srun` option; it is rejected as the real tool does.
+
+### Added
+- `top`, as a one-shot snapshot of the node's load and processes.
+
 ## [1.2.1] - 2026-10-23
 
 ### Changed

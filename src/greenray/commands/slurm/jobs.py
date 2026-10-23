@@ -127,6 +127,7 @@ OPTS_FLAG = {
     "--unbuffered",
     "--no-shell",
 }
+SHELLS = ("bash", "/bin/bash", "sh", "/bin/sh")
 PYXIS_OPTS = {
     "--container-image",
     "--container-mounts",
@@ -512,6 +513,13 @@ def srun(ctx, args):
                 raise _err(
                     f"srun: error: Unable to create step for job {parent.id}: Invalid generic resource (gres) specification"
                 )
+        if opts.get("pty") and cmd[0] in SHELLS:
+            # a shell step inside an allocation: move onto the job's node; exit returns here, the job stays
+            host = parent.nodelist[0]
+            ctx.host_stack.append(ctx.host)
+            ctx.host = host
+            state.nodes[host].env["SLURM_JOB_ID"] = str(parent.id)
+            return f"(interactive shell on {host} inside job {parent.id}; type 'exit' to return to the allocation)\n"
         out, rc = _run_step(ctx, parent, opts, cmd)
         if rc:
             raise CommandError(out, rc)
@@ -522,7 +530,7 @@ def srun(ctx, args):
     j.command = " ".join(cmd)
     if opts.get("container_image"):
         j.container_image = opts["container_image"]
-    if opts.get("pty") and cmd[0] in ("bash", "/bin/bash", "sh", "/bin/sh"):
+    if opts.get("pty") and cmd[0] in SHELLS:
         host = j.nodelist[0]
         ctx.host_stack.append(ctx.host)
         ctx.host = host
@@ -548,6 +556,8 @@ def salloc(ctx, args):
     state = ctx.state
     _ensure(state)
     opts, cmd = parse_job_opts("salloc", args, pyxis=_pyxis_client_ok(ctx.node))
+    if opts.get("pty"):  # an srun option; salloc opens no terminal itself
+        raise _err("salloc: unrecognized option '--pty'\nTry \"salloc --help\" for more information")
     _need_ctl(ctx, "salloc: error: Unable to allocate resources: ")
     _begin(ctx)
     j, _ = _alloc_now(ctx, "salloc", opts)
