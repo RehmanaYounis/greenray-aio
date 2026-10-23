@@ -705,6 +705,38 @@ def ps(ctx, args):
     return "\n".join(rows) + "\n"
 
 
+@command("top", help="top: one snapshot of the busiest processes (batch mode)")
+def top(ctx, args):
+    node = ctx.node
+    procs = [
+        (1000 + abs(hash(svc)) % 900, "root", 0.1, 0.0, f"/usr/sbin/{svc}")
+        for svc, st in node.services.items()
+        if st == "active"
+    ]
+    procs += [(p.pid, p.get("user", "alice"), 98.0, 1.2, p.name) for g in node.gpus for p in g.processes]
+    procs.sort(key=lambda r: -r[2])
+    total_mib = node.real_memory_mb
+    used_mib = 12 * 1024 + sum(int(g.memory_used_mib) for g in node.gpus) // 8
+    busy = sum(g.utilization for g in node.gpus) / 100 if node.gpus else 0.0
+    load = f"{busy + 0.08:.2f}, {busy * 0.8 + 0.05:.2f}, {busy * 0.5 + 0.01:.2f}"
+    cpu_us = min(99.0, 0.3 + 12.0 * busy)
+    lines = [
+        f"top - {clock.stamp(ctx.state, '%H:%M:%S')} up {clock.uptime_text(ctx.state)},  1 user,  load average: {load}",
+        f"Tasks: {len(procs) + 180} total,   {1 + sum(1 for r in procs if r[2] > 50)} running, {len(procs) + 179} sleeping,   0 stopped,   0 zombie",
+        f"%Cpu(s): {cpu_us:4.1f} us,  0.2 sy,  0.0 ni, {99.8 - cpu_us:4.1f} id,  0.0 wa,  0.0 hi,  0.0 si,  0.0 st",
+        f"MiB Mem : {total_mib:9.1f} total, {total_mib - used_mib:9.1f} free, {used_mib:9.1f} used, {2048:9.1f} buff/cache",
+        f"MiB Swap: {0:9.1f} total, {0:9.1f} free, {0:9.1f} used. {total_mib - used_mib:9.1f} avail Mem",
+        "",
+        "    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND",
+    ]
+    for pid, user, cpu, mem, name in procs:
+        state = "R" if cpu > 50 else "S"
+        lines.append(
+            f"{pid:>7} {user:<9} 20   0 {'24.1g' if cpu > 50 else '1.2g':>7} {'18.3g' if cpu > 50 else '48m':>6} {'1.1g' if cpu > 50 else '12m':>6} {state} {cpu:5.1f} {mem:5.1f} {'14:21.07' if cpu > 50 else '0:01.12':>9} {name.rsplit('/', 1)[-1]}"
+        )
+    return "\n".join(lines) + "\n"
+
+
 @command("kill", "pkill", help="kill [-9] <pid>")
 def kill(ctx, args):
     targets = [a for a in args if not a.startswith("-")]

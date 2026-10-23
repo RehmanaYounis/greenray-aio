@@ -275,3 +275,24 @@ def test_dcgmi_dmon_fields():
     assert out.splitlines()[0].split() == ["#Entity", "GPUTMP", "POWER", "GPUTL"]
     assert len(out.splitlines()) == 2 + 8
     assert "not a valid field" in s.run("dcgmi dmon -e 99999")
+
+
+def test_interactive_shell_inside_an_allocation_and_salloc_rejects_pty():
+    s = Shell(make_cluster())
+    s.run("ssh dgx-04")
+    assert "unrecognized option '--pty'" in s.run("salloc -N 1 --pty bash")
+    assert "Granted job allocation" in s.run("salloc -N 1 --gpus=1")
+    out = s.run("srun -N 1 --gpus=1 --pty bash")
+    assert "interactive shell on dgx-01" in out and s.ctx.host == "dgx-01"
+    assert s.run("hostname").strip() == "dgx-01"
+    s.run("exit")
+    assert s.ctx.host == "dgx-04"
+    assert "R " in s.run("squeue") or "RUNNING" in s.run("squeue -l")  # the allocation survives the shell
+
+
+def test_top_is_a_snapshot_of_the_node():
+    s = Shell(make_cluster())
+    s.run("ssh dgx-01")
+    out = s.run("top")
+    assert out.startswith("top - ") and "load average" in out and "nvidia-persistenced" in out
+    assert "%CPU" in out
