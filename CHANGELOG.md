@@ -2,6 +2,14 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] - 2026-10-23
+
+### Changed
+- Merging into `main` is the release: the workflow tags the version in `pyproject.toml` and publishes it, with that version's changelog section as the release notes. Tags are no longer pushed by hand.
+
+### Added
+- The everyday Linux tools on every node: `less`, `cut`, `uniq`, `tr`, `printf`, `find`, `mv`, `ln`, `rmdir`, `which`, `file`, `stat`, `du`, `basename`, `dirname`, `realpath`, `date`, `sleep`, `seq`, `xargs`, `test`, `expr`, `diff`, `cmp`, `history`, `bash script.sh`, `sudo`, `tar`, `gzip`, `jq`, `nproc`, `htop`, `pgrep`, `killall`, `w`, `who`, `lsof`, `fuser`, `vmstat`, `hostnamectl`, `timedatectl`, `modinfo`, `ss`, `netstat`, `ifconfig`, `ethtool`, `nslookup`, `dig`, `traceroute`, `curl`, `wget` and `shutdown`. They read the simulated node, so `ss -tlnp` lists the services that are running, `curl` reaches the API server only when it is up, `lsof /dev/nvidia0` names the job's processes and `shutdown` powers the node off with the same audit record as a power-off from BCM.
+
 ## [1.2.2] - 2026-10-23
 
 ### Fixed

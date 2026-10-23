@@ -21,7 +21,8 @@ You start on `bcm-head` as root. `ssh dgx-01` moves your shell to a compute node
 | BCM | `cmsh` in one-shot mode (device, category, softwareimage, partition, user, power, imageupdate, grabimage), `cmha` |
 | Fabric | `ibstat`, `ibdiagnet`, `mlxlink`, `perfquery`, NCCL tests (`all_reduce_perf` through `mpirun`), GPUDirect RDMA and GPUDirect Storage checks |
 | DPU | BlueField tools (`mlxconfig`, `bfb-install`, `rshim`, DOCA services) |
-| Shell | `cd`, `pwd`, `ls`, `cat`, `grep`, `sed -i`, `awk`, `head`, `tail`, `wc`, `sort`, `watch`, `clear`, heredocs, pipes, `&&`, redirects, `$(...)`; `nano`, `vi` and `vim` open your real editor; `--help` and `man` work as on a real node |
+| Shell | `cd`, `pwd`, `ls`, `cat`, `less`, `grep`, `sed -i`, `awk`, `cut`, `sort`, `uniq`, `tr`, `head`, `tail`, `wc`, `find`, `mv`, `cp`, `diff`, `tar`, `date`, `xargs`, `test`, `bash script.sh`, `watch`, `clear`, heredocs, pipes, `&&`, redirects, `$(...)`; `nano`, `vi` and `vim` open your real editor; `--help` and `man` work as on a real node |
+| Node diagnostics | `top`, `htop`, `ps`, `pgrep`, `kill`, `lsof`, `fuser`, `free`, `vmstat`, `uptime`, `w`, `hostnamectl`, `timedatectl`, `lscpu`, `numactl`, `lsmod`, `modinfo`, `ss`, `ip`, `ifconfig`, `ethtool`, `ping`, `nslookup`, `traceroute`, `curl`, `shutdown` |
 
 `commands` inside a lab prints the full list for the current version, and `explain <command>` describes what a tool is for and what to look for in its output.
 
