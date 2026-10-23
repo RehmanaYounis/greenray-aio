@@ -1,4 +1,5 @@
 id: tsh-ib-port-down
+code: tsh-8
 title: "One compute-fabric port on a DGX node is down"
 domain: Troubleshooting and Optimization
 difficulty: medium

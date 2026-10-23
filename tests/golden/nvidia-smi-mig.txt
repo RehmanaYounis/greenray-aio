@@ -1,0 +1,38 @@
+Enabled MIG Mode for GPU 00000000:2A:00.0
+All done.
+Successfully created GPU instance ID  1 on GPU  1 using profile MIG 1g.10gb (ID 19)
+Successfully created compute instance ID  0 on GPU  1 GPU instance ID  1 using profile MIG 1g.10gb (ID  0)
+Successfully created GPU instance ID  2 on GPU  1 using profile MIG 1g.10gb (ID 19)
+Successfully created compute instance ID  0 on GPU  1 GPU instance ID  2 using profile MIG 1g.10gb (ID  0)
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 550.90.07             Driver Version: 550.90.07      CUDA Version: 12.4      |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   1  NVIDIA H100 80GB HBM3          On  | 00000000:2A:00.0   Off |                    0 |
+| N/A   33C    P0              72W / 700W |        0MiB / 81559MiB |       0%     Default |
+|                                         |                        |              Enabled |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| MIG devices:                                                                            |
++------------------+----------------------------------+-----------+-----------------------+
+| GPU  GI  CI  MIG |                     Memory-Usage |        Vol|      Shared           |
+|      ID  ID  Dev |                       BAR1-Usage | SM     Unc| CE ENC DEC OFA JPG    |
+|                  |                                  |        ECC|                       |
+|==================+==================================+===========+=======================|
+|   1    1   0   0 |                   0MiB / 9856MiB |  16      0|  1   0    0    0    0 |
+|                  |                  0MiB / 32767MiB |           |                       |
++------------------+----------------------------------+-----------+-----------------------+
+|   1    2   0   1 |                   0MiB / 9856MiB |  16      0|  1   0    0    0    0 |
+|                  |                  0MiB / 32767MiB |           |                       |
++------------------+----------------------------------+-----------+-----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI        PID   Type   Process name                              GPU Memory |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+

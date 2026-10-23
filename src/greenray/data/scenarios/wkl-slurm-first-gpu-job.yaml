@@ -1,4 +1,5 @@
 id: wkl-slurm-first-gpu-job
+code: wkl-1
 title: Submit your first GPU batch job
 domain: Workload Management
 difficulty: easy

@@ -6,12 +6,12 @@ The exam tests whether you can operate a GPU cluster, not whether you can recite
 
 Six ten-minute labs for the first week. They practise the basics every other scenario assumes, in this order:
 
-1. `tsh-first-look-at-logs`: a job disappeared overnight. Slurm accounting and the node's `journalctl` and `dmesg` say why.
-2. `tsh-which-gpu-is-which`: the BMC names a PCI bus id; hardware support wants an index, a UUID and a serial.
-3. `adm-bcm-cmsh-inventory`: read a node's MAC, category, software image and kernel out of `cmsh`.
-4. `wkl-slurm-first-gpu-job`: write, submit and read the output of a one-GPU batch job.
-5. `adm-slurm-partition-time-limit`: edit `slurm.conf` and make the controller re-read it without touching running jobs.
-6. `wkl-k8s-pod-pending-nodeselector`: a pod is Pending; its events and the node labels say why.
+1. `tsh-1` (`tsh-first-look-at-logs`): a job disappeared overnight. Slurm accounting and the node's `journalctl` and `dmesg` say why.
+2. `tsh-2` (`tsh-which-gpu-is-which`): the BMC names a PCI bus id; hardware support wants an index, a UUID and a serial.
+3. `adm-1` (`adm-bcm-cmsh-inventory`): read a node's MAC, category, software image and kernel out of `cmsh`.
+4. `wkl-1` (`wkl-slurm-first-gpu-job`): write, submit and read the output of a one-GPU batch job.
+5. `adm-2` (`adm-slurm-partition-time-limit`): edit `slurm.conf` and make the controller re-read it without touching running jobs.
+6. `wkl-2` (`wkl-k8s-pod-pending-nodeselector`): a pod is Pending; its events and the node labels say why.
 
 `greenray next` walks you through them in this order and moves on when they are passed.
 

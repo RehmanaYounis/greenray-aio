@@ -1,4 +1,5 @@
 id: adm-bcm-cmsh-inventory
+code: adm-1
 title: Fill in the CMDB record for dgx-03 from cmsh
 domain: Administration
 difficulty: easy

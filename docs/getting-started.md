@@ -54,10 +54,12 @@ $ greenray next
 On a fresh profile that is the first on-ramp lab, where a user's job disappeared overnight and you find out why from Slurm accounting and the node's logs. Start it:
 
 ```
-$ greenray lab tsh-first-look-at-logs
+$ greenray lab tsh-1
 ```
 
-`greenray` on its own opens a menu instead: type the number of an entry, or its name, and `help` explains the commands. Either way you end up in the same labs.
+`tsh-1` is the lab's code; its id, `tsh-first-look-at-logs`, works in the same place. `greenray list` shows both for every scenario.
+
+`greenray` on its own opens a menu instead: type the number of an entry, or its name, and `help` explains the commands. Choose Labs to see the list and type a code to start one. Either way you end up in the same labs.
 
 You land on the BCM head node as root. The briefing is a ticket; the objectives say what "done" means. A few things to know:
 

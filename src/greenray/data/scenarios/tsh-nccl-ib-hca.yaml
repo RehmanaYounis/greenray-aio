@@ -1,4 +1,5 @@
 id: tsh-nccl-ib-hca
+code: tsh-14
 title: Multi-node NCCL is crawling — find the bad NCCL setting
 domain: Troubleshooting and Optimization
 difficulty: hard

@@ -1,4 +1,5 @@
 id: wkl-k8s-pod-pending-gpu
+code: wkl-4
 title: A training pod is stuck in Pending
 domain: Workload Management
 difficulty: medium

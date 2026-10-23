@@ -1,4 +1,5 @@
 id: tsh-power-cap-persistence
+code: tsh-3
 title: "Training is slow on one DGX node - find the clock limiter"
 domain: Troubleshooting and Optimization
 difficulty: easy

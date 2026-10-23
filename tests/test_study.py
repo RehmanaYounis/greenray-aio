@@ -8,7 +8,8 @@ from greenray.content import scenarios as sc
 def test_fresh_profile_starts_with_the_on_ramp():
     picks = study.recommend(limit=6)
     assert [p.scenario.id for p in picks] == list(study.ON_RAMP_ORDER)
-    assert picks[0].command == f"greenray lab {study.ON_RAMP_ORDER[0]}"
+    assert picks[0].command == "greenray lab tsh-1"
+    assert sc.find("tsh-1").id == study.ON_RAMP_ORDER[0]
     assert "on-ramp" in picks[0].why
 
 
@@ -43,7 +44,7 @@ def test_plan_covers_every_scenario_exactly_once():
     labs = [
         a.removeprefix("lab ") for _, _, days in study.plan() for acts in days for a in acts if a.startswith("lab ")
     ]
-    assert sorted(labs) == sorted(s.id for s in sc.load_all())
+    assert sorted(labs) == sorted(s.code for s in sc.load_all())
     assert len(study.plan()) == 4 and all(len(days) == study.DAYS_PER_WEEK for _, _, days in study.plan())
 
 
@@ -51,6 +52,6 @@ def test_plan_marks_passed_labs():
     progress.record_scenario("tsh-first-look-at-logs", True, 60, 0, False)
     ui = ScriptedUI([])
     study.show_plan(ui)
-    line = next(l for l in ui.output if "lab tsh-first-look-at-logs" in l)
+    line = next(l for l in ui.output if "lab tsh-1 " in l or l.endswith("lab tsh-1"))
     assert "✔" in line
     assert "Week 4" in ui.text and "mock" in ui.text

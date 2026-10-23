@@ -1,4 +1,5 @@
 id: wkl-slurm-multinode-sbatch
+code: wkl-7
 title: The "16-GPU" training job only ever sees 8 GPUs
 domain: Workload Management
 difficulty: medium

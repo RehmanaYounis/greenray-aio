@@ -1,4 +1,5 @@
 id: tsh-node-lost-driver-after-category-change
+code: tsh-16
 title: "Every job on one DGX node fails since the maintenance reboot"
 domain: Troubleshooting and Optimization
 difficulty: hard

@@ -1,4 +1,5 @@
 id: tsh-ecc-row-remap
+code: tsh-5
 title: "Uncorrectable ECC on a DGX node - row remap pending"
 domain: Troubleshooting and Optimization
 difficulty: medium

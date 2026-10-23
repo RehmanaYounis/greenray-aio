@@ -11,10 +11,13 @@ The loader refuses a problem file that contains `solution`, `explanation` or `ed
 
 Prefix ids with the domain: `ins-`, `adm-`, `wkl-`, `tsh-`. The file name must equal the id.
 
+Each scenario also carries a `code`, the short handle learners type (`tsh-3`). A new scenario takes the next free number in its domain; `greenray validate` rejects a duplicate, a gap or a prefix that differs from the id's. Codes are never reassigned, so a lab someone wrote down keeps meaning the same thing.
+
 ## Problem file
 
 ```yaml
 id: tsh-example
+code: tsh-19                                # next free number in the domain; never reused
 title: Short, symptom-style title
 domain: Troubleshooting and Optimization   # one of the 4 blueprint domains, spelled exactly
 difficulty: medium                          # easy | medium | hard

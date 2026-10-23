@@ -2,6 +2,17 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-10-23
+
+### Added
+- Short lab codes. Every scenario has a code such as `tsh-1` next to its id, shown by `greenray list`, `next`, `plan` and the report card, and accepted wherever an id is: `greenray lab tsh-3`, `greenray incident --id adm-2`, the menu. Codes are fixed for the life of a scenario; `greenray validate` checks them.
+- The Labs menu starts a lab: after the list, type a code or id.
+- Golden-output tests for `nvidia-smi`, `sinfo`, `squeue`, `sacct`, `kubectl get`, `cmsh device list` and `ibstat` on the healthy cluster, so a change to a tool's layout is a reviewed decision rather than an accident.
+
+### Fixed
+- `nvidia-smi -i N` printed every GPU in the status table; it now shows only the selected ones, including `-i 2,5`, and the MIG and process sections follow the selection.
+- The `nvidia-smi` status table was ragged: the per-GPU rows were shorter than the borders. Every line is now the same width, and the MIG devices table has the real tool's columns.
+
 ## [1.0.1] - 2026-10-23
 
 ### Fixed

@@ -1,6 +1,8 @@
 # Using the lab
 
-Installed with uv tool, pipx or Docker, the command is `greenray`. From a source checkout use `uv run greenray`. `greenray` on its own opens a menu: type the number of an entry or its name (`next`, `plan`, `lab <id>`, ...), and `help` explains the commands. `--no-color` (or the `NO_COLOR` variable) switches to plain output.
+Installed with uv tool, pipx or Docker, the command is `greenray`. From a source checkout use `uv run greenray`. `greenray` on its own opens a menu: type the number of an entry or its name (`next`, `plan`, `lab tsh-1`, ...), and `help` explains the commands. The Labs entry lists every scenario and starts the one whose code or id you type.
+
+Every scenario has a short code next to its id: `tsh-1` is the first troubleshooting lab, `adm-3` the third administration lab. Codes and ids are interchangeable everywhere a scenario is named, and `greenray list` shows both. Codes are fixed: a scenario added later gets the next number and never renumbers the others. `--no-color` (or the `NO_COLOR` variable) switches to plain output.
 
 ## Commands
 
@@ -9,10 +11,10 @@ Installed with uv tool, pipx or Docker, the command is `greenray`. From a source
 | `greenray next` | What to practise next: the on-ramp first, then the easiest unpassed lab in your weakest exam domain, then guided passes to redo as unguided incidents |
 | `greenray plan` | A four-week schedule covering every scenario, with your passes ticked off |
 | `greenray list` | All scenarios by exam domain, with your pass marks |
-| `greenray lab <id>` | A scenario in guided mode: title, objectives and hints are available |
-| `greenray lab <id> --variant N` | A specific variant of a scenario that has several (another node, GPU or job); without the flag one is picked at random |
+| `greenray lab <code or id>` | A scenario in guided mode: title, objectives and hints are available |
+| `greenray lab <code or id> --variant N` | A specific variant of a scenario that has several (another node, GPU or job); without the flag one is picked at random |
 | `greenray incident [-d DOMAIN] [-t TOPIC]` | A random scenario as an incident: only the incident report is shown, and the id, title and success criteria stay hidden until the debrief. `-t` is a scenario tag such as `slurm`, `kubernetes`, `bcm`, `mig` or `infiniband` |
-| `greenray incident --id <id>` | A specific scenario as an incident, for a fresh independent attempt |
+| `greenray incident --id <code or id>` | A specific scenario as an incident, for a fresh independent attempt |
 | `greenray sandbox` | A healthy cluster to explore; nothing is graded |
 | `greenray mock` | The full mock exam: 30 questions and 3 labs (one Slurm, one Kubernetes, one BCM) in 120 minutes, graded at the end |
 | `greenray mock --labs-only` | The three labs alone in 40 minutes, for exam-day pacing |

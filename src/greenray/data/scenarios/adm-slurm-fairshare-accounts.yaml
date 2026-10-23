@@ -1,4 +1,5 @@
 id: adm-slurm-fairshare-accounts
+code: adm-12
 title: Split the cluster 60/40 between the NLP and vision teams
 domain: Administration
 difficulty: hard

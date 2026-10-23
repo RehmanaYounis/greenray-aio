@@ -172,7 +172,7 @@ def show_briefing(
         subtitle = f"{s.domain} · reported via monitoring and user tickets"
     else:
         title = s.title
-        subtitle = s.domain if exam else f"{s.domain} · {s.difficulty} · ~{s.time_limit_min} min"
+        subtitle = s.domain if exam else f"{s.code} · {s.domain} · {s.difficulty} · ~{s.time_limit_min} min"
         if s.variant_label and not exam:
             subtitle += f" · {s.variant_label}"
     ui.out("")
@@ -268,7 +268,7 @@ def show_debrief(ui: UI, session: LabSession, passed: bool, identity_hidden: boo
     if nxt:
         ui.out(
             ui.yellow(
-                f"\nPractise next: greenray incident --id {nxt.id}   (a related problem: {', '.join(sorted(set(nxt.tags) & set(s.tags))) or nxt.domain})"
+                f"\nPractise next: greenray incident --id {nxt.code}   (a related problem: {', '.join(sorted(set(nxt.tags) & set(s.tags))) or nxt.domain})"
             )
         )
 

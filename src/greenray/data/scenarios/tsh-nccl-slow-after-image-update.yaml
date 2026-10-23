@@ -1,4 +1,5 @@
 id: tsh-nccl-slow-after-image-update
+code: tsh-15
 title: Two-node training is eight times slower since the image update
 domain: Troubleshooting and Optimization
 difficulty: hard

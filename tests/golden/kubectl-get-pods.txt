@@ -1,0 +1,17 @@
+NAMESPACE      NAME                               READY   STATUS    RESTARTS   AGE
+kube-flannel   kube-flannel-ds-7n9k4              1/1     Running   0          41d
+kube-flannel   kube-flannel-ds-gz5zx              1/1     Running   0          41d
+kube-flannel   kube-flannel-ds-jgwrb              1/1     Running   0          41d
+kube-flannel   kube-flannel-ds-tj9xx              1/1     Running   0          41d
+kube-flannel   kube-flannel-ds-z7thg              1/1     Running   0          41d
+kube-system    coredns-lj5tlh67tp-7mxsf           1/1     Running   0          41d
+kube-system    coredns-lj5tlh67tp-9mj9g           1/1     Running   0          41d
+kube-system    etcd-bcm-head                      1/1     Running   0          41d
+kube-system    kube-apiserver-bcm-head            1/1     Running   0          41d
+kube-system    kube-controller-manager-bcm-head   1/1     Running   0          41d
+kube-system    kube-proxy-8m9rz                   1/1     Running   0          41d
+kube-system    kube-proxy-dctf7                   1/1     Running   0          41d
+kube-system    kube-proxy-fb87c                   1/1     Running   0          41d
+kube-system    kube-proxy-lfqp7                   1/1     Running   0          41d
+kube-system    kube-proxy-znchp                   1/1     Running   0          41d
+kube-system    kube-scheduler-bcm-head            1/1     Running   0          41d
