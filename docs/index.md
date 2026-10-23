@@ -5,7 +5,8 @@ Hands-on lab simulator and mock exam for the NVIDIA-Certified Professional: AI O
 GreenRay AIO drops you into a broken or half-configured four-node DGX H100 cluster managed by Base Command Manager and asks you to find out what is wrong and fix it, with the commands you would use on real systems: `nvidia-smi`, `dcgmi`, Slurm, `kubectl` and `helm` with the GPU Operator, `cmsh`, InfiniBand tools, Docker and NGC. Nothing is real: no GPU, no network, no account. Everything runs in one Python process on your laptop.
 
 <video controls preload="metadata" style="width: 100%; max-width: 900px; border-radius: 6px;">
-  <source src="https://github.com/user-attachments/assets/16234b2c-1e5a-4718-abc8-5ab954ff79cd" type="video/mp4">
+  <source src="assets/greenray-aio-demo.mp4" type="video/mp4">
+  <a href="assets/greenray-aio-demo.mp4">Watch the demo (MP4, 4 MB)</a>
 </video>
 
 A ninety-second lab, start to finish: install, ask what to practise, diagnose a slow node, fix it, read the debrief.

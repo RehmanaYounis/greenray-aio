@@ -2,6 +2,11 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-10-23
+
+### Fixed
+- The documentation site serves the demo recording itself; the previous source only played on github.com.
+
 ## [1.0.0] - 2026-10-23
 
 The first stable release. The scenario format is now a commitment: a change that breaks existing scenario files bumps the major version.
