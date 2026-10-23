@@ -623,6 +623,9 @@ VAL_FLAGS = {
 }
 
 
+KUBE_CONTEXT = "kubernetes-admin@kubernetes"  # the only context in the head node's kubeconfig
+
+
 def _parse(args):
     pos, opts = [], {"set": [], "set-string": [], "values": []}
     i = 0
@@ -718,6 +721,9 @@ def helm(ctx, args):
         )
     verb, rest = args[0], args[1:]
     pos, opts = _parse(rest)
+    context = opts.get("kube-context")
+    if context and context != KUBE_CONTEXT and verb not in ("repo", "show", "search", "version"):
+        raise CommandError(f'Error: Kubernetes cluster unreachable: context "{context}" does not exist', 1)
     ns = opts.get("namespace", "default")
     kc.advance(state)
     kc.reconcile(state)

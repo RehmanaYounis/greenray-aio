@@ -40,6 +40,8 @@ The site's pages live in `docs/`. The architecture, contributing, security and c
 - Only emit colour when `ctx.colorize` is true (the output goes straight to a colour terminal).
 - Help pages live in `src/greenray/data/help/<command>/`; see `src/greenray/content/helppages.py`. Write original text in the real tool's layout, and list only options the simulator implements.
 - `tests/test_strictness.py` is a table of invocations the real tools reject, with the wording they use. A new command should add its own rows: a simulator that accepts a wrong command teaches a wrong habit. When a user reports the real tool being stricter than the simulator, the fix starts with a row in that table.
+- `tests/test_flags.py` runs every option listed on every help page and fails when one changes neither the output nor the cluster. A new help page therefore needs a `Baseline` entry there that puts the command in a situation where its options can show an effect, and any option that is a genuine no-op in that situation goes in `NO_VISIBLE_EFFECT` with the reason. Listing an option on a help page is a promise that the simulator honours it.
+- `tests/test_golden.py` pins the exact output of the everyday tools on the healthy cluster. A deliberate layout change is made with `UPDATE_GOLDEN=1` after comparing the new text with the real tool.
 
 ## Versioning
 

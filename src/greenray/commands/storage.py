@@ -437,6 +437,14 @@ def showmount_cmd(ctx, args):
     if snode.services.get("nfs-server", "inactive") != "active":
         raise CommandError("clnt_create: RPC: Program not registered", 1)
     exs = exports(ctx.state, server)
+    if not any(a in ("-e", "--exports") for a in args):
+        # without -e the tool lists the clients that currently mount something from the server
+        clients = sorted(
+            n.ip
+            for name, n in ctx.state.nodes.items()
+            if name != server and any(m.source.split(":")[0] in (server, "master") for m in mounts(ctx.state, name))
+        )
+        return "\n".join([f"Hosts on {server_name}:", *clients]) + "\n"
     w = max([len(e.path) for e in exs] + [1])
     out = [f"Export list for {server_name}:"]
     out += [f"{e.path:<{w}} {','.join(c.net for c in e.clients)}" for e in exs]

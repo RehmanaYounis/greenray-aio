@@ -46,6 +46,16 @@ def find_pod(state, opts: dict, ref: str) -> tuple:
     return p, 1
 
 
+def check_container(p, opts: dict) -> None:
+    """``-c`` must name one of the pod's containers (init containers included)."""
+    want = opts.get("container")
+    if not want:
+        return
+    names = [c.get("name") for key in ("containers", "initContainers") for c in (p.spec.get(key) or [])]
+    if want not in names:
+        raise CommandError(f"error: container {want} is not valid for pod {p.name}", 1)
+
+
 def cmd_logs(state, pos: list[str], opts: dict) -> str:
     if not pos and opts.get("selector"):
         pods = [p for p in list_objects(state, "pods", opts) if p.status not in ("Pending",)]
@@ -67,7 +77,10 @@ def cmd_logs(state, pos: list[str], opts: dict) -> str:
         return "\n".join(out) + "\n"
     if not pos:
         raise CommandError("error: expected 'logs [-f] [-p] (POD | TYPE/NAME) [-c CONTAINER]'.", 1)
+    if opts.get("selector"):
+        raise CommandError("error: only a selector (-l) or a POD name is allowed", 1)
     p, n = find_pod(state, opts, pos[0])
+    check_container(p, opts)
     out = ""
     if n > 1:
         out = f"Found {n} pods, using pod/{p.name}\n"
@@ -108,6 +121,7 @@ def cmd_exec(ctx, pos: list[str], opts: dict, cmd: list[str]) -> str:
     if not pos:
         raise CommandError("error: expected 'exec (POD | TYPE/NAME) [-c CONTAINER] [flags] -- COMMAND [args...]'.", 1)
     p, _ = find_pod(state, opts, pos[0])
+    check_container(p, opts)
     if not cmd:
         raise CommandError("error: you must specify at least one command for the container", 1)
     if p.node is None:
@@ -148,6 +162,8 @@ def cmd_run(ctx, pos: list[str], opts: dict, cmd: list[str]) -> str:
             raise CommandError(f"error: unknown flag: --{bad}\nSee 'kubectl run --help' for usage.", 1)
     if not pos:
         raise CommandError("error: NAME is required for run", 1)
+    if opts.get("rm") and not opts.get("stdin"):
+        raise CommandError("error: --rm should only be used for attached containers", 1)
     name = pos[0]
     image = opts.get("image")
     if not image:

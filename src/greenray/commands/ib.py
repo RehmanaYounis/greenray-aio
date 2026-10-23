@@ -20,6 +20,7 @@ import re
 from ..core.errors import CommandError
 from ..core.state import HEAD
 from . import HOOKS_REBOOT, HOOKS_SERVICE, command
+from .system import known_dirs
 
 STATE_NUM = {"Down": 1, "Initializing": 2, "Armed": 3, "Active": 4}
 PHYS_NUM = {
@@ -1178,6 +1179,13 @@ MPI_VAL_OPTS = {
 MPI_TWO_VAL = {"--mca", "-mca", "-gmca", "--gmca"}
 
 
+MPI_POLICIES = {
+    "--map-by": {"slot", "node", "socket", "numa", "core", "hwthread", "l1cache", "l2cache", "l3cache", "board"},
+    "--bind-to": {"none", "core", "socket", "numa", "hwthread", "l1cache", "l2cache", "l3cache", "board"},
+    "--rank-by": {"slot", "node", "socket", "numa", "core", "hwthread", "board"},
+}
+
+
 @command(
     "mpirun",
     "mpiexec",
@@ -1185,6 +1193,8 @@ MPI_TWO_VAL = {"--mca", "-mca", "-gmca", "--gmca"}
 )
 def mpirun(ctx, args):
     np_, hosts, xvars, npernode, allow_root, prog_i = None, [], {}, None, False, None
+    flags: set[str] = set()
+    policy = {"map-by": "slot", "bind-to": "core", "rank-by": "slot"}
     i = 0
     while i < len(args):
         a = args[i]
@@ -1193,8 +1203,37 @@ def mpirun(ctx, args):
             continue
         if a in ("--allow-run-as-root",):
             allow_root = True
-        elif a in ("--report-bindings", "--oversubscribe", "--tag-output", "-v", "--display-map"):
-            pass
+        elif a in ("--report-bindings", "--oversubscribe", "--tag-output", "-v", "--verbose", "--display-map"):
+            flags.add(a.lstrip("-"))
+        elif a in MPI_POLICIES:
+            val = args[i + 1] if i + 1 < len(args) else ""
+            if val.split(":")[0] not in MPI_POLICIES[a] and not val.startswith("ppr:"):
+                raise CommandError(
+                    "--------------------------------------------------------------------------\n"
+                    f"The specified {a.lstrip('-')} directive ({val}) is not recognized.\n"
+                    f"Please check the mpirun man page for the accepted values.\n"
+                    "--------------------------------------------------------------------------"
+                )
+            policy[a.lstrip("-")] = val.split(":")[0]
+            i += 2
+            continue
+        elif a in ("--prefix", "-wdir", "--wdir"):
+            val = args[i + 1] if i + 1 < len(args) else ""
+            if not val.startswith("/"):
+                raise CommandError(f'mpirun: Error: option "{a}" requires an absolute path, got "{val}"')
+            if a == "--prefix" and val.rstrip("/") not in known_dirs(ctx):
+                raise CommandError(
+                    "--------------------------------------------------------------------------\n"
+                    "mpirun was unable to find the executable orted in the --prefix path\n"
+                    f"    {val.rstrip('/')}/bin\n"
+                    "--------------------------------------------------------------------------"
+                )
+            if a != "--prefix" and val.rstrip("/") not in known_dirs(ctx):
+                raise CommandError(
+                    f"mpirun: Could not change to the working directory {val}: No such file or directory"
+                )
+            i += 2
+            continue
         elif a in MPI_VAL_OPTS:
             val = args[i + 1] if i + 1 < len(args) else ""
             if a in ("-np", "-n", "-c"):
@@ -1271,6 +1310,9 @@ def mpirun(ctx, args):
             )
     total = sum(s for _, s in hosts)
     np_ = np_ or total
+    if np_ > total and "oversubscribe" in flags:
+        hosts = [(h, s + (np_ - total if n == 0 else 0)) for n, (h, s) in enumerate(hosts)]
+        total = np_
     if np_ > total:
         raise CommandError(
             "--------------------------------------------------------------------------\n"
@@ -1286,8 +1328,10 @@ def mpirun(ctx, args):
         if take:
             placements.append((h, take, 0))
         left -= take
+    procs = _rank_order(placements, policy)
     if prog == "hostname":
-        return "".join(f"{h}\n" for h, n, _ in placements for _ in range(n))
+        out = "".join(f"{h}\n" for h in procs)
+        return _launch_report(flags, policy, procs) + _tagged(flags, out, procs)
     if prog not in OP_FACTOR:
         raise CommandError(
             "--------------------------------------------------------------------------\n"
@@ -1302,7 +1346,60 @@ def mpirun(ctx, args):
             env.update(ctx.node.env)
         env.update(xvars)
         env_by_host[h] = env
-    return run_nccl_test(ctx, prog, placements, env_by_host, pargs)
+    out = run_nccl_test(ctx, prog, placements, env_by_host, pargs)
+    return _launch_report(flags, policy, procs) + _tagged(flags, out, procs)
+
+
+def _rank_order(placements, policy):
+    """The host of each rank, in rank order: --map-by node spreads consecutive ranks across hosts."""
+    by_host = [[h] * n for h, n, _ in placements]
+    if policy["map-by"] == "node" or policy["rank-by"] == "node":
+        order = []
+        while any(by_host):
+            for slots in by_host:
+                if slots:
+                    order.append(slots.pop(0))
+        return order
+    return [h for slots in by_host for h in slots]
+
+
+def _binding(policy, rank):
+    if policy["bind-to"] == "none":
+        return "is not bound (or bound to all available processors)"
+    if policy["bind-to"] in ("socket", "numa", "board"):
+        return f"bound to socket {rank % 2}[core 0-55[hwt 0-1]]: [BB/BB/BB/BB][../../../..]"
+    return f"bound to socket {rank % 2}[core {rank}[hwt 0-1]]: [BB/../../..][../../../..]"
+
+
+def _launch_report(flags, policy, procs):
+    """What --display-map and --report-bindings print before the program starts."""
+    out = []
+    if "display-map" in flags:
+        out += [
+            f" Data for JOB [31337,1] offset 0 Total slots allocated {len(procs)}",
+            "",
+            " ========================   JOB MAP   ========================",
+            "",
+        ]
+        for host in dict.fromkeys(procs):
+            ranks = [r for r, h in enumerate(procs) if h == host]
+            out.append(f" Data for node: {host}\tNum slots: {len(ranks)}\tMax slots: 0\tNum procs: {len(ranks)}")
+            out += [
+                f" \tProcess OMPI jobid: [31337,1] App: 0 Process rank: {r} Bound: {_binding(policy, r)}" for r in ranks
+            ]
+            out.append("")
+        out.append(" =============================================================")
+    if "report-bindings" in flags:
+        out += [f"[{h}:{2000 + r}] MCW rank {r} {_binding(policy, r)}" for r, h in enumerate(procs)]
+    return "\n".join(out) + "\n" if out else ""
+
+
+def _tagged(flags, out, procs):
+    """--tag-output prefixes every line with the job id and the rank that printed it."""
+    if "tag-output" not in flags:
+        return out
+    lines = out.rstrip("\n").split("\n") if out else []
+    return "".join(f"[31337,{i % max(1, len(procs))}]<stdout>:{line}\n" for i, line in enumerate(lines))
 
 
 # ---------------------------------------------------------------- hooks

@@ -61,10 +61,15 @@ def runuser_cmd(ctx, args):
     import shlex as _shlex
 
     user, rest = None, list(args)
-    if "-u" in rest:
-        i = rest.index("-u")
-        user = rest[i + 1] if i + 1 < len(rest) else None
-        del rest[i : i + 2]
+    for i, a in enumerate(rest):
+        if a in ("-u", "--user"):
+            user = rest[i + 1] if i + 1 < len(rest) else None
+            del rest[i : i + 2]
+            break
+        if a.startswith("--user="):
+            user = a.split("=", 1)[1]
+            del rest[i]
+            break
     if rest and rest[0] == "--":
         rest = rest[1:]
     if not user or not rest:

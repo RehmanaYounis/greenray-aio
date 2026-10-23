@@ -2,6 +2,20 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-10-23
+
+### Added
+- A test that runs every option listed on every help page and fails when one changes neither the output nor the cluster. The help pages already promised to simulate the options they list; the suite now holds the simulator to it, with the handful of genuine no-ops listed with their reasons.
+- An issue template for reporting a simulated command that differs from the real tool.
+- `mpirun` honours `--map-by`, `--rank-by`, `--bind-to`, `--display-map`, `--report-bindings`, `--tag-output`, `--oversubscribe`, `--prefix` and `-wdir`.
+- `sbatch`, `srun` and `salloc` keep and validate the rest of a submission: `--comment`, `--constraint` against node features, `--reservation`, `--hint`, `--distribution`, `--mem-bind`, `--mpi`, `--signal`, `--mem`, `--time-min`, `--sockets-per-node`, `--cpus-per-gpu`, `--ntasks-per-gpu`, `--requeue` and the pyxis flags; `-v` prints the defined options and `salloc -Q` is quiet. `scontrol show job` shows the comment, features, reservation, memory, minimum time and requeue setting. `srun -o` writes the step's output to the file.
+
+### Fixed
+- `kubectl scale` with no arguments crashed; `-f=`, `-n=` and the other short options with `=` were parsed wrongly; `patch --type=json` with an object patch crashed; a name together with `--all` or a selector was accepted by `delete`, `wait`, `label` and `taint`; `logs` and `exec` accepted a container name the pod does not have; `run --rm` without `-i` was accepted.
+- `helm --kube-context` with an unknown context was ignored.
+- `sacct` showed every user's jobs without `-a`.
+- `uname` printed everything without `-a`; `mkdir` created missing parents without `-p`; `ping -c` was ignored; `modprobe --remove`, `runuser --user`, `taskset --pid` and `--cpu-list`, `mlxconfig -e` on ConnectX-7, `munge -n`, `numactl -N`/`-m`/`-C`/`-i`/`-p` with a space and `showmount` without `-e` were not honoured.
+
 ## [1.1.0] - 2026-10-23
 
 ### Added

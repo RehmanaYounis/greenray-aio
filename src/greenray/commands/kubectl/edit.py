@@ -113,6 +113,10 @@ def cmd_patch(ctx, pos: list[str], opts: dict) -> str:
         except yaml.YAMLError:
             raise CommandError(f'error: unable to parse "{raw}": yaml: invalid', 1)
     ptype = opts.get("type", "strategic")
+    if ptype not in ("json", "merge", "strategic"):
+        raise CommandError(f'error: --type must be one of [json merge strategic], not "{ptype}"', 1)
+    if ptype == "json" and not isinstance(patch, list):
+        raise CommandError("error: json: cannot unmarshal object into Go value of type jsonpatch.Patch", 1)
     ns = ns_of(opts)
     items = list_objects(state, kind, opts, [name])
     obj = api_obj(state, kind, items[0])
@@ -433,6 +437,8 @@ def cmd_rollout(state, pos: list[str], opts: dict) -> str:
 
 
 def cmd_scale(state, pos: list[str], opts: dict) -> str:
+    if not pos or ("/" not in pos[0] and len(pos) < 2):
+        raise CommandError("error: required resource not specified", 1)
     ref = pos[0] if "/" in pos[0] else f"{pos[0]}/{pos[1]}"
     kw, name = ref.split("/", 1)
     kind = resolve_kind(kw)
@@ -451,6 +457,10 @@ def cmd_wait(state, pos: list[str], opts: dict) -> str:
     reconcile(state)
     out = []
     for kind, names in split_targets(pos):
+        if names and opts.get("selector"):
+            raise CommandError("error: name cannot be provided when a selector is specified", 1)
+        if names and opts.get("all"):
+            raise CommandError("error: cannot use --all together with a resource name", 1)
         items = list_objects(state, kind, opts, names) if names else list_objects(state, kind, opts)
         for i in items:
             ok = False

@@ -170,18 +170,23 @@ def numactl(ctx, args):
         return _show(ctx)
     # policy options followed by a command: run the command (binding is not modelled further)
     i = 0
-    opts_with_arg = ("-N", "-m", "-C", "-i", "-p")
+    node_opts = {"-N": "--cpunodebind", "-m": "--membind", "-i": "--interleave", "-p": "--preferred"}
     while i < len(args) and args[i].startswith("-"):
         a = args[i]
-        if a in opts_with_arg:
-            i += 2
-            continue
-        if "=" in a:
-            key, val = a.split("=", 1)
-            if key in ("--cpunodebind", "--membind", "--preferred", "--interleave"):
-                allowed = {str(n) for n in range(_topo(ctx.node)[1])} | {"all"}
-                if any(v not in allowed for v in val.replace("-", ",").split(",") if v):
-                    raise CommandError(f"numa_parse_nodestring: invalid node {val}\n(use numactl -H to list nodes)", 1)
+        key, _, val = a.partition("=")
+        if a in node_opts or a == "-C":
+            if i + 1 >= len(args):
+                raise CommandError(f"numactl: option requires an argument -- '{a[1:]}'", 1)
+            key, val = node_opts.get(a, "--physcpubind"), args[i + 1]
+            i += 1
+        if key in ("--cpunodebind", "--membind", "--preferred", "--interleave"):
+            allowed = {str(n) for n in range(_topo(ctx.node)[1])} | {"all"}
+            if any(v not in allowed for v in val.replace("-", ",").split(",") if v):
+                raise CommandError(f"numa_parse_nodestring: invalid node {val}\n(use numactl -H to list nodes)", 1)
+        elif key == "--physcpubind":
+            cpus = _topo(ctx.node)[0] * _topo(ctx.node)[1]
+            if any(not v.isdigit() or int(v) >= cpus for v in val.replace("-", ",").split(",") if v):
+                raise CommandError(f"numa_parse_cpustring: invalid cpu {val}\n(use numactl -H to list cpus)", 1)
         i += 1
     rest = args[i:]
     if not rest:
@@ -196,6 +201,7 @@ def taskset(ctx, args):
     if not args:
         raise CommandError("usage: taskset [options] [mask | cpu-list] [pid|cmd [args...]]", 1)
     flags = "".join(a[1:] for a in args if a.startswith("-") and not a.startswith("--"))
+    flags += "".join({"--pid": "p", "--cpu-list": "c"}.get(a, "") for a in args)
     pos = [a for a in args if not a.startswith("-")]
     if "p" in flags:
         pid = pos[-1] if pos else "$$"

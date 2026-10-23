@@ -77,7 +77,10 @@ def munge_cmd(ctx, args):
         key = ctx.node.files.get(MUNGE_KEY, "default-munge-key")
     if key == "<munged down>":
         raise _err('munge: Error: Unable to access "/run/munge/munge.socket.2": No such file or directory', 6)
-    blob = base64.b64encode(f"{_key_tag(key)}|{ctx.host}|{ctx.state.slurm.get('clock', 0)}".encode()).decode()
+    payload = "" if any(a in ("-n", "--no-input") for a in args) else (ctx.stdin or "")
+    blob = base64.b64encode(
+        f"{_key_tag(key)}|{ctx.host}|{ctx.state.slurm.get('clock', 0)}|{len(payload)}".encode()
+    ).decode()
     return f"MUNGE:AwQFAAB{blob}:\n"
 
 
@@ -90,7 +93,7 @@ def unmunge_cmd(ctx, args):
     if not m:
         raise _err("unmunge: Error: No credential specified", 2)
     try:
-        tag, src, _ = base64.b64decode(m.group(1)).decode().split("|", 2)
+        tag, src, _, length = base64.b64decode(m.group(1)).decode().split("|", 3)
     except Exception:
         raise _err("unmunge: Error: Invalid credential format", 9) from None
     key = _munge_key(ctx.state, ctx.host)
@@ -113,7 +116,7 @@ def unmunge_cmd(ctx, args):
         "ZIP:             none (0)\n"
         "UID:             root (0)\n"
         "GID:             root (0)\n"
-        "LENGTH:          0\n\n"
+        f"LENGTH:          {length}\n\n"
     )
 
 

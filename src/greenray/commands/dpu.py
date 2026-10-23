@@ -263,7 +263,7 @@ def mlxconfig(ctx, args):
     cmd, params = rest[0].lower(), rest[1:]
     d = _find_dpu(ctx, dev)
     if d is None:
-        return _mlxconfig_cx7(ctx, dev, cmd)
+        return _mlxconfig_cx7(ctx, dev, cmd, show_all)
     if cmd in ("q", "query"):
         want = [p.upper() for p in params] or list(PARAMS)
         for p in want:
@@ -321,7 +321,7 @@ def mlxconfig(ctx, args):
     raise CommandError(f'-E- Unknown command "{rest[0]}". Valid commands: q[uery], s[et], r[eset]')
 
 
-def _mlxconfig_cx7(ctx, dev, cmd):
+def _mlxconfig_cx7(ctx, dev, cmd, show_all=False):
     from .ib import _mlx_dev
 
     i, _p = _mlx_dev(ctx, dev)
@@ -337,9 +337,14 @@ def _mlxconfig_cx7(ctx, dev, cmd):
         "Description:        NVIDIA ConnectX-7 HHHL Adapter card; 400Gb/s NDR IB; Single-port OSFP; PCIe 5.0 x16",
         f"Device:             {dev}",
         "",
-        f"{'Configurations:':<52}Next Boot",
     ]
-    out += [f"        {k:<44}{v}" for k, v in CX7_PARAMS.items()]
+    if show_all:  # nothing has been changed on a ConnectX-7 here, so all three columns agree
+        out.append(f"{'Configurations:':<52}{'Default':<20}{'Current':<20}Next Boot")
+        out += [f"        {k:<44}{v:<20}{v:<20}{v}" for k, v in CX7_PARAMS.items()]
+        out.append("The '*' shows parameters with next value different from default/current value.")
+    else:
+        out.append(f"{'Configurations:':<52}Next Boot")
+        out += [f"        {k:<44}{v}" for k, v in CX7_PARAMS.items()]
     return "\n".join(out) + "\n"
 
 
