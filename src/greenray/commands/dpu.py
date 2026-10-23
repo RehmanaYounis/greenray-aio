@@ -25,7 +25,7 @@ Model (set up by :func:`attach_dpu`, normally from a scenario's ``python`` setup
   Files reach the DPU with ``scp`` (storage.py). On the Arm node, a standalone kubelet runs
   every Pod manifest in /etc/kubelet.d (static pods), pulling images from NGC (``DOCA_IMAGES``).
   ``crictl`` there shows those pods; elsewhere it falls through to the Kubernetes-backed crictl
-  in container.py.
+  in the container package.
 """
 
 from __future__ import annotations
@@ -39,6 +39,7 @@ from ..core.errors import CommandError
 from ..core.state import make_node, wrap
 from . import HOOKS_REBOOT, HOOKS_SERVICE, REGISTRY, command
 from . import container as _container  # noqa: F401  (registers the generic crictl we wrap below)
+from .common import columns
 
 KUBELET_DIR = "/etc/kubelet.d/"
 
@@ -505,11 +506,6 @@ def _cid(seed, n=13):
     return hashlib.sha256(seed.encode()).hexdigest()[:n]
 
 
-def _cols(rows):
-    widths = [max(len(str(r[i])) for r in rows) for i in range(len(rows[0]))]
-    return "\n".join("   ".join(f"{str(c):<{w}}" for c, w in zip(r, widths)).rstrip() for r in rows) + "\n"
-
-
 _generic_crictl = REGISTRY.get("crictl")
 
 
@@ -553,7 +549,7 @@ def crictl(ctx, args):
         for ref in node.cri_images:
             name, tag = _norm_image(ref)
             rows.append((name, tag, _cid(ref), IMAGE_SIZE.get(name.rsplit("/", 1)[-1], "300MB")))
-        return _cols(rows)
+        return columns(rows)
     if sub == "pods":
         rows = [("POD ID", "CREATED", "STATE", "NAME", "NAMESPACE", "ATTEMPT", "RUNTIME")]
         for p in pods:
@@ -568,7 +564,7 @@ def crictl(ctx, args):
                     "(default)",
                 )
             )
-        return _cols(rows)
+        return columns(rows)
     if sub == "ps":
         rows = [("CONTAINER", "IMAGE", "CREATED", "STATE", "NAME", "ATTEMPT", "POD ID", "POD")]
         running = []
@@ -590,7 +586,7 @@ def crictl(ctx, args):
                     )
                 )
         ctx.state.flags.setdefault("dpu_running", {})[ctx.host] = running
-        return _cols(rows)  # -a would add exited containers; this model has none
+        return columns(rows)  # -a would add exited containers; this model has none
     if sub == "logs":
         cid = next((a for a in args[1:] if not a.startswith("-")), "")
         for p in pods:

@@ -83,7 +83,7 @@ def mount_for(node, path):
     return best
 
 
-def _opt(options, key, default=None):
+def _mount_opt(options, key, default=None):
     for o in str(options).split(","):
         k, _, v = o.partition("=")
         if k.strip() == key:
@@ -96,9 +96,9 @@ def storage_gbps(m) -> float:
         return 2.0  # OS drive
     fs = m["fstype"]
     if fs.startswith("nfs"):
-        rsize = int(_opt(m["options"], "rsize", 1048576) or 1048576)
-        nconnect = int(_opt(m["options"], "nconnect", 1) or 1)
-        if _opt(m["options"], "proto") == "rdma":
+        rsize = int(_mount_opt(m["options"], "rsize", 1048576) or 1048576)
+        nconnect = int(_mount_opt(m["options"], "nconnect", 1) or 1)
+        if _mount_opt(m["options"], "proto") == "rdma":
             return min(10.0, 1.4 * (rsize / 8192) ** 0.28 * nconnect**0.5)
         # NFS over TCP from the head node: capped by its 10/25GbE internalnet link
         return min(1.15, 0.30 * (rsize / 8192) ** 0.28 * nconnect**0.5)
@@ -118,7 +118,7 @@ def gds_fs_supported(m) -> tuple[bool, str]:
     if fs == "lustre":
         return True, "DDN EXAScaler (Lustre)"
     if fs.startswith("nfs"):
-        if _opt(m["options"], "proto") == "rdma":
+        if _mount_opt(m["options"], "proto") == "rdma":
             return True, "NFS over RDMA"
         return False, "NFS over TCP is not supported by GDS (needs NFS over RDMA)"
     if fs in ("ext4", "xfs") and m["target"] in LOCAL_NVME:
@@ -410,7 +410,7 @@ def nfsiostat(ctx, args):
     out = []
     for m in nfs:
         reading = rm is not None and rm["target"] == m["target"]
-        rsize_kb = int(_opt(m["options"], "rsize", 1048576) or 1048576) / 1024
+        rsize_kb = int(_mount_opt(m["options"], "rsize", 1048576) or 1048576) / 1024
         rk = kbs if reading else 0.0
         rops = rk / rsize_kb if rsize_kb else 0.0
         rtt = 0.9 if reading else 0.0
@@ -470,8 +470,8 @@ def dataloader_bench(ctx, args):
     where = (
         f"{m['fstype']}, {m['source']}"
         + (
-            f", rsize={_opt(m['options'], 'rsize')}"
-            if m["fstype"].startswith("nfs") and _opt(m["options"], "rsize")
+            f", rsize={_mount_opt(m['options'], 'rsize')}"
+            if m["fstype"].startswith("nfs") and _mount_opt(m["options"], "rsize")
             else ""
         )
         if m

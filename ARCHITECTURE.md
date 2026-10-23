@@ -33,8 +33,9 @@ colour terminal), and only stream samples when `ctx.streaming` is true, so pipes
 and files get plain text. Service and reboot hooks let one tool react to another
 (`systemctl restart slurmd` re-reads `gres.conf`).
 
-Large families (`slurm`, `kubectl`) are packages with one module per concern and an
-`__init__` that re-exports what other tools use.
+Large families (`slurm`, `kubectl`, `container`, `cmsh`) are packages with one module per
+concern and an `__init__` that re-exports what other tools use. `commands/common.py` is the
+toolkit they share: option lookup, errors and the two plain table layouts.
 
 ## Scenarios and grading
 A scenario is a YAML file: `setup` ops applied to the healthy tree, `checks` as Python

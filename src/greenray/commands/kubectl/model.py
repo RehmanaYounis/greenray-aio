@@ -9,6 +9,7 @@ import re
 
 from ...core.errors import CommandError
 from ...core.state import wrap
+from ..common import columns
 
 # state.k8s layout (scenarios grade the end state, so every field here is stable):
 #   nodes[name]      labels, taints, schedulable (cordon), capacity / allocatable, ready
@@ -92,15 +93,7 @@ def age(state, created: int | None) -> str:
     return human(now(state) - (created if created is not None else now(state)))
 
 
-def table(rows, gap: int = 3) -> str:
-    if not rows:
-        return ""
-    widths = [max(len(str(r[i])) for r in rows) for i in range(len(rows[0]))]
-    out = []
-    for r in rows:
-        cells = [str(c).ljust(widths[i] + gap) if i < len(r) - 1 else str(c) for i, c in enumerate(r)]
-        out.append("".join(cells).rstrip())
-    return "\n".join(out) + "\n"
+table = columns  # kubectl listings are the toolkit's plain columns
 
 
 def truthy(v, default: bool = True) -> bool:

@@ -2,6 +2,11 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.2.1] - 2026-10-23
+
+### Changed
+- The container tools and `cmsh` are packages with one module per concern, like Slurm and kubectl, and the option, error and table helpers that four modules each carried are one shared toolkit. No behaviour changes; the golden-output and option suites were the check.
+
 ## [1.2.0] - 2026-10-23
 
 ### Added
