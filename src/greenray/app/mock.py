@@ -71,9 +71,9 @@ def report_card(ui: UI, qs: list[dict], res: dict, labs: list[LabSession], lab_s
         for d, q_cell, lab_cell, bar in rows:
             ui.out(f"  {d:<36} questions {q_cell or '-':>5}  labs {lab_cell or '-':>4}  {bar}")
 
-    todo = [f"greenray lab {lab.scenario_required.id}" for lab in labs if lab_scores[lab.scenario_required.id] < 1]
-    linked = {q["lab"] for q in qs if q["id"] in res["missed"] and q.get("lab")}
-    todo += [f"greenray lab {sid}" for sid in sorted(linked) if f"greenray lab {sid}" not in todo]
+    todo = [f"greenray lab {lab.scenario_required.code}" for lab in labs if lab_scores[lab.scenario_required.id] < 1]
+    linked = {sc.find(q["lab"]).code for q in qs if q["id"] in res["missed"] and q.get("lab")}
+    todo += [f"greenray lab {code}" for code in sorted(linked) if f"greenray lab {code}" not in todo]
     todo = todo[:5]
     scored = [(d, pct) for d, _, _, pct in cards if pct is not None]
     if scored:

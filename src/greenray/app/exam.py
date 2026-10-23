@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 
 from ..content import questions as qb
+from ..content import scenarios as sc
 from ..content import solutions
 from . import progress
 from .ui import UI
@@ -69,7 +70,7 @@ def review(ui: UI, q: dict, given: set | None) -> None:
     if q.get("explanation"):
         ui.out(ui.dim(q["explanation"].rstrip()))
     if q.get("lab"):
-        ui.out(ui.yellow(f"Practise hands-on: greenray lab {q['lab']}"))
+        ui.out(ui.yellow(f"Practise hands-on: greenray lab {sc.find(q['lab']).code}"))
 
 
 def offer_review(ui: UI, qs: list[dict], answers: dict, missed: list[str], flagged: set) -> None:

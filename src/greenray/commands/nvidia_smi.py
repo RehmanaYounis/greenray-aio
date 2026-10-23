@@ -26,6 +26,16 @@ PROFILE_MEM_MIB = {
     "4g.40gb": 40192,
     "7g.80gb": 80384,
 }
+# SMs per MIG profile on H100 80GB (132 in total), as the MIG devices table reports them.
+PROFILE_SMS = {
+    "1g.10gb": 16,
+    "1g.10gb+me": 16,
+    "1g.20gb": 16,
+    "2g.20gb": 32,
+    "3g.40gb": 60,
+    "4g.40gb": 64,
+    "7g.80gb": 132,
+}
 
 
 def _require_driver(ctx):
@@ -87,51 +97,59 @@ def _lost_msgs(ctx):
 # ---------------------------------------------------------------- table
 
 
-def _table(ctx):
+def _table(ctx, args=()):
     n = ctx.node
     lost = _lost_msgs(ctx)
     if lost:
         return "\n".join(lost) + "\n"
+    gpus = _selected(ctx, args)
     lines = [
         "+-----------------------------------------------------------------------------------------+",
-        f"| NVIDIA-SMI {n.driver_version:<22}Driver Version: {n.driver_version:<15}CUDA Version: {n.cuda_version:<9}|",
+        f"| NVIDIA-SMI {n.driver_version:<22}Driver Version: {n.driver_version:<15}CUDA Version: {n.cuda_version:<10}|",
         "|-----------------------------------------+------------------------+----------------------+",
         "| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |",
         "| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |",
         "|                                         |                        |               MIG M. |",
         "|=========================================+========================+======================|",
     ]
-    for g in n.gpus:
+    for g in gpus:
         pm = "On" if g.persistence_mode else "Off"
         ecc = "ERR!" if g.reset_required else str(g.ecc_volatile_dbe)
         mig = "Enabled" if g.mig_mode else "Disabled"
         if g.mig_pending is not None:
             mig += "*"
         util = "ERR!" if g.reset_required else f"{g.utilization}%"
+        power = f"{int(g.power_draw_w)}W / {g.power_limit_w}W"
+        memory = f"{g.memory_used_mib}MiB / {g.memory_total_mib}MiB"
         lines += [
-            f"| {g.index:>3}  {g.name:<24} {pm:>4} | {g.bus_id:<16} Off | {ecc:>20} |",
-            f"| N/A   {g.temp_c:>2}C    {g.pstate:<3} {int(g.power_draw_w):>10}W / {g.power_limit_w:>4}W | "
-            f"{g.memory_used_mib:>8}MiB / {g.memory_total_mib}MiB | {util:>8} {g.compute_mode:>11} |",
-            f"|                                         |                        | {mig:>20} |",
+            f"| {g.index:>3}  {g.name:<29}{pm:>4}  | {g.bus_id:<16}   Off | {ecc:>20} |",
+            f"| N/A   {g.temp_c:>2}C    {g.pstate:<3} {power:>22} | {memory:>22} | {util:>8} {g.compute_mode:>11} |",
+            f"|{'':41}|{'':24}| {mig:>20} |",
             "+-----------------------------------------+------------------------+----------------------+",
         ]
-    if any(g.mig_mode for g in n.gpus):
+    if any(g.mig_mode for g in gpus):
         lines += [
             "",
             "+-----------------------------------------------------------------------------------------+",
             "| MIG devices:                                                                            |",
-            "| GPU  GI  CI  MIG |              Memory-Usage |  Vol|        Shared                      |",
-            "+==================+===========================+=====================================+",
+            "+------------------+----------------------------------+-----------+-----------------------+",
+            "| GPU  GI  CI  MIG |                     Memory-Usage |        Vol|      Shared           |",
+            "|      ID  ID  Dev |                       BAR1-Usage | SM     Unc| CE ENC DEC OFA JPG    |",
+            "|                  |                                  |        ECC|                       |",
+            "|==================+==================================+===========+=======================|",
         ]
-        for g in n.gpus:
+        for g in gpus:
             for ci in g.compute_instances:
                 gi = next((x for x in g.gpu_instances if x.id == ci.gi), None)
                 prof = gi.profile if gi else ci.profile
-                lines.append(
-                    f"| {g.index:>3} {ci.gi:>3} {ci.id:>3} {g.compute_instances.index(ci):>3} |"
-                    f"   0MiB / {PROFILE_MEM_MIB.get(prof, 0):>5}MiB ({prof:<9}) |                                     |"
-                )
-        lines.append("+------------------+---------------------------+-------------------------------------+")
+                slices = int(prof[0])
+                memory = f"0MiB / {PROFILE_MEM_MIB.get(prof, 0)}MiB"
+                lines += [
+                    f"| {g.index:>3} {ci.gi:>4} {ci.id:>3} {g.compute_instances.index(ci):>3} | {memory:>32} |"
+                    f"{PROFILE_SMS.get(prof, 16):>4}{0:>7}|{slices:>3}{0:>4}{0:>5}{0:>5}{0:>5} |",
+                    f"|{'':18}| {'0MiB / 32767MiB':>32} |{'':11}|{'':23}|",
+                    "+------------------+----------------------------------+-----------+-----------------------+",
+                ]
     lines += [
         "",
         "+-----------------------------------------------------------------------------------------+",
@@ -139,7 +157,7 @@ def _table(ctx):
         "|  GPU   GI   CI        PID   Type   Process name                              GPU Memory |",
         "|=========================================================================================|",
     ]
-    procs = [(g, p) for g in n.gpus for p in g.processes]
+    procs = [(g, p) for g in gpus for p in g.processes]
     if not procs:
         lines.append("|  No running processes found                                                             |")
     for g, p in procs:
@@ -720,7 +738,7 @@ def nvidia_smi(ctx, args):
     if "-rgc" in args or "--reset-gpu-clocks" in args:
         return "".join(f"All done. GPU clocks reset for GPU {g.bus_id}\n" for g in _visible(gpus))
     if "-i" in args or "--id" in args:
-        return _table(ctx)
+        return _table(ctx, args)
     raise CommandError("Invalid combination of input arguments. Please run 'nvidia-smi -h' for help.", 2)
 
 

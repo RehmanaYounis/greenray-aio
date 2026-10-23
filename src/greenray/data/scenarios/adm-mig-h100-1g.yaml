@@ -1,4 +1,5 @@
 id: adm-mig-h100-1g
+code: adm-6
 title: Partition an H100 into seven 1g.10gb MIG slices
 domain: Administration
 difficulty: medium

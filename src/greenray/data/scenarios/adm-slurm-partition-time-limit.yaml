@@ -1,4 +1,5 @@
 id: adm-slurm-partition-time-limit
+code: adm-2
 title: Put a two-day time limit on the defq partition
 domain: Administration
 difficulty: easy

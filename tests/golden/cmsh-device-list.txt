@@ -1,0 +1,7 @@
+Type         Hostname (key) MAC               Category Ip             Network     Status
+------------ -------------- ----------------- -------- -------------- ----------- ----------
+HeadNode     bcm-head       52:54:00:AA:00:FE          10.141.255.254 internalnet [   UP   ]
+PhysicalNode dgx-01         7C:C2:55:1A:00:01 dgx-h100 10.141.0.1     internalnet [   UP   ]
+PhysicalNode dgx-02         7C:C2:55:1A:00:02 dgx-h100 10.141.0.2     internalnet [   UP   ]
+PhysicalNode dgx-03         7C:C2:55:1A:00:03 dgx-h100 10.141.0.3     internalnet [   UP   ]
+PhysicalNode dgx-04         7C:C2:55:1A:00:04 dgx-h100 10.141.0.4     internalnet [   UP   ]

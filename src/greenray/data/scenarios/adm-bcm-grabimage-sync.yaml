@@ -1,4 +1,5 @@
 id: adm-bcm-grabimage-sync
+code: adm-9
 title: A hand-fix on dgx-01 works. Make it permanent and roll it out
 domain: Administration
 difficulty: hard

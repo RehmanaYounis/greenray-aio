@@ -1,4 +1,5 @@
 id: wkl-k8s-pod-pending-nodeselector
+code: wkl-2
 title: The cuda-test pod has been Pending for twenty minutes
 domain: Workload Management
 difficulty: easy

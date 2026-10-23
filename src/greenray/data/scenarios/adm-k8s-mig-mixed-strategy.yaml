@@ -1,4 +1,5 @@
 id: adm-k8s-mig-mixed-strategy
+code: adm-10
 title: Expose MIG slices to Kubernetes with the mixed strategy
 domain: Administration
 difficulty: hard

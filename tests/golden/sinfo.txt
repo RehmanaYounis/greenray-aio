@@ -1,0 +1,2 @@
+PARTITION AVAIL  TIMELIMIT  NODES  STATE NODELIST
+defq*        up   infinite      4   idle dgx-[01-04]

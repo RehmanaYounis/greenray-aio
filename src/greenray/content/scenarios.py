@@ -46,6 +46,7 @@ class Scenario:
     domain: str
     briefing: str
     checks: list
+    code: str = ""  # short handle such as tsh-3, fixed for the scenario's lifetime
     difficulty: str = "medium"
     time_limit_min: int = 15
     objectives: list = field(default_factory=list)
@@ -282,11 +283,18 @@ def load_all() -> list[Scenario]:
     return out
 
 
-def find(scenario_id: str) -> Scenario:
+def find(key: str) -> Scenario:
+    """The scenario with this id or short code (``tsh-3``); codes are matched regardless of case."""
     for s in load_all():
-        if s.id == scenario_id:
+        if key == s.id or key.lower() == s.code:
             return s
-    raise KeyError(scenario_id)
+    raise KeyError(key)
+
+
+def code_order(s: Scenario) -> tuple[str, int]:
+    """Sort key putting tsh-2 before tsh-10."""
+    prefix, _, number = s.code.rpartition("-")
+    return prefix, int(number) if number.isdigit() else 0
 
 
 def pick_variant(s: Scenario, seed: int | None = None, avoid: int | None = None) -> Scenario:

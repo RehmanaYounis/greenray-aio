@@ -12,21 +12,22 @@ def list_scenarios(ui: UI) -> None:
     prog = progress.load()["scenarios"]
     scenarios = sc.load_all()
     for d in DOMAINS:
-        items = [s for s in scenarios if s.domain == d]
+        items = sorted((s for s in scenarios if s.domain == d), key=sc.code_order)
         rows, styles = [], []
         for s in items:
             p = prog.get(s.id)
             mark = "✔" if p and p["passed"] else ("…" if p else " ")
-            rows.append([mark, s.id, s.title, s.difficulty])
+            rows.append([mark, s.code, s.id, s.title, s.difficulty])
             styles.append("green" if mark == "✔" else ("yellow" if mark == "…" else ""))
         ui.out("")
         if ui.color:
             ui.out(ui.bold(f"{d}  ({int(DOMAIN_WEIGHTS[d] * 100)}% of exam)"))
-            ui.out(ui.table(["", "Scenario", "Title", "Level"], rows, styles))
+            ui.out(ui.table(["", "Code", "Scenario", "Title", "Level"], rows, styles))
         else:
             ui.out(f"{d}  ({int(DOMAIN_WEIGHTS[d] * 100)}% of exam)")
-            for mark, sid, title, level in rows:
-                ui.out(f"  {mark} {sid:<38} {title}  {level}")
+            for mark, code, sid, title, level in rows:
+                ui.out(f"  {mark} {code:<7} {sid:<42} {title}  {level}")
+    ui.out(ui.dim("\nStart one with its code or id: greenray lab tsh-1"))
 
 
 def show_progress(ui: UI) -> None:

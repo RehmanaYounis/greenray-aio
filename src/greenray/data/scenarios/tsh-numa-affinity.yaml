@@ -1,4 +1,5 @@
 id: tsh-numa-affinity
+code: tsh-17
 title: The same training job is 35% slower whenever it lands on dgx-03
 domain: Troubleshooting and Optimization
 difficulty: hard

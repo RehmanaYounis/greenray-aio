@@ -1,4 +1,5 @@
 id: ins-bcm-add-node-category
+code: ins-2
 title: Bring a newly racked DGX into the right BCM category
 domain: Installation and Deployment
 difficulty: medium

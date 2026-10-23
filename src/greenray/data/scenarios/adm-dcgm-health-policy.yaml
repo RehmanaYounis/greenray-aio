@@ -1,4 +1,5 @@
 id: adm-dcgm-health-policy
+code: adm-5
 title: Put dgx-04 under proactive DCGM health and policy monitoring
 domain: Administration
 difficulty: medium

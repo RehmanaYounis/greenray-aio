@@ -1,4 +1,5 @@
 id: tsh-device-plugin-crashloop
+code: tsh-13
 title: NVIDIA device plugin in CrashLoopBackOff on re-imaged nodes
 domain: Troubleshooting and Optimization
 difficulty: hard

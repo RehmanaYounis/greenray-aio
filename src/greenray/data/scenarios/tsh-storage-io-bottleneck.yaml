@@ -1,4 +1,5 @@
 id: tsh-storage-io-bottleneck
+code: tsh-18
 title: GPUs starve during training - utilisation jumps between 0 and 100%
 domain: Troubleshooting and Optimization
 difficulty: hard

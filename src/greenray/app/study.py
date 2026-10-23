@@ -77,12 +77,12 @@ def recommend(data: dict | None = None, limit: int = 3) -> list[Pick]:
         return f"{s.difficulty}, not passed yet"
 
     todo = sorted((s for s in sc.load_all() if not recs.get(s.id, {}).get("passed")), key=rank)
-    picks = [Pick(s, f"greenray lab {s.id}", reason(s, False)) for s in todo]
+    picks = [Pick(s, f"greenray lab {s.code}", reason(s, False)) for s in todo]
     retry = sorted(
         (s for s in sc.load_all() if recs.get(s.id, {}).get("passed") and not recs[s.id].get("independent_passes")),
         key=rank,
     )
-    picks += [Pick(s, f"greenray incident --id {s.id}", reason(s, True)) for s in retry]
+    picks += [Pick(s, f"greenray incident --id {s.code}", reason(s, True)) for s in retry]
     return picks[:limit]
 
 
@@ -95,6 +95,7 @@ def show_next(ui: UI) -> None:
     s = top.scenario
     body = [
         f"{ui.bold(s.title)}",
+        f"{s.code} · {s.id}",
         f"{s.domain} · {s.difficulty} · ~{s.time_limit_min} min",
         f"Why: {top.why}",
         "",
@@ -132,7 +133,7 @@ def plan() -> list[tuple[str, str, list[list[str]]]]:
     scenarios = sc.load_all()
 
     def lab(s: Scenario) -> str:
-        return f"lab {s.id}"
+        return f"lab {s.code}"
 
     def by_level(items: list[Scenario]) -> list[Scenario]:
         return sorted(items, key=lambda s: (LEVEL.get(s.difficulty, 1), s.id))
@@ -170,8 +171,7 @@ def show_plan(ui: UI) -> None:
         rows, styles = [], []
         for d, acts in enumerate(days, 1):
             for i, act in enumerate(acts):
-                sid = act.removeprefix("lab ")
-                done = act.startswith("lab ") and recs.get(sid, {}).get("passed")
+                done = act.startswith("lab ") and recs.get(sc.find(act[4:]).id, {}).get("passed")
                 rows.append([f"Day {d}" if i == 0 else "", "✔" if done else "", act])
                 styles.append("green" if done else "")
         ui.out("")

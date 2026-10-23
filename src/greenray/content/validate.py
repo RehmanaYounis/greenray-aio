@@ -81,6 +81,24 @@ def coverage_ids() -> set[str]:
     return set(re.findall(r"`((?:ins|adm|wkl|tsh)-[a-z0-9-]+)`", COVERAGE_DOC.read_text(encoding="utf-8")))
 
 
+def code_problems(scenarios: list[sc.Scenario]) -> list[str]:
+    """Codes must be unique, carry the id's domain prefix and number each domain 1..n without gaps."""
+    problems = []
+    numbers: dict[str, list[int]] = {}
+    for s in scenarios:
+        prefix = s.id.split("-", 1)[0]
+        m = re.fullmatch(rf"{prefix}-([1-9]\d*)", s.code)
+        if not m:
+            problems.append(f"{s.id}: code must look like {prefix}-N, got {s.code!r}")
+            continue
+        numbers.setdefault(prefix, []).append(int(m.group(1)))
+    for prefix, nums in numbers.items():
+        expected = list(range(1, len(nums) + 1))
+        if sorted(nums) != expected:
+            problems.append(f"{prefix} codes are not 1..{len(nums)} without gaps or duplicates: {sorted(nums)}")
+    return problems
+
+
 def structural_problems() -> list[str]:
     """Problems that don't need the private solutions (safe to run in public CI)."""
     problems = []
@@ -94,6 +112,7 @@ def structural_problems() -> list[str]:
             problems.append(f"{s.id}: no hints")
         if not s.objectives:
             problems.append(f"{s.id}: no objectives")
+    problems += code_problems(scenarios)
     bank = qb.load_bank()
     if set(DOMAINS) - {q["domain"] for q in bank}:
         problems.append("some domains have no questions")

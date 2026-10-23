@@ -1,4 +1,5 @@
 id: tsh-thermal-throttle
+code: tsh-10
 title: "One slow GPU - thermal slowdown on a DGX node"
 domain: Troubleshooting and Optimization
 difficulty: medium

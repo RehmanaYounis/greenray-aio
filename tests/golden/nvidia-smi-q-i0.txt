@@ -1,0 +1,66 @@
+==============NVSMI LOG==============
+
+Driver Version                            : 550.90.07
+CUDA Version                              : 12.4
+Attached GPUs                             : 8
+GPU 00000000:18:00.0
+    Product Name                          : NVIDIA H100 80GB HBM3
+    Persistence Mode                      : Enabled
+    Serial Number                         : 1652301000417
+    GPU UUID                              : GPU-7f3a0100-1c2e-4b5a-9d0e-0100a1b2c3d4
+    VBIOS Version                         : 96.00.74.00.0C
+    Minor Number                          : 0
+    PCI
+        Bus Id                            : 00000000:18:00.0
+    MIG Mode
+        Current                           : Disabled
+        Pending                           : Disabled
+    Clocks Event Reasons
+        GPU Idle                          : Active
+        Applications Clocks Setting       : Not Active
+        SW Power Cap                      : Not Active
+        HW Slowdown                       : Not Active
+        HW Thermal Slowdown               : Not Active
+        HW Power Brake Slowdown           : Not Active
+        SW Thermal Slowdown               : Not Active
+        Sync Boost                        : Not Active
+    FB Memory Usage
+        Total                             : 81559 MiB
+        Used                              : 0 MiB
+        Free                              : 81559 MiB
+    Utilization
+        Gpu                               : 0 %
+    ECC Mode
+        Current                           : Enabled
+        Pending                           : Enabled
+    ECC Errors
+        Volatile
+            SRAM Correctable              : 0
+            DRAM Uncorrectable            : 0
+        Aggregate
+            SRAM Correctable              : 0
+            DRAM Uncorrectable            : 0
+    Remapped Rows
+        Correctable Error                 : 0
+        Uncorrectable Error               : 0
+        Pending                           : No
+        Remapping Failure Occurred        : No
+    Temperature
+        GPU Current Temp                  : 32 C
+        GPU Shutdown Temp                 : 92 C
+        GPU Slowdown Temp                 : 87 C
+        Memory Current Temp               : 30 C
+    GPU Power Readings
+        Power Draw                        : 71.00 W
+        Current Power Limit               : 700.00 W
+        Default Power Limit               : 700.00 W
+        Min Power Limit                   : 200.00 W
+        Max Power Limit                   : 700.00 W
+    Clocks
+        SM                                : 345 MHz
+        Memory                            : 2619 MHz
+    Applications Clocks
+        Graphics                          : 1980 MHz
+    Max Clocks
+        SM                                : 1980 MHz
+    Compute Mode                          : Default

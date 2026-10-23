@@ -1,4 +1,5 @@
 id: wkl-k8s-taint-toleration
+code: wkl-3
 title: GPU nodes are tainted - make the inference Deployment tolerate them
 domain: Workload Management
 difficulty: easy

@@ -2,7 +2,7 @@
 
 greenray                     interactive menu
 greenray list                scenarios by domain, with your status
-greenray lab <id>            hands-on scenario (practice mode)
+greenray lab <code|id>       hands-on scenario (practice mode)
 greenray mock [--labs-only]  full mock exam: 30 questions + 3 labs, 120 minutes
 greenray exam [-n] [-m] [-d] question drill
 greenray sandbox             healthy cluster, free practice
@@ -48,7 +48,7 @@ Type the number of a menu entry and press Enter, or q to quit.
 
 Everything here is also a command outside the menu, which is the quicker way once you know them:
   greenray next            what to practise next (start here)
-  greenray lab <id>        a scenario in guided mode; greenray list shows the ids
+  greenray lab tsh-1       a scenario in guided mode, by its code or id; greenray list shows both
   greenray incident        a random incident with the cause hidden
   greenray mock            the mock exam
   greenray --help          every command and flag
@@ -96,15 +96,16 @@ def menu(ui: UI) -> None:
             domain = DOMAINS[int(k) - 1] if k.isdigit() and 1 <= int(k) <= len(DOMAINS) else None
             start_incident(ui, domain=domain)
         elif choice == "1":
-            sid = words[1] if len(words) > 1 else ""
-            if not sid:
+            key = words[1] if len(words) > 1 else ""
+            if not key:
                 list_scenarios(ui)
-                sid = ui.ask("\nScenario id (blank to go back): ").strip()
-            if sid:
+                ui.set_completer([w for s in sc.load_all() for w in (s.code, s.id)], lambda: None)
+                key = ui.ask("\nLab code or id (blank to go back): ").strip()
+            if key:
                 try:
-                    run_lab(ui, sc.find(sid))
+                    run_lab(ui, sc.find(key))
                 except KeyError:
-                    ui.out(ui.red(f"No scenario '{sid}'. Choose 1 to see the list."))
+                    ui.out(ui.red(f"No scenario '{key}'. Use a code such as tsh-1 or an id from the list."))
         elif choice == "2":
             run_mock(ui)
         elif choice == "3":
@@ -200,12 +201,12 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="cmd")
     sub.add_parser("list", help="list scenarios by domain")
     lab = sub.add_parser("lab", help="start a hands-on scenario")
-    lab.add_argument("id")
+    lab.add_argument("id", help="scenario code (tsh-1) or id; greenray list shows both")
     lab.add_argument("--variant", type=int, metavar="N", help="pick variant N of a scenario that has several")
     inc = sub.add_parser("incident", help="investigate a random incident; root cause, id and title stay hidden")
     inc.add_argument("-d", "--domain", choices=DOMAINS)
     inc.add_argument("-t", "--topic", help="scenario tag, e.g. slurm, kubernetes, bcm, mig, infiniband")
-    inc.add_argument("--id", help="retry a specific scenario as an incident (its id is known, objectives stay hidden)")
+    inc.add_argument("--id", help="retry a specific scenario (code or id) as an incident; objectives stay hidden")
     mock = sub.add_parser("mock", help="full mock exam: 30 questions + 3 labs in 120 minutes")
     mock.add_argument("--labs-only", action="store_true", help="the 3 labs alone in 40 minutes (exam-day pacing)")
     ex = sub.add_parser("exam", help="timed question drill")
