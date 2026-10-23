@@ -4,6 +4,9 @@ All notable changes are listed here. The project follows [Semantic Versioning](h
 
 ## [1.3.0] - 2026-10-23
 
+### Changed
+- Merging into `main` is the release: the workflow tags the version in `pyproject.toml` and publishes it, with that version's changelog section as the release notes. Tags are no longer pushed by hand.
+
 ### Fixed
 - `srun --pty bash` inside an existing allocation opened no shell and reported "execve(): bash: No such file"; it now moves you onto the allocated node, and `exit` returns to the allocation without ending it.
 - `salloc` accepted `--pty`, which is an `srun` option; it is rejected as the real tool does.

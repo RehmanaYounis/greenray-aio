@@ -49,7 +49,7 @@ GreenRay AIO uses [semantic versioning](https://semver.org/):
 
 - A merged set of features bumps the **minor** version (1.0.0 → 1.1.0), a fix bumps the **patch** version (1.0.0 → 1.0.1), and a change that breaks existing scenario files bumps the **major** version.
 - In the same pull request, bump `version` in `pyproject.toml` and add a section to `CHANGELOG.md`.
-- To publish, tag `vX.Y.Z` on `main` (`git tag v1.1.0 && git push origin v1.1.0`). The release workflow then builds the package and creates the GitHub Release.
+- Merging into `main` publishes. The release workflow reads the version from `pyproject.toml`, creates the `vX.Y.Z` tag if it does not exist, and then publishes to PyPI and GHCR and creates the GitHub Release with that version's changelog section as its notes. A merge that keeps the version, such as a documentation change, releases nothing. The workflow refuses a version that has no changelog section.
 
 ## Content rules
 
