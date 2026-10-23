@@ -2,6 +2,15 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.0.0] - 2026-10-23
+
+The first stable release. The scenario format is now a commitment: a change that breaks existing scenario files bumps the major version.
+
+What 1.0 contains, for someone arriving fresh: a simulated four-node DGX H100 cluster managed by Base Command Manager with emulated `nvidia-smi`, DCGM, Slurm, Kubernetes with the GPU Operator, `cmsh`, InfiniBand tools, NCCL tests, Docker and NGC; 48 scenarios with reference solutions covering every topic of the NCP-AIO blueprint, from a six-lab on-ramp to cross-system incidents, most with variants; a grader that reads the cluster's end state, the evidence gathered and the safety of the work; guided and incident modes; a study path (`next`, `plan`), a mock exam in the current format with a report card, and reflection notes; installation from PyPI or as a Docker image; a documentation site.
+
+### Added
+- A demo recording on the README and the documentation home page.
+
 ## [0.9.3] - 2026-10-22
 
 ### Changed

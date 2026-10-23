@@ -45,10 +45,9 @@ The site's pages live in `docs/`. The architecture, contributing, security and c
 
 GreenRay AIO uses [semantic versioning](https://semver.org/):
 
-- Below 1.0, each merged set of features bumps the **minor** version (0.3.0 → 0.4.0), and fixes bump the **patch** version (0.3.0 → 0.3.1).
-- 1.0.0 is reserved for when the project goes public and the scenario format is stable.
+- A merged set of features bumps the **minor** version (1.0.0 → 1.1.0), a fix bumps the **patch** version (1.0.0 → 1.0.1), and a change that breaks existing scenario files bumps the **major** version.
 - In the same pull request, bump `version` in `pyproject.toml` and add a section to `CHANGELOG.md`.
-- To publish, tag `vX.Y.Z` on `main` (`git tag v0.4.0 && git push origin v0.4.0`). The release workflow then builds the package and creates the GitHub Release.
+- To publish, tag `vX.Y.Z` on `main` (`git tag v1.1.0 && git push origin v1.1.0`). The release workflow then builds the package and creates the GitHub Release.
 
 ## Content rules
 
