@@ -1,6 +1,6 @@
 [project]
 name = "greenray-aio"
-version = "1.3.0"
+version = "1.3.1"
 description = "GreenRay AIO: hands-on lab simulator and mock exam for the NVIDIA NCP-AIO (AI Operations) certification"
 readme = "README.md"
 requires-python = ">=3.10"

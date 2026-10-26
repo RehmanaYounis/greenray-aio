@@ -45,3 +45,17 @@ def test_labs_only_mock_skips_questions():
 
     exam = progress.load()["exams"][-1]
     assert exam["kind"] == "labs" and exam["total"] == 0 and len(exam["labs"]) == 3
+
+
+def test_exam_menu_can_be_left_without_grading_and_answers_unknown_input():
+    ui = ScriptedUI(["q", "a", "q", "bogus", "x", "y"])
+    mock.run_mock(ui, seed=1)
+    assert "Unknown choice 'bogus'" in ui.text and "Exam abandoned." in ui.text
+    assert "Result:" not in ui.text and mock.progress.load()["exams"] == []
+    assert "q to return to the exam menu" in ui.text
+
+
+def test_ctrl_c_in_a_question_returns_to_the_menu_and_at_the_menu_offers_to_leave():
+    ui = ScriptedUI(["q", KeyboardInterrupt(), KeyboardInterrupt(), "y"])
+    mock.run_mock(ui, seed=1)
+    assert "Exam menu" in ui.text and "Exam abandoned." in ui.text and mock.progress.load()["exams"] == []

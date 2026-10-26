@@ -44,6 +44,8 @@ The real exam, per NVIDIA's certification page at the time of writing, is 30 mul
 
 NVIDIA does not publish how the two sections are weighted or the pass mark. The mock weights questions and labs 50/50 and uses a 70% practice target; treat the number as a guide, not a prediction.
 
+Inside the questions, answer with letters, `s` skips, `f` flags a question for review and `q` returns to the exam menu. From the menu, `f` finishes and grades; `x` leaves without grading or recording anything.
+
 Every mock ends with a **report card**: a bar per domain combining your questions and labs, and a practise-next list built from the labs that fell short, the labs linked from the questions you missed, and your weakest domain. The missed and flagged questions can be reviewed with their explanations straight away.
 
 ## A four-week outline

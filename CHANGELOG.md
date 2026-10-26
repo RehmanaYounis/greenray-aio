@@ -2,6 +2,11 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.3.1] - 2026-10-26
+
+### Fixed
+- The mock exam menu can be left without grading (`x`), says what it does with input it does not understand, and the questions say what `s`, `f` and `q` do. Ctrl-C inside a question returns to the exam menu, and at the menu it offers to leave, instead of ending the program without a record.
+
 ## [1.3.0] - 2026-10-23
 
 ### Changed

@@ -13,8 +13,14 @@ from .ui import UI
 PRACTICE_PASS_PCT = 70.0  # NVIDIA does not publish a cut score; this is a practice target
 
 
-def ask_questions(ui: UI, qs: list[dict], deadline: float, answers: dict, flagged: set) -> None:
-    """Ask each unanswered question once, then revisit skipped ones. Mutates ``answers``/``flagged``."""
+def ask_questions(
+    ui: UI, qs: list[dict], deadline: float, answers: dict, flagged: set, leave: str = "finish early"
+) -> None:
+    """Ask each unanswered question once, then revisit skipped ones. Mutates ``answers``/``flagged``.
+
+    ``leave`` says where ``q`` takes the learner, since a mock returns to its menu and a drill ends.
+    """
+    ui.out(ui.dim(f"Answer with letters (B, or A C for 'choose two'). s skips, f flags for review, q to {leave}."))
 
     def ask(i: int) -> str:
         q = qs[i]
@@ -26,7 +32,11 @@ def ask_questions(ui: UI, qs: list[dict], deadline: float, answers: dict, flagge
         for j, c in enumerate(q["choices"]):
             ui.out(f"  {qb.LETTERS[j]}. {c}")
         while True:
-            raw = ui.ask("> ").strip().lower()
+            try:
+                raw = ui.ask("> ").strip().lower()
+            except KeyboardInterrupt:
+                ui.out("")
+                return "quit"
             if raw in ("q", "quit"):
                 return "quit"
             if raw == "s":
@@ -102,7 +112,6 @@ def run_exam(ui: UI, n: int = 60, minutes: int = 120, domain: str | None = None)
     qs = qb.pick(bank, n, domain)
     scope = f"domain: {domain}" if domain else "weighted by the official blueprint"
     ui.out(ui.bold(f"\nQuestion drill: {len(qs)} questions, {minutes} minutes, {scope}"))
-    ui.out("Answer with letters (B, or A C for 'choose two'). 's' skip, 'f' flag, 'q' finish early.\n")
     start = time.time()
     answers: dict = {}
     flagged: set = set()
