@@ -17,7 +17,7 @@ from ..content import scenarios as sc
 from ..content.domains import DOMAINS
 from . import progress
 from .exam import PRACTICE_PASS_PCT, ask_questions, load_scored_bank, offer_review
-from .lab import LabSession, read_line, run_exam_lab, show_results, show_solution
+from .lab import LabSession, run_exam_lab, show_results, show_solution
 from .study import ON_RAMP
 from .ui import UI
 
@@ -122,9 +122,14 @@ def run_mock(ui: UI, seed: int | None = None, labs_only: bool = False) -> None:
             for i, lab in enumerate(labs, 1):
                 ui.out(f"  {i}) Lab {i}: {lab.scenario_required.title}")
             ui.out("  f) Finish and grade")
-            choice = read_line(ui, "> ").strip().lower()
+            ui.out("  x) Leave without grading")
+            try:
+                choice = ui.ask("> ").strip().lower()
+            except KeyboardInterrupt:  # Ctrl-C at the menu is a request to leave, not a cancelled line
+                ui.out("")
+                choice = "x"
             if choice == "q" and qs:
-                ask_questions(ui, qs, deadline, answers, flagged)
+                ask_questions(ui, qs, deadline, answers, flagged, leave="return to the exam menu")
             elif choice.isdigit() and 1 <= int(choice) <= len(labs):
                 lab_no = int(choice)
                 touched.add(lab_no)
@@ -134,15 +139,22 @@ def run_mock(ui: UI, seed: int | None = None, labs_only: bool = False) -> None:
                     return f"{q_part}lab {n}/{len(labs)}"
 
                 run_exam_lab(ui, labs[lab_no - 1], deadline, status=status)
-            elif choice in ("f", "finish", "quit"):
+            elif choice in ("f", "finish"):
                 if ui.ask("Finish the exam now? [y/N] ").strip().lower() == "y":
                     break
+            elif choice in ("x", "exit", "quit", "abandon"):
+                if ui.ask("Leave the exam? Nothing is graded or recorded. [y/N] ").strip().lower() == "y":
+                    ui.out(ui.dim("Exam abandoned."))
+                    return
+            elif choice:
+                ui.out(ui.red(f"Unknown choice '{choice}'. Enter q, a lab number, f to finish, or x to leave."))
         else:
             ui.out(ui.red("\nTime is up. Grading."))
 
     elapsed = (time.time() - start) / 60
     res = qb.score(qs, answers)
-    lab_scores = {lab.scenario_required.id: lab.score() for lab in labs}
+    # a lab that was never opened scores nothing: its untouched invariants are not the learner's work
+    lab_scores = {lab.scenario_required.id: lab.score() if i in touched else 0.0 for i, lab in enumerate(labs, 1)}
     lab_pct = 100.0 * sum(lab_scores.values()) / max(1, len(lab_scores))
     total = lab_pct if labs_only else combined_score(res["pct"], list(lab_scores.values()))
     verdict = ui.green("PASS") if total >= PRACTICE_PASS_PCT else ui.red("NOT YET")
@@ -150,7 +162,10 @@ def run_mock(ui: UI, seed: int | None = None, labs_only: bool = False) -> None:
     ui.out(ui.bold(f"\nResult: {total:.1f}%  {verdict}   ({elapsed:.0f} of {minutes} min used)"))
     if qs:
         ui.out(f"  Questions: {res['correct']}/{res['total']} = {res['pct']:.0f}%")
-    for lab in labs:
+    for i, lab in enumerate(labs, 1):
+        if i not in touched:
+            ui.out(f"  Lab {lab.scenario_required.id}: not attempted")
+            continue
         ui.out(f"  Lab {lab.scenario_required.id}: {lab_scores[lab.scenario_required.id] * 100:.0f}% of objectives")
         show_results(ui, lab.grade(), kinds=lab.scenario_required.kinds)
     if not labs_only:

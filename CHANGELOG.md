@@ -2,6 +2,13 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.3.1] - 2026-10-26
+
+### Fixed
+- The mock exam menu can be left without grading (`x`), says what it does with input it does not understand, and the questions say what `s`, `f` and `q` do. Ctrl-C inside a question returns to the exam menu, and at the menu it offers to leave, instead of ending the program without a record.
+- A mock-exam lab that was never opened scores nothing and is reported as not attempted; before, its invariant checks ("defq is still up") counted as work.
+- In the question review the whole correct and chosen lines are coloured, not only the mark, and explanations are blue rather than dim.
+
 ## [1.3.0] - 2026-10-23
 
 ### Changed
