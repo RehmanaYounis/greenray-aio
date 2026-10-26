@@ -74,6 +74,10 @@ class UI:
     def yellow(self, s: str) -> str:
         return self._c("33", s)
 
+    def level(self, difficulty: str, s: str) -> str:
+        """Easy green, medium yellow, hard red: the one colour code used for labs everywhere."""
+        return {"easy": self.green, "medium": self.yellow, "hard": self.red}.get(difficulty, self.bold)(s)
+
     def blue(self, s: str) -> str:
         return self._c("94", s)
 
@@ -133,11 +137,11 @@ class UI:
     def out(self, s: str = "") -> None:
         print(s)
 
-    def ask(self, prompt: str) -> str:
-        """Read a line; EOF (Ctrl-D / end of piped input) reads as ``quit``."""
+    def ask(self, prompt: str, typed: bool = False) -> str:
+        """Read a line; EOF (Ctrl-D / end of piped input) reads as ``quit``. ``typed`` colours the input."""
         try:
             if self.interactive:
-                return self._line_reader().read(prompt)
+                return self._line_reader().read(prompt, typed)
             return input(prompt)
         except EOFError:
             return "quit"

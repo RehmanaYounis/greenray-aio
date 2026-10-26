@@ -118,13 +118,14 @@ def run_mock(ui: UI, seed: int | None = None, labs_only: bool = False) -> None:
             left = int((deadline - time.time()) // 60)
             ui.out(ui.bold(f"\n--- Exam menu ({left} min left) ---"))
             if qs:
-                ui.out(f"  q) Questions ({len(answers)}/{len(qs)} answered)")
+                ui.out(ui.cyan(f"  q) Questions ({len(answers)}/{len(qs)} answered)"))
             for i, lab in enumerate(labs, 1):
-                ui.out(f"  {i}) Lab {i}: {lab.scenario_required.title}")
-            ui.out("  f) Finish and grade")
-            ui.out("  x) Leave without grading")
+                s = lab.scenario_required
+                ui.out(ui.level(s.difficulty, f"  {i}) Lab {i}: {s.title}"))
+            ui.out(ui.blue("  f) Finish and grade"))
+            ui.out(ui.blue("  x) Leave without grading"))
             try:
-                choice = ui.ask("> ").strip().lower()
+                choice = ui.ask("> ", typed=True).strip().lower()
             except KeyboardInterrupt:  # Ctrl-C at the menu is a request to leave, not a cancelled line
                 ui.out("")
                 choice = "x"

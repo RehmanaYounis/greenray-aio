@@ -2,6 +2,11 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.3.2] - 2026-10-26
+
+### Changed
+- One colour code for labs everywhere: easy green, medium yellow, hard red, in the lab list, `next` and the mock-exam menu. In the exam menu the questions entry is cyan and the two ways out are blue; a question is bold above its plain choices; what you type at an exam prompt is cyan.
+
 ## [1.3.1] - 2026-10-26
 
 ### Fixed

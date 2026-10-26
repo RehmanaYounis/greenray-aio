@@ -27,13 +27,13 @@ def ask_questions(
         left = deadline - time.time()
         if left <= 0:
             return "quit"
-        ui.out(ui.bold(f"\nQ{i + 1}/{len(qs)}  [{q['domain']}]  ({int(left // 60)}m left)"))
-        ui.out(q["question"].rstrip())
+        ui.out(ui.bold(f"\nQ{i + 1}/{len(qs)}") + ui.dim(f"  [{q['domain']}]  ({int(left // 60)}m left)"))
+        ui.out(ui.bold(q["question"].rstrip()))
         for j, c in enumerate(q["choices"]):
             ui.out(f"  {qb.LETTERS[j]}. {c}")
         while True:
             try:
-                raw = ui.ask("> ").strip().lower()
+                raw = ui.ask("> ", typed=True).strip().lower()
             except KeyboardInterrupt:
                 ui.out("")
                 return "quit"

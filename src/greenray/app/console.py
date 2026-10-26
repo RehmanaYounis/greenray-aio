@@ -13,8 +13,11 @@ from prompt_toolkit.completion import CompleteEvent, Completer, Completion
 from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.history import FileHistory, InMemoryHistory
+from prompt_toolkit.styles import Style
 
 from ..core.shell import Context
+
+TYPED = Style.from_dict({"": "ansicyan"})  # answers and menu choices, so they stand apart from the text around them
 
 # Commands whose first argument is a host rather than a file.
 HOST_COMMANDS = {"ssh", "scp", "ping"}
@@ -79,5 +82,7 @@ class LineReader:
         self.session: PromptSession = PromptSession(history=history, enable_history_search=True)
         self.completer: Completer | None = None
 
-    def read(self, prompt: str) -> str:
-        return self.session.prompt(ANSI(prompt), completer=self.completer, complete_while_typing=False)
+    def read(self, prompt: str, typed: bool = False) -> str:
+        return self.session.prompt(
+            ANSI(prompt), completer=self.completer, complete_while_typing=False, style=TYPED if typed else None
+        )

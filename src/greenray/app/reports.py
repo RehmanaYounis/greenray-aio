@@ -17,7 +17,7 @@ def list_scenarios(ui: UI) -> None:
         for s in items:
             p = prog.get(s.id)
             mark = "✔" if p and p["passed"] else ("…" if p else " ")
-            rows.append([mark, s.code, s.id, s.title, s.difficulty])
+            rows.append([mark, s.code, s.id, s.title, ui.level(s.difficulty, s.difficulty)])
             styles.append("green" if mark == "✔" else ("yellow" if mark == "…" else ""))
         ui.out("")
         if ui.color:

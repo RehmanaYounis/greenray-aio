@@ -24,7 +24,7 @@ class ScriptedUI(UI):
     def out(self, s=""):
         self.output.append(s)
 
-    def ask(self, prompt):
+    def ask(self, prompt, typed=False):
         self.prompts.append(prompt)
         line = next(self.lines, "quit")
         if isinstance(line, BaseException):
