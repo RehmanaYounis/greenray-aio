@@ -153,7 +153,8 @@ def run_mock(ui: UI, seed: int | None = None, labs_only: bool = False) -> None:
 
     elapsed = (time.time() - start) / 60
     res = qb.score(qs, answers)
-    lab_scores = {lab.scenario_required.id: lab.score() for lab in labs}
+    # a lab that was never opened scores nothing: its untouched invariants are not the learner's work
+    lab_scores = {lab.scenario_required.id: lab.score() if i in touched else 0.0 for i, lab in enumerate(labs, 1)}
     lab_pct = 100.0 * sum(lab_scores.values()) / max(1, len(lab_scores))
     total = lab_pct if labs_only else combined_score(res["pct"], list(lab_scores.values()))
     verdict = ui.green("PASS") if total >= PRACTICE_PASS_PCT else ui.red("NOT YET")
@@ -161,7 +162,10 @@ def run_mock(ui: UI, seed: int | None = None, labs_only: bool = False) -> None:
     ui.out(ui.bold(f"\nResult: {total:.1f}%  {verdict}   ({elapsed:.0f} of {minutes} min used)"))
     if qs:
         ui.out(f"  Questions: {res['correct']}/{res['total']} = {res['pct']:.0f}%")
-    for lab in labs:
+    for i, lab in enumerate(labs, 1):
+        if i not in touched:
+            ui.out(f"  Lab {lab.scenario_required.id}: not attempted")
+            continue
         ui.out(f"  Lab {lab.scenario_required.id}: {lab_scores[lab.scenario_required.id] * 100:.0f}% of objectives")
         show_results(ui, lab.grade(), kinds=lab.scenario_required.kinds)
     if not labs_only:

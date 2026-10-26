@@ -74,11 +74,16 @@ def review(ui: UI, q: dict, given: set | None) -> None:
     ui.out(ui.bold(f"\n[{q['id']}] {q['domain']}"))
     ui.out(q["question"].rstrip())
     for j, c in enumerate(q["choices"]):
-        mark = ui.green("✔") if j in q["answer"] else (ui.red("✘") if given and j in given else " ")
-        ui.out(f"  {mark} {qb.LETTERS[j]}. {c}")
+        line = f"{qb.LETTERS[j]}. {c}"
+        if j in q["answer"]:
+            ui.out("  " + ui.green(f"✔ {line}"))
+        elif given and j in given:
+            ui.out("  " + ui.red(f"✘ {line}"))
+        else:
+            ui.out(f"    {line}")
     ui.out(f"Your answer: {yours}   Correct: {right}")
     if q.get("explanation"):
-        ui.out(ui.dim(q["explanation"].rstrip()))
+        ui.out(ui.blue(q["explanation"].rstrip()))
     if q.get("lab"):
         ui.out(ui.yellow(f"Practise hands-on: greenray lab {sc.find(q['lab']).code}"))
 

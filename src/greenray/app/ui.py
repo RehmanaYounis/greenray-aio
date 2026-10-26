@@ -74,6 +74,9 @@ class UI:
     def yellow(self, s: str) -> str:
         return self._c("33", s)
 
+    def blue(self, s: str) -> str:
+        return self._c("94", s)
+
     def cyan(self, s: str) -> str:
         return self._c("36", s)
 

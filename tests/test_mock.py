@@ -59,3 +59,10 @@ def test_ctrl_c_in_a_question_returns_to_the_menu_and_at_the_menu_offers_to_leav
     ui = ScriptedUI(["q", KeyboardInterrupt(), KeyboardInterrupt(), "y"])
     mock.run_mock(ui, seed=1)
     assert "Exam menu" in ui.text and "Exam abandoned." in ui.text and mock.progress.load()["exams"] == []
+
+
+def test_untouched_labs_score_nothing_and_say_so():
+    ui = ScriptedUI(["q"] + ["a"] * 30 + ["f", "y", "n", "n", "n", "n"])
+    mock.run_mock(ui, seed=1)
+    assert ui.text.count("not attempted") == 3 and "% of objectives" not in ui.text
+    assert all(v == 0 for v in mock.progress.load()["exams"][-1]["labs"].values())
