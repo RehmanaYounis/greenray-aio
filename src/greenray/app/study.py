@@ -96,7 +96,7 @@ def show_next(ui: UI) -> None:
     body = [
         f"{ui.bold(s.title)}",
         f"{s.code} · {s.id}",
-        f"{s.domain} · {s.difficulty} · ~{s.time_limit_min} min",
+        f"{s.domain} · {ui.level(s.difficulty, s.difficulty)} · ~{s.time_limit_min} min",
         f"Why: {top.why}",
         "",
         f"  {top.command}",
