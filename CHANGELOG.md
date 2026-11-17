@@ -2,6 +2,17 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - 2026-11-17
+
+### Added
+- BCM-managed Slurm in `cmsh`: `wlm` mode with the Slurm instance and its `jobqueue` submode (`list`, `show`, `add`, `set nodes|maxtime|defaulttime|default|state|qos|allowqos`, `remove`, `commit`), with the checks the real tool makes on node lists, time limits and states. A commit regenerates the `NodeName` and `PartitionName` lines of `/etc/slurm/slurm.conf` from the model and reconfigures `slurmctld`, and so does `systemctl restart cmd` on the head node, so a partition added to the file by hand disappears the way it does on a real cluster.
+- `configurationoverlay` mode: the five overlays `cm-wlm-setup` creates (`slurm-server`, `slurm-client`, `slurm-client-gpu`, `slurm-submit`, `slurm-accounting`) with `list`, `show`, `set priority`, `append`/`removefrom categories|nodes` and `commit`. A node is a Slurm client when an overlay with the `slurmclient` role covers it or its category; only `slurm-client-gpu` puts `Gres=gpu:h100:8` on its `NodeName` line.
+- Bulk operations in device and category mode: `foreach -c <categories> (...)`, `foreach -n <hostlist> (...)` and `range -n <hostlist>` followed by `get`, `set`, `clear` or `commit` on the selection.
+- `kernelmodules` submode of a software image (`list`, `add`, `remove`, `commit`); a commit rebuilds the image's initial ramdisk and the modules load when a node boots from the image, not before.
+- `cm-wlm-setup` and `cm-kubernetes-setup` on the head node explain what the interactive wizards produced and where it lives in `cmsh`; `cm-kubernetes-setup --add-user` and `--list-users` work. `cmsh -c "main; events"` prints the BCM event log.
+- Three scenarios: `adm-bcm-wlm-default-queue` (adm-13, a hand-added partition vanished when cmd restarted; two variants), `adm-bcm-wlm-new-queue` (adm-14) and `ins-bcm-overlay-new-category` (ins-10, a node moved to a new category is absent from `sinfo`). 51 scenarios in all.
+- Twelve questions on BCM-managed Slurm, configuration overlays, the setup wizards, `foreach`, `kernelmodules` and node-level image overrides. 178 questions in all.
+
 ## [1.3.2] - 2026-10-26
 
 ### Changed

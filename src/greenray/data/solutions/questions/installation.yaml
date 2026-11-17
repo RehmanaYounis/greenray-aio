@@ -472,3 +472,52 @@ ins-052:
     configuration, including GPU GRES. Hand-compiling on each node is slow and
     error-prone. Jobs aren't forwarded over SSH by BCM. The GPU Operator doesn't
     install Slurm.
+
+ins-053:
+  answer: [0]
+  explanation: |
+    cm-wlm-setup expresses the deployment as configuration overlays: slurm-server
+    (head node), slurm-client and slurm-client-gpu (the GPU node category),
+    slurm-submit and slurm-accounting. Each overlay lists the categories and
+    nodes it covers and the roles it hands them. The partition object holds the
+    cluster-wide settings, and wlm mode holds the Slurm instance and its queues,
+    not the role assignment.
+
+ins-054:
+  answer: [0]
+  explanation: |
+    A node is a Slurm compute node in BCM because an overlay with the slurmclient
+    role covers its category or the node itself. A fresh category is on no
+    overlay, so the nodes lose the role when they move; CMDaemon writes slurm.conf
+    from the roles and the NodeName lines for those nodes disappear, which makes
+    slurmctld forget them entirely rather than mark them DOWN. slurmd is in the
+    image; scontrol create does not add nodes; MUNGE keys are not tied to
+    categories.
+
+ins-055:
+  answer: [0]
+  explanation: |
+    Both overlays carry the slurmclient role. The GPU overlay adds the role's
+    GPU configuration, which is what puts Gres=gpu:... on the NodeName lines and
+    makes --gpus requests schedulable. Priority decides which overlay's settings
+    win for a node covered by several overlays that assign the same role. The
+    overlays have nothing to do with head versus compute nodes or Slurm
+    versions, and neither is a backup.
+
+ins-056:
+  answer: [0]
+  explanation: |
+    Overlays are edited in configurationoverlay mode: select the overlay, append
+    the category to its categories list, commit. There is no overlay property on
+    a category, no clients property on the wlm instance, and assigning the role
+    directly on every node bypasses the overlay, so the next node added to the
+    category would miss it.
+
+ins-057:
+  answer: [0]
+  explanation: |
+    cm-kubernetes-setup --add-user takes an existing BCM user, creates the
+    Kubernetes role binding and the kubeconfig in that user's home directory.
+    Copying the admin kubeconfig hands out cluster-admin rights; kubectl has no
+    create user command; the docker group has nothing to do with Kubernetes
+    access.

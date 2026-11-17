@@ -1,0 +1,48 @@
+id: adm-bcm-wlm-new-queue
+code: adm-14
+title: Add a short queue on two nodes, the BCM way
+domain: Administration
+difficulty: easy
+time_limit_min: 10
+tags: [bcm, cmsh, wlm, slurm, partition, jobqueue]
+briefing: |
+  Change request CR-140, approved for today:
+
+    "Create a Slurm partition called short for test runs: nodes dgx-03 and
+    dgx-04 only, maximum job time 4 hours. defq stays as it is and remains the
+    default partition."
+
+  This cluster's Slurm is managed by Base Command Manager. Make the change so
+  that it is still there after CMDaemon regenerates slurm.conf, then confirm
+  that the controller shows the new partition.
+objectives:
+  - A job queue named short exists in BCM's Slurm configuration with nodes dgx-03 and dgx-04 and MaxTime 4:00:00, not the default, committed
+  - slurm.conf on bcm-head and scontrol show partition agree with it
+  - defq is unchanged and still the default
+  - slurm.conf was not edited by hand
+setup:
+  - python: |
+      from greenray.commands.cmsh import bcm_init
+      from greenray.commands.cmsh.wlm import wlm_init
+      bcm_init(state)
+      wlm_init(state)
+checks:
+  - desc: "short is a job queue in wlm mode: nodes dgx-[03-04], MaxTime 4:00:00, not default, committed"
+    expr: "'short' in bcm.wlm.slurm.jobqueues and bcm.wlm.slurm.jobqueues['short'].nodes == 'dgx-[03-04]' and bcm.wlm.slurm.jobqueues['short'].maxtime in ('4:00:00', '04:00:00', '0-04:00:00') and bcm.wlm.slurm.jobqueues['short'].default is False and not bcm.uncommitted"
+  - desc: slurm.conf carries the generated PartitionName=short line and slurmctld knows the partition with a 4-hour limit
+    expr: "re.search(r'^PartitionName=short Nodes=dgx-\\[03-04\\]', file('bcm-head', '/etc/slurm/slurm.conf'), re.M) is not None and 'short' in slurm.partitions and slurm.partitions['short'].max_time in ('4:00:00', '04:00:00', '0-04:00:00')"
+  - desc: defq is unchanged and still the default
+    expr: "bcm.wlm.slurm.jobqueues['defq'].default is True and bcm.wlm.slurm.jobqueues['defq'].nodes == 'dgx-[01-04]' and slurm.partitions['defq'].get('default') is True"
+  - desc: you confirmed the result with sinfo or scontrol
+    kind: evidence
+    expr: ran(r'^(sinfo|scontrol show (partition|part))')
+  - desc: slurm.conf was not edited by hand
+    kind: safety
+    expr: not ran(r'^(nano|vim?|sed -i|tee)\b.*slurm\.conf$')
+hints:
+  - "Read the first lines of /etc/slurm/slurm.conf on bcm-head: they say who owns the file. On a BCM cluster partitions are objects in cmsh, under the workload manager: cmsh -c \"wlm; list\" and then use the instance it shows."
+  - "Inside the instance, jobqueue is a submode: list shows the queues, use defq; show shows the properties a queue has. add <name> creates a new one; set works on nodes, maxtime and default."
+  - "Nothing happens until commit. After it, grep PartitionName /etc/slurm/slurm.conf and scontrol show partition short should both show the new queue; CMDaemon wrote the file and reconfigured the controller for you."
+references:
+  - NVIDIA Base Command Manager 10 Administrator Manual, Slurm configuration in cmsh (wlm mode, job queues)
+  - Slurm slurm.conf man page (PartitionName, MaxTime)

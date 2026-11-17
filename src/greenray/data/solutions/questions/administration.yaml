@@ -331,3 +331,68 @@ adm-039:
     the job's own QOS. Restricting allowed QOS is done with AllowQos. The
     default QOS comes from the association (DefaultQOS). It is not ignored
     with multifactor priority.
+
+adm-040:
+  answer: [0]
+  explanation: |
+    On a BCM cluster slurm.conf is a generated file. CMDaemon writes it from
+    its Slurm configuration (what cmsh shows under wlm) on every commit in that
+    mode and every time cmd starts, for example after a package upgrade or a
+    reboot of the head node. A line added by hand is not in the model and does
+    not survive the next write. scontrol reconfigure has no expiry, slurmctld
+    never removes partitions, and Slurm packages do not overwrite a site's
+    slurm.conf.
+
+adm-041:
+  answer: [0]
+  explanation: |
+    Partitions are job queues of the Slurm instance in wlm mode. partition mode
+    in cmsh is the BCM cluster partition (the base partition with cluster-wide
+    settings), which has nothing to do with Slurm partitions. Categories and
+    devices have no partition property.
+
+adm-042:
+  answer: [0]
+  explanation: |
+    cmsh warns but commits. Both PartitionName lines get Default=YES and Slurm
+    applies the last Default=YES it reads, so which queue ends up default
+    depends on the order of the lines. Clear the old default first, then set the
+    new one. Nothing is rejected or deleted, and Slurm has exactly one default
+    partition.
+
+adm-043:
+  answer: [0]
+  explanation: |
+    A device-level softwareimage overrides the category's image, and
+    imageupdate sends the node its effective image, which is why the event log
+    names the old one. device show on the node, or softwareimage usedby on the
+    old image, shows the override; clear softwareimage and commit removes it.
+    Repositories, install mode and BMC firmware do not change which image
+    CMDaemon sends.
+
+adm-044:
+  answer: [0]
+  explanation: |
+    foreach runs the commands in parentheses once for each node selected by -c
+    (category) or -n (hostlist), in device mode. set has no -c option, a
+    category cannot push a device property to its nodes with a flag, and cmsh
+    has no shell-style loops.
+
+adm-045:
+  answer: [0]
+  explanation: |
+    kernelmodules lists the modules the image loads at boot; committing the list
+    rebuilds the image's initial ramdisk. Running nodes keep what they have
+    until they boot from the updated image. The setting is per image, not per
+    head node, there is nothing to edit on the nodes, and lsmod lists every
+    loaded module.
+
+adm-046:
+  answer: [0]
+  explanation: |
+    scontrol update changes the controller's in-memory configuration and is
+    gone when slurmctld re-reads slurm.conf, which on BCM happens at every
+    regeneration. The durable place is the job queue in cmsh (set maxtime,
+    commit), after which CMDaemon writes the file and reconfigures slurmctld.
+    slurmctld never writes slurm.conf, a restart is not required, and MaxTime
+    is a partition property.

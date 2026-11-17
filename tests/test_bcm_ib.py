@@ -143,6 +143,129 @@ def test_cmsh_drain_sets_slurm_drain():
     assert sn.state == "DRAIN" and sn.reason == "fan"
 
 
+# ---------------------------------------------------------------- BCM-managed Slurm (wlm, overlays)
+
+CONF = "/etc/slurm/slurm.conf"
+
+
+def test_wlm_lists_the_instance_and_its_queues():
+    s = sh()
+    assert "slurm" in s.run('cmsh -c "wlm; list"') and "Slurm" in s.run('cmsh -c "wlm; use slurm; show"')
+    out = s.run('cmsh -c "wlm; use slurm; jobqueue; list"')
+    assert "defq" in out and "dgx-[01-04]" in out and "yes" in out
+
+
+def test_jobqueue_commit_regenerates_file_and_controller():
+    s = sh()
+    out = s.run('cmsh -c "wlm; use slurm; jobqueue; add short; set nodes dgx-03,dgx-04; set maxtime 4:00:00; commit"')
+    assert "slurmctld reconfigured" in out
+    conf = s.ctx.state.nodes["bcm-head"].files[CONF]
+    assert "PartitionName=short Nodes=dgx-[03-04] Default=NO MaxTime=4:00:00 State=UP" in conf
+    assert s.ctx.state.slurm.partitions["short"].max_time == "4:00:00"
+    assert "short" in s.run("sinfo")
+    s.run('cmsh -c "wlm; use slurm; jobqueue; remove short; commit"')
+    assert "short" not in s.ctx.state.nodes["bcm-head"].files[CONF] and "short" not in s.ctx.state.slurm.partitions
+
+
+def test_jobqueue_properties_are_validated():
+    s = sh()
+    for cmd, msg in (
+        ("use defq; set maxtime bogus", "invalid time"),
+        ("use defq; set nodes dgx-09", "unknown compute node"),
+        ("use defq; set default maybe", "yes or no"),
+        ("use defq; set state SLEEPY", "state must be"),
+        ("use defq; set name other", "read-only"),
+    ):
+        out = s.run(f'cmsh -c "wlm; use slurm; jobqueue; {cmd}" && echo OK')
+        assert msg in out and "OK" not in out, (cmd, out)
+    assert not s.ctx.state.bcm.uncommitted
+
+
+def test_two_default_queues_warn_and_slurm_keeps_the_last():
+    s = sh()
+    out = s.run('cmsh -c "wlm; use slurm; jobqueue; add gpu; set nodes dgx-01; set default yes; commit"')
+    assert "more than one default" in out
+    assert s.ctx.state.slurm.partitions["gpu"].get("default") is True
+
+
+def test_hand_added_partition_is_lost_when_cmd_restarts():
+    s = sh()
+    s.run(f"echo 'PartitionName=tmp Nodes=dgx-01 Default=NO MaxTime=1:00:00 State=UP' >> {CONF}")
+    s.run("scontrol reconfigure")
+    assert "tmp" in s.ctx.state.slurm.partitions
+    s.run("systemctl restart cmd")
+    assert "tmp" not in s.ctx.state.nodes["bcm-head"].files[CONF] and "tmp" not in s.ctx.state.slurm.partitions
+    assert any("cmd started" in e for e in s.ctx.state.bcm.events)
+
+
+def test_overlay_append_category_brings_node_into_slurm_with_gpus():
+    s = sh()
+    bcm = s.ctx.state.bcm
+    s.run('cmsh -c "category; clone dgx-h100 dgx-h100-b; commit"')
+    s.run('cmsh -c "device; use dgx-04; set category dgx-h100-b; commit"')
+    s.run("systemctl restart cmd")
+    assert "dgx-04" not in s.ctx.state.slurm.nodes
+    assert "NodeName=dgx-[01-03]" in s.ctx.state.nodes["bcm-head"].files[CONF]
+    s.run('cmsh -c "configurationoverlay; use slurm-client; append categories dgx-h100-b; commit"')
+    sn = s.ctx.state.slurm.nodes["dgx-04"]
+    assert sn.state == "IDLE" and sn.gres in ("", "(null)")  # the plain client overlay knows nothing about GPUs
+    s.run('cmsh -c "configurationoverlay; use slurm-client-gpu; append categories dgx-h100-b; commit"')
+    assert s.ctx.state.slurm.nodes["dgx-04"].gres == "gpu:h100:8"
+    assert "dgx-h100-b" in s.run('cmsh -c "configurationoverlay; list"')
+    assert "dgx-h100-b" in bcm.overlays["slurm-client-gpu"].categories
+
+
+def test_overlay_validation_and_commit_scope():
+    s = sh()
+    out = s.run('cmsh -c "configurationoverlay; use slurm-client; append categories nope" && echo OK')
+    assert "does not exist" in out and "OK" not in out
+    out = s.run('cmsh -c "configurationoverlay; use slurm-client; set priority high" && echo OK')
+    assert "OK" not in out
+    # a commit applies to the selected object only; -a commits everything that is staged
+    s.run(
+        'cmsh -c "configurationoverlay; use slurm-client; set priority 510; use slurm-client-gpu; set priority 460; commit"'
+    )
+    bcm = s.ctx.state.bcm
+    assert bcm.overlays["slurm-client-gpu"].priority == 460 and bcm.overlays["slurm-client"].priority == 500
+    s.run('cmsh -c "configurationoverlay; commit -a"')
+    assert bcm.overlays["slurm-client"].priority == 510 and not bcm.uncommitted
+
+
+def test_foreach_and_range_apply_to_every_selected_node():
+    s = sh()
+    out = s.run('cmsh -c "device; foreach -c dgx-h100 (get category)"')
+    assert out.count("dgx-h100") == 4 and "dgx-04: dgx-h100" in out
+    s.run('cmsh -c "device; range -n dgx-[01-02]; set installmode FULL; commit"')
+    devs = s.ctx.state.bcm.devices
+    assert devs["dgx-01"].installmode == "FULL" and devs["dgx-02"].installmode == "FULL"
+    assert devs["dgx-03"].installmode == "AUTO"
+    s.run('cmsh -c "device; foreach -n dgx-[03-04] (set installmode FULL; commit)"')
+    assert devs["dgx-03"].installmode == "FULL" and devs["dgx-04"].installmode == "FULL"
+    assert not s.ctx.state.bcm.uncommitted
+
+
+def test_kernelmodules_load_only_after_the_node_boots_from_the_image():
+    s = sh()
+    out = s.run('cmsh -c "softwareimage; use dgx-os-6.2-h100-image; kernelmodules; add gdrdrv; commit"')
+    assert "Initial ramdisk" in out
+    assert "gdrdrv" in s.ctx.state.bcm.softwareimages["dgx-os-6.2-h100-image"].kernelmodules
+    assert "gdrdrv" not in s.ctx.state.nodes["dgx-02"].modules
+    out = s.run('cmsh -c "softwareimage; use dgx-os-6.2-h100-image; kernelmodules; add nosuchmod" && echo OK')
+    assert "not found" in out and "OK" not in out
+    s.run('cmsh -c "device; reboot -n dgx-02"')
+    assert "gdrdrv" in s.ctx.state.nodes["dgx-02"].modules
+    assert "gdrdrv" in s.run("ssh dgx-02 lsmod")
+
+
+def test_setup_wizards_point_at_cmsh():
+    s = sh()
+    assert "wlm" in s.run("cm-wlm-setup")
+    assert "does not exist" in s.run("cm-kubernetes-setup --add-user nobody")
+    s.run('cmsh -c "user; add dana; commit"')
+    assert "dana-restricted" in s.run("cm-kubernetes-setup --add-user dana")
+    assert "dana" in s.run("cm-kubernetes-setup --list-users")
+
+
 # ---------------------------------------------------------------- InfiniBand
 
 

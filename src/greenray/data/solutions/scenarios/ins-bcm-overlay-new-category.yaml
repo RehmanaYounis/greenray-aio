@@ -1,0 +1,38 @@
+# Private solution for scenario ins-bcm-overlay-new-category
+solution:
+  - sinfo
+  - scontrol show node dgx-04
+  - grep NodeName /etc/slurm/slurm.conf
+  - cmsh -c "device; list"
+  - cmsh -c "main; events"
+  - cmsh -c "configurationoverlay; list"
+  - cmsh -c "configurationoverlay; use slurm-client; show"
+  - cmsh -c "configurationoverlay; use slurm-client; append categories dgx-h100-b; commit"
+  - cmsh -c "configurationoverlay; use slurm-client-gpu; append categories dgx-h100-b; commit"
+  - cmsh -c "configurationoverlay; use slurm-submit; append categories dgx-h100-b; commit"
+  - cmsh -c "configurationoverlay; list"
+  - grep NodeName /etc/slurm/slurm.conf
+  - sinfo
+  - scontrol show node dgx-04
+explanation: |
+  In BCM a node is a Slurm compute node because it carries the slurmclient
+  role, and roles reach nodes through configuration overlays: each overlay lists
+  the categories and the individual nodes it applies to. cm-wlm-setup created
+  five of them, and the two that matter here, slurm-client and slurm-client-gpu,
+  both listed only the dgx-h100 category. When dgx-04 moved to dgx-h100-b it
+  left both overlays, so it lost the role, CMDaemon regenerated slurm.conf with
+  three NodeName entries, and slurmctld forgot the node at the next reconfigure.
+  The node is healthy; Slurm was simply never told about it again.
+
+  The fix is on the overlays, not on the node: append the new category to
+  slurm-client (the role itself) and to slurm-client-gpu (the same role with the
+  GPU settings, at a higher priority, which is what puts Gres=gpu:h100:8 on the
+  NodeName line). Each commit makes CMDaemon rewrite slurm.conf, reconfigure the
+  controller and start slurmd on the node that just gained the role, so sinfo
+  shows four nodes again. Adding the category to slurm-submit lets users submit
+  from dgx-04 as from the other nodes.
+edge_cases:
+  - "Appending only slurm-client brings the node back without GPUs: it registers, but the NodeName line has no Gres and jobs asking for --gpus never land there. Check scontrol show node for the Gres line."
+  - "Moving dgx-04 back to dgx-h100 would also fix sinfo, and undo the pilot. Fix the overlay, which is where the configuration was incomplete."
+  - "Overlay priority decides which settings win when two overlays hand the same role to a node: the higher number wins. slurm-client-gpu at 450 and slurm-client at 500 is the layout cm-wlm-setup produces; do not change the numbers to make a node appear."
+  - "A node can be added to an overlay by name (append nodes dgx-04) instead of by category. That works for one machine and silently stops working for the next node that joins the category; cover the category."

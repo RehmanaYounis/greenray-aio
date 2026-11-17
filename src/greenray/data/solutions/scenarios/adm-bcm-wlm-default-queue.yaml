@@ -1,0 +1,39 @@
+# Private solution for scenario adm-bcm-wlm-default-queue
+solution:
+  - sbatch /home/{user}/infer/run.sbatch
+  - scontrol show partition
+  - grep PartitionName /etc/slurm/slurm.conf
+  - diff /root/slurm.conf.cr131 /etc/slurm/slurm.conf
+  - journalctl -u cmd
+  - cmsh -c "main; events"
+  - cmsh -c "wlm; use slurm; jobqueue; list"
+  - cmsh -c "wlm; use slurm; jobqueue; use defq; set default no; commit"
+  - cmsh -c "wlm; use slurm; jobqueue; add {queue}; set nodes dgx-01,dgx-02,dgx-03,dgx-04; set maxtime {maxtime}; set default yes; commit"
+  - cmsh -c "wlm; use slurm; jobqueue; list"
+  - systemctl restart cmd
+  - grep PartitionName /etc/slurm/slurm.conf
+  - scontrol show partition {queue}
+  - sbatch /home/{user}/infer/run.sbatch
+  - squeue
+explanation: |
+  The partition did not vanish by itself. On a BCM cluster slurm.conf is a
+  generated file: CMDaemon (cmd) writes it from its own Slurm configuration,
+  the one you see in cmsh under wlm, and rewrites it whenever that configuration
+  is committed and whenever cmd itself starts. Last week's edit lived in the file
+  only. At 03:00 an unattended upgrade restarted cmd, cmd wrote the file again
+  from its model, the hand-added PartitionName line was gone, and slurmctld was
+  reconfigured with one partition. The cmd journal and the BCM event log both
+  record it.
+
+  The durable fix is to put the queue where cmd reads it from. In cmsh, wlm mode
+  holds the Slurm instance; its jobqueue submode holds the partitions. Each
+  object is committed on its own, so defq's default flag is cleared and committed
+  first, then {queue} is added with its nodes, time limit and default flag and
+  committed. Every commit regenerates slurm.conf and reconfigures slurmctld, so
+  scontrol shows the result immediately, and restarting cmd now produces the
+  same file.
+edge_cases:
+  - "Only one queue can be the default. If two are committed with default yes, cmsh warns and Slurm keeps the last one in the file; clear the old default first."
+  - "Changing the partition with scontrol update is the same mistake with a shorter life: it lasts until the next reconfigure. Make the change in cmsh and let it reach the controller through cmd."
+  - "On a cluster where BCM does not manage Slurm (the header of slurm.conf says so), editing the file and reconfiguring is the right procedure. Always read the header first."
+  - "A queue's nodes must be known devices; cmsh refuses a hostlist that names a node BCM has never heard of. Expand the hostlist with scontrol show hostnames if you are unsure what dgx-[01-04] contains."

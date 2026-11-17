@@ -1,0 +1,96 @@
+id: adm-bcm-wlm-default-queue
+code: adm-13
+title: A hand-added partition vanished overnight. Bring it back the BCM way
+domain: Administration
+difficulty: medium
+time_limit_min: 15
+tags: [bcm, cmsh, wlm, slurm, slurm.conf, partition, jobqueue]
+briefing: |
+  Ticket INC-5120 from {user} (inference team), 08:40:
+
+    "Every job we submit this morning fails with 'invalid partition specified:
+    {queue}'. Our scripts have used -p {queue} since last week and it worked
+    fine yesterday evening. Nothing changed on our side."
+
+  Last week an administrator created the {queue} partition for the inference
+  team by editing /etc/slurm/slurm.conf on bcm-head and running
+  scontrol reconfigure. The change request (CR-131) says: {queue} on every DGX
+  node, MaxTime {maxtime}, and it is the default partition so that short
+  inference tests land there without -p; defq stays for the long training jobs
+  and is no longer the default.
+
+  Find out what happened to the partition overnight, restore CR-131 in the way
+  that survives the next time it happens, and make sure the team's job script
+  /home/{user}/infer/run.sbatch submits again. Nothing is running on the
+  cluster right now.
+objectives:
+  - The {queue} job queue exists in BCM's Slurm configuration (wlm mode) with every DGX node, MaxTime {maxtime}, as the default queue; defq is kept and is no longer the default
+  - slurm.conf and slurmctld agree with the BCM configuration, and /home/{user}/infer/run.sbatch submits
+  - The partition survives a restart of cmd (CMDaemon) on the head node
+  - slurm.conf was not edited by hand this time
+variants:
+  - {"queue": "interactive", "maxtime": "8:00:00", "user": "bob"}
+  - {"queue": "debug", "maxtime": "2:00:00", "user": "carol"}
+setup:
+  - python: |
+      from greenray.commands.cmsh import bcm_init
+      from greenray.commands.cmsh.wlm import wlm_init
+      bcm = bcm_init(state)
+      wlm_init(state)
+      head = state.nodes['bcm-head']
+      state.slurm.users['{user}'] = {'name': '{user}', 'default_account': 'root'}
+      head.files['/home/{user}/infer/run.sbatch'] = (
+          "#!/bin/bash\n"
+          "#SBATCH -J infer-smoke\n"
+          "#SBATCH -p {queue}\n"
+          "#SBATCH --gpus=1\n"
+          "#SBATCH --time=00:20:00\n"
+          "srun python /home/{user}/infer/smoke.py\n")
+      # the backup the administrator took before the hand edit, and the edited file as it was yesterday
+      conf = head.files['/etc/slurm/slurm.conf']
+      head.files['/etc/slurm/slurm.conf.orig'] = conf
+      head.files['/root/slurm.conf.cr131'] = conf.replace(
+          'Default=YES', 'Default=NO') + (
+          "PartitionName={queue} Nodes=dgx-[01-04] Default=YES MaxTime={maxtime} State=UP\n")
+      head.journal['cmd'] = [
+          "2026-10-19 03:00:02 bcm-head systemd[1]: Stopping CMDaemon...",
+          "2026-10-19 03:00:04 bcm-head systemd[1]: Stopped CMDaemon.",
+          "2026-10-19 03:00:04 bcm-head systemd[1]: Started CMDaemon.",
+          "2026-10-19 03:00:09 bcm-head cmd[1127]: Info: CMDaemon 10.24.08 started",
+          "2026-10-19 03:00:11 bcm-head cmd[1127]: Info: Slurm: wrote /etc/slurm/slurm.conf (cmd started)",
+          "2026-10-19 03:00:11 bcm-head cmd[1127]: Info: Slurm: scontrol reconfigure",
+      ]
+      head.journal.setdefault('slurmctld', []).extend([
+          "2026-10-19 03:00:12 bcm-head slurmctld[2211]: Reconfigure: read /etc/slurm/slurm.conf, 4 nodes, 1 partitions",
+          "2026-10-19 08:31:40 bcm-head slurmctld[2211]: _slurm_rpc_submit_batch_job: Invalid partition name specified",
+          "2026-10-19 08:35:02 bcm-head slurmctld[2211]: _slurm_rpc_submit_batch_job: Invalid partition name specified",
+      ])
+      bcm.events.extend([
+          "2026-10-12 16:05:33 [notice] bcm-head: Slurm configuration committed in cmsh; slurm.conf regenerated, slurmctld reconfigured",
+          "2026-10-19 03:00:04 [notice] bcm-head: CMDaemon stopped (unattended upgrade of cmdaemon package)",
+          "2026-10-19 03:00:09 [notice] bcm-head: CMDaemon started",
+          "2026-10-19 03:00:11 [notice] bcm-head: cmd started; slurm.conf regenerated, slurmctld reconfigured",
+      ])
+checks:
+  - desc: "{queue} is a job queue in wlm mode: every DGX node, MaxTime {maxtime}, default, committed"
+    expr: "'{queue}' in bcm.wlm.slurm.jobqueues and bcm.wlm.slurm.jobqueues['{queue}'].nodes == 'dgx-[01-04]' and bcm.wlm.slurm.jobqueues['{queue}'].maxtime == '{maxtime}' and bcm.wlm.slurm.jobqueues['{queue}'].default is True and not bcm.uncommitted"
+  - desc: defq is still there and is no longer the default queue
+    expr: "'defq' in bcm.wlm.slurm.jobqueues and bcm.wlm.slurm.jobqueues['defq'].default is False"
+  - desc: "slurm.conf on bcm-head carries the generated PartitionName={queue} line and slurmctld knows the partition as the default"
+    expr: "re.search(r'^PartitionName={queue} .*Default=YES.*MaxTime={maxtime}', file('bcm-head', '/etc/slurm/slurm.conf'), re.M) is not None and '{queue}' in slurm.partitions and slurm.partitions['{queue}'].get('default') is True and slurm.partitions['defq'].get('default') is False"
+  - desc: "{user}'s job script was submitted successfully"
+    expr: "any(j.name == 'infer-smoke' and j.partition == '{queue}' for j in slurm.jobs)"
+  - desc: you found the cause in the logs (journalctl -u cmd, the BCM event log or the slurmctld journal)
+    kind: evidence
+    expr: ran(r'^(journalctl|cmsh .*events|less|cat|tail|grep)')
+  - desc: slurm.conf was not edited by hand this time
+    kind: safety
+    expr: not ran(r'^(nano|vim?|sed -i|tee)\b.*slurm\.conf$') and not ran(r'^cp .*slurm\.conf$')
+hints:
+  - "Reproduce first: submit the team's script with sbatch, then scontrol show partition. Which partitions does the controller know this morning, and what does grep PartitionName /etc/slurm/slurm.conf say? Compare the file with /root/slurm.conf.cr131."
+  - "Who writes slurm.conf on a BCM cluster? Read the first lines of the file, journalctl -u cmd on bcm-head around 03:00 and cmsh -c \"main; events\". A hand edit lasts until CMDaemon writes the file again."
+  - "The partitions CMDaemon writes come from its own Slurm configuration: cmsh -c \"wlm; use slurm; jobqueue; list\". A queue that is not there is not in the next slurm.conf either. add, set and commit work in that submode like everywhere else in cmsh; show on a queue lists its properties."
+  - "Only one queue can be the default. Change defq first, then add {queue}; each object needs its own commit. Afterwards systemctl restart cmd on bcm-head is the real test: the partition must still be there."
+references:
+  - NVIDIA Base Command Manager 10 Administrator Manual, Slurm configuration in cmsh (wlm mode, job queues)
+  - Slurm slurm.conf man page (PartitionName, Default, MaxTime)

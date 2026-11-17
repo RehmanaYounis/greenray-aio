@@ -475,3 +475,92 @@
     - It sets the default QOS for jobs submitted without --qos
     - It lists the only QOS that users may request in this partition
     - It is ignored unless PriorityType=priority/basic
+- id: adm-040
+  domain: Administration
+  difficulty: medium
+  lab: adm-bcm-wlm-default-queue
+  question: |
+    On a BCM-managed cluster an administrator adds a partition by editing
+    /etc/slurm/slurm.conf on the head node and running scontrol reconfigure.
+    It works. A week later the partition is gone. What happened?
+  choices:
+    - CMDaemon regenerates slurm.conf from its own Slurm configuration whenever that configuration is committed or cmd restarts, and the hand-added line was not in it
+    - scontrol reconfigure only applies changes for 7 days
+    - slurmctld removes partitions that had no jobs for a week
+    - An unattended Slurm package upgrade replaced slurm.conf with the package default
+- id: adm-041
+  domain: Administration
+  difficulty: easy
+  lab: adm-bcm-wlm-new-queue
+  question: |
+    Where in cmsh are Slurm partitions created on a BCM cluster so that the
+    change survives regeneration of slurm.conf?
+  choices:
+    - In wlm mode, inside the Slurm instance, in the jobqueue submode (add, set nodes/maxtime, commit)
+    - In partition mode, with add <name> and commit
+    - In category mode, with set partition <name>
+    - In device mode, with set partition on every node
+- id: adm-042
+  domain: Administration
+  difficulty: medium
+  lab: adm-bcm-wlm-default-queue
+  question: |
+    An administrator commits a second job queue with default set to yes in cmsh
+    wlm mode without changing the existing default queue. What is the result?
+  choices:
+    - cmsh warns that more than one queue is the default; both are written with Default=YES and Slurm treats the last one in the file as the default
+    - The commit is rejected until exactly one queue is the default
+    - Both queues become the default and jobs are spread between them
+    - The existing default queue is deleted
+- id: adm-043
+  domain: Administration
+  difficulty: medium
+  lab: ins-bcm-softwareimage-update
+  question: |
+    After the dgx-h100 category was switched to a new software image and
+    imageupdate -w was run for the category, one node still runs the old
+    packages, and the BCM event log shows the old image being sent to that node.
+    What should the administrator check first?
+  choices:
+    - Whether the device carries its own softwareimage setting, which overrides the category's image (device show, or softwareimage usedby <old image>)
+    - Whether the node's /etc/apt/sources.list points at the old repository
+    - Whether the node's install mode is FULL
+    - Whether the node's BMC firmware is current
+- id: adm-044
+  domain: Administration
+  difficulty: medium
+  lab: adm-bcm-cmsh-inventory
+  question: |
+    An administrator wants to set the same BMC power-control property on every
+    node of the dgx-h100 category in one cmsh command and commit it. Which
+    construct does cmsh provide for this?
+  choices:
+    - 'device; foreach -c dgx-h100 (set powercontrol ipmi0; commit)'
+    - 'device; set -c dgx-h100 powercontrol ipmi0; commit'
+    - 'category; use dgx-h100; set powercontrol ipmi0 --nodes; commit'
+    - 'device; for node in $(list); do set powercontrol ipmi0; done'
+- id: adm-045
+  domain: Administration
+  difficulty: hard
+  lab: ins-bcm-softwareimage-update
+  question: |
+    An administrator adds nvidia_peermem to the kernelmodules list of a
+    software image in cmsh and commits. lsmod on the nodes that use the image
+    still does not show the module. Why?
+  choices:
+    - The commit regenerates the image's initial ramdisk; nodes load the module when they boot from the updated image (reboot or imageupdate followed by reboot), not at commit time
+    - kernelmodules only affects the head node
+    - The module must also be added to /etc/modules on every node by hand
+    - lsmod only lists modules loaded by systemd
+- id: adm-046
+  domain: Administration
+  difficulty: medium
+  lab: adm-bcm-wlm-new-queue
+  question: |
+    Which statement about changing a partition's MaxTime on a BCM-managed
+    Slurm cluster is correct?
+  choices:
+    - scontrol update partitionname=... maxtime=... changes the running controller immediately but the value is lost at the next regeneration of slurm.conf; the durable change is set maxtime on the job queue in cmsh wlm mode
+    - scontrol update is durable because slurmctld writes the change back to slurm.conf
+    - Only a restart of slurmctld can change MaxTime
+    - MaxTime is a property of the node category in BCM

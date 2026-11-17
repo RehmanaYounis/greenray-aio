@@ -1,0 +1,28 @@
+# Private solution for scenario adm-bcm-wlm-new-queue
+solution:
+  - head -n 5 /etc/slurm/slurm.conf
+  - cmsh -c "wlm; list"
+  - cmsh -c "wlm; use slurm; jobqueue; list"
+  - cmsh -c "wlm; use slurm; jobqueue; use defq; show"
+  - cmsh -c "wlm; use slurm; jobqueue; add short; set nodes dgx-03,dgx-04; set maxtime 4:00:00; commit"
+  - cmsh -c "wlm; use slurm; jobqueue; list"
+  - grep PartitionName /etc/slurm/slurm.conf
+  - scontrol show partition short
+  - sinfo
+explanation: |
+  On a BCM cluster the Slurm configuration lives in CMDaemon and slurm.conf is
+  written from it. The header of the file says so, and anything added to the
+  file by hand is gone the next time CMDaemon writes it, which happens at every
+  commit in wlm mode and every time cmd starts.
+
+  So the partition is added as a job queue: wlm mode, the Slurm instance, the
+  jobqueue submode, add short, set its nodes and its time limit, commit. A new
+  queue is not the default unless you say so, so defq keeps that role. The
+  commit makes CMDaemon rewrite slurm.conf and reconfigure slurmctld, which is
+  why scontrol show partition and sinfo show the new queue right away without a
+  scontrol reconfigure of your own.
+edge_cases:
+  - "set nodes takes a hostlist of nodes BCM knows (dgx-03,dgx-04 or dgx-[03-04]); a node that is not a device is refused."
+  - "Slurm time limits read minutes, HH:MM:SS or D-HH:MM:SS; 4:00:00, 04:00:00 and 240 are the same four hours. cmsh stores what you typed, Slurm shows it as 04:00:00."
+  - "A queue can also carry a QOS (set qos) or restrict which QOS may use it (set allowqos); both end up on the PartitionName line as QOS= and AllowQos=."
+  - "A hand edit of slurm.conf still works for a quick test and disappears at the next regeneration. Put a change you want to keep in cmsh."
