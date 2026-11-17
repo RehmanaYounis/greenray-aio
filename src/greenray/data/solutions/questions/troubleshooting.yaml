@@ -266,14 +266,6 @@ tsh-030:
     plugin can't find NVML and crashes. GPU count, Prometheus and the MIG label
     don't cause NVML load failures.
 
-tsh-031:
-  answer: [0]
-  explanation: |
-    Secrets are namespaced. Pods elsewhere work because their namespace has the
-    NGC pull secret. A 401 is an authentication error. A deleted tag gives
-    "not found". GPU availability and the device plugin affect scheduling, not
-    image pulls.
-
 tsh-032:
   answer: [2]
   explanation: |

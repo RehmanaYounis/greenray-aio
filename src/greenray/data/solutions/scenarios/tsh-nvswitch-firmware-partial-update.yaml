@@ -42,3 +42,10 @@ edge_cases:
   - "A reboot without draining first makes Slurm mark the node DOWN with 'Node unexpectedly rebooted'. Drain, reboot, resume is the sequence that leaves no surprise state behind."
   - "Fabric Manager being active does not prove the fabric is healthy; it configures whatever switches it finds. The version mismatch that stops Fabric Manager from starting is a different fault (driver versus Fabric Manager package)."
   - "nvsm dump health collects everything support asks for in one archive; take it before the reboot if the case may be escalated, because the reboot clears the evidence."
+expect:
+  'nvsm show health':
+    - 'Unhealthy'
+    - 'versions differ'
+  'nvsm show versions':
+    - 'NVSwitch2 firmware'
+    - '96.10.42.00.01'

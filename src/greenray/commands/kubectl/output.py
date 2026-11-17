@@ -54,7 +54,10 @@ def list_objects(state, kind: str, opts: dict, names=()) -> list:
             items = [p for p in items if selector_matches(sel, p.labels)]
         if fsel:
             for cond in fsel.split(","):
-                f, op, v = re.match(r"([\w.]+)(!=|==|=)(.*)", cond).groups()
+                m = re.match(r"([\w.]+)(!=|==|=)(.*)", cond)
+                if not m:
+                    raise CommandError(f"error: field selector {cond!r} must be a key=value pair", 1)
+                f, op, v = m.groups()
                 getter = {
                     "spec.nodeName": lambda p: p.node or "",
                     "status.phase": lambda p: p.phase,
@@ -82,7 +85,10 @@ def list_objects(state, kind: str, opts: dict, names=()) -> list:
         items = [e for e in k.events if all_ns or e.namespace == ns]
         if fsel:
             for cond in fsel.split(","):
-                f, op, v = re.match(r"([\w.]+)(!=|==|=)(.*)", cond).groups()
+                m = re.match(r"([\w.]+)(!=|==|=)(.*)", cond)
+                if not m:
+                    raise CommandError(f"error: field selector {cond!r} must be a key=value pair", 1)
+                f, op, v = m.groups()
                 key = {
                     "involvedObject.name": "name",
                     "involvedObject.kind": "kind",
@@ -403,7 +409,7 @@ def output(state, kind: str, items: list, opts: dict, single: bool = False) -> s
         return custom_columns(objs, fmt.split("=", 1)[1])
     raise CommandError(
         f'error: unable to match a printer suitable for the output format "{fmt}", allowed formats are: '
-        "custom-columns,go-template,json,jsonpath,name,wide,yaml",
+        "custom-columns,json,jsonpath,name,wide,yaml",
         1,
     )
 

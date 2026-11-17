@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fnmatch
+import json
 import re
 import shlex
 import time
@@ -443,12 +444,19 @@ def seq(ctx, args):
 @command("xargs", help="xargs [-n N] COMMAND: run a command with stdin as arguments")
 def xargs(ctx, args):
     per = opt(args, "-n")
-    rest = [a for a in args if a not in ("-n", per)]
+    repl = opt(args, "-I")
+    rest = [a for a in args if a not in ("-n", per, "-I", repl) and not (a.startswith("-n") and a[2:].isdigit())]
+    packed = next((a[2:] for a in args if a.startswith("-n") and a[2:].isdigit()), None)
+    per = per or packed
     words = ctx.stdin.split()
     cmd = rest or ["echo"]
     if not words:
         return ""
-    chunk = int(per) if per and per.isdigit() else len(words)
+    if repl:
+        return "".join(dispatch(ctx, [a.replace(repl, w) for a in cmd]) for w in ctx.stdin.splitlines() if w.strip())
+    if per and not per.isdigit():
+        raise CommandError("xargs: invalid number for -n option", 1)
+    chunk = int(per) if per else len(words)
     out = []
     for i in range(0, len(words), chunk):
         out.append(dispatch(ctx, cmd + words[i : i + chunk]))
@@ -514,10 +522,10 @@ def expr(ctx, args):
 def diff(ctx, args):
     import difflib
 
-    pos = [a for a in args if not a.startswith("-")]
+    pos = [a for a in args if a == "-" or not a.startswith("-")]
     if len(pos) != 2:
         raise CommandError("diff: missing operand after 'diff'\ndiff: Try 'diff --help' for more information.", 2)
-    a, b = (_file(ctx, p, "diff").splitlines(keepends=True) for p in pos)
+    a, b = ((ctx.stdin if p == "-" else _file(ctx, p, "diff")).splitlines(keepends=True) for p in pos)
     if "-u" in args:
         lines = list(difflib.unified_diff(a, b, fromfile=pos[0], tofile=pos[1]))
     else:
@@ -526,9 +534,8 @@ def diff(ctx, args):
             if tag == "equal":
                 continue
             span = lambda x, y: str(x + 1) if y - x <= 1 else f"{x + 1},{y}"  # noqa: E731
-            lines.append(
-                f"{span(i1, i2)}{'acd'[['replace', 'equal', 'delete'].index(tag) if tag in ('replace', 'delete') else 0] if tag != 'insert' else 'a'}{span(j1, j2)}\n"
-            )
+            letter = {"replace": "c", "delete": "d", "insert": "a"}[tag]
+            lines.append(f"{span(i1, i2)}{letter}{span(j1, j2)}\n")
             lines += [f"< {l}" for l in a[i1:i2]]
             if tag == "replace":
                 lines.append("---\n")
@@ -605,6 +612,8 @@ def sudo(ctx, args):
 def tar(ctx, args):
     flags = "".join(a.lstrip("-") for a in args if a.startswith("-") and not a.startswith("--") and a not in ("-C",))
     pos = [a for a in args if not a.startswith("-")]
+    if pos and not flags and re.fullmatch(r"[cxtzjvf]+", pos[0]):  # tar czf archive files (old-style flags)
+        flags, pos = pos[0], pos[1:]
     into = opt(args, "-C", default=None)
     if into:
         pos = [p for p in pos if p != into]
@@ -661,7 +670,7 @@ def gzip(ctx, args):
     return ""
 
 
-@command("jq", help="jq FILTER [FILE]: . and .key paths")
+@command("jq", help="jq [-r] [-c] FILTER [FILE]: paths (.a.b[0], .[]), length, keys, select(.k == v), pipes")
 def jq(ctx, args):
     import json
 
@@ -673,17 +682,67 @@ def jq(ctx, args):
         data = json.loads(text)
     except ValueError as e:
         raise CommandError(f"jq: error (at <stdin>:0): {e}", 5)
-    for key in [k for k in pos[0].strip().split(".") if k]:
-        m = re.fullmatch(r"(\w*)\[(\d*)\]", key)
-        name, index = (m.group(1), m.group(2)) if m else (key, None)
-        if name:
-            if not isinstance(data, dict):
-                raise CommandError(f'jq: error (at <stdin>:0): Cannot index {type(data).__name__} with "{name}"', 5)
-            data = data.get(name)
-        if index is not None and isinstance(data, list):
-            data = data[int(index)] if index else data
-    compact = "-c" in args
-    return (json.dumps(data) if compact else json.dumps(data, indent=2)) + "\n"
+    results = [data]
+    for stage in [s.strip() for s in pos[0].split("|")]:
+        results = [r for item in results for r in _jq_stage(stage, item)]
+    raw, compact = "-r" in args, "-c" in args
+    out = []
+    for r in results:
+        if raw and isinstance(r, str):
+            out.append(r)
+        else:
+            out.append(json.dumps(r) if compact else json.dumps(r, indent=2))
+    return "\n".join(out) + "\n"
+
+
+def _jq_stage(stage: str, data):
+    """One pipeline stage of the jq subset; a list of outputs (``.[]`` fans out)."""
+    if stage in (".", ""):
+        return [data]
+    if stage == "length":
+        return [len(data) if isinstance(data, (list, dict, str)) else (0 if data is None else data)]
+    if stage == "keys":
+        if not isinstance(data, dict):
+            raise CommandError(f"jq: error (at <stdin>:0): {type(data).__name__} has no keys", 5)
+        return [sorted(data)]
+    m = re.fullmatch(r"select\(\s*(\.[\w.\[\]-]*)\s*(==|!=)\s*(.+?)\s*\)", stage)
+    if m:
+        want = json.loads(m.group(3)) if m.group(3)[0] in '"[{0123456789-tfn' else m.group(3)
+        got = _jq_stage(m.group(1), data)
+        hit = bool(got) and got[0] == want
+        return [data] if hit == (m.group(2) == "==") else []
+    if not stage.startswith("."):
+        raise CommandError(
+            f"jq: error: {stage} is not supported in the lab (paths, length, keys, select, pipes are)", 3
+        )
+    items = [data]
+    for key in re.findall(r"\.?([\w-]*)((?:\[\d*\])*)", stage):
+        name, indexes = key
+        if not name and not indexes:
+            continue
+        nxt = []
+        for item in items:
+            if name:
+                if item is None:
+                    nxt.append(None)
+                    continue
+                if not isinstance(item, dict):
+                    raise CommandError(f'jq: error (at <stdin>:0): Cannot index {type(item).__name__} with "{name}"', 5)
+                item = item.get(name)
+            for idx in re.findall(r"\[(\d*)\]", indexes):
+                if item is None:
+                    break
+                if not isinstance(item, list):
+                    raise CommandError(f"jq: error (at <stdin>:0): Cannot iterate over {type(item).__name__}", 5)
+                if idx == "":
+                    nxt.extend(item)
+                    item = None
+                    break
+                item = item[int(idx)] if int(idx) < len(item) else None
+            if item is not None or not indexes or "[]" not in indexes:
+                nxt.append(item)
+        items = nxt
+    return items
 
 
 @command("nproc", help="nproc: number of CPUs")

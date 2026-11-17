@@ -1,0 +1,62 @@
+SCONTROL(1)                    Slurm Commands                    SCONTROL(1)
+
+NAME
+       scontrol - view or modify Slurm configuration and state
+
+SYNOPSIS
+       scontrol [OPTIONS] [COMMAND]
+
+DESCRIPTION
+       scontrol is the administrator's view of the running controller. It
+       reads and changes jobs, nodes and partitions in slurmctld's memory.
+       A change made with update takes effect at once and lasts until the
+       controller next reads slurm.conf; put permanent changes in the file
+       (or, on a BCM cluster, in cmsh) as well.
+
+OPTIONS
+       -d, --details
+              Print more detail: with show job, the CPU and GPU ids
+              allocated on each node.
+
+       -o, --oneliner
+              Print each record on a single line, which makes grep useful.
+
+COMMANDS
+       show job [ID]
+       show node [NAME]
+       show partition [NAME]
+       show config
+              Print the entity, every field as KEY=VALUE.
+
+       show hostnames HOSTLIST
+       show hostlist HOST,HOST,...
+              Expand or compress a hostlist expression.
+
+       update NodeName=NAME State=DRAIN|RESUME|DOWN Reason="..."
+              Change a node's state. DRAIN lets running jobs finish and
+              starts nothing new; DOWN kills what is running; RESUME
+              clears both.
+
+       update JobId=ID TimeLimit=|Priority=|NumNodes=|...
+              Change a job. Most fields only change while it is pending.
+
+       update PartitionName=NAME State=|MaxTime=|Default=|QOS=|...
+              Change a partition.
+
+       reconfigure
+              Make every daemon re-read slurm.conf. Running jobs are not
+              affected. Some parameters need a restart instead; the
+              slurm.conf page says which.
+
+       reboot [ASAP] [nextstate=RESUME] NODELIST
+              Reboot nodes once their jobs finish (ASAP drains them
+              first). nextstate says what to do when they return.
+
+       hold, release, requeue JOBID
+              Hold a pending job, release it, or put a running job back
+              in the queue.
+
+SEE ALSO
+       sinfo(1), squeue(1), slurm.conf(5)
+
+GreenRay AIO                     lab manual                     SCONTROL(1)

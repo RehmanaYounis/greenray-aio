@@ -33,3 +33,10 @@ edge_cases:
   - "The trigger's drain and a manual drain look the same in sinfo. The reason text is the difference: the trigger undrains only what it drained, so a manual drain is never undone by a cooling GPU."
   - "poweroff is also a built-in action, and the wrong one here: a drained node still finishes its job, a powered-off node kills it."
   - "Triggers evaluate the measurable per node, so one trigger covers every DGX node; there is no need for one trigger per node or per category."
+expect:
+  'sinfo -R':
+    - 'BCM trigger'
+    - '{node}'
+  'cmsh -c "device; latestmetricdata -n {node}"':
+    - 'gpu_temp'
+    - '91 C'

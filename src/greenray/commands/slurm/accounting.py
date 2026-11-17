@@ -53,6 +53,13 @@ SACCT_W = {
     "allocnodes": 10,
     "submitline": 40,
     "derivedexitcode": 10,
+    "ncpus": 10,
+    "reqmem": 10,
+    "reqnodes": 8,
+    "uid": 10,
+    "group": 9,
+    "layout": 10,
+    "nodes": 15,
 }
 SACCT_HDR = {
     "jobid": "JobID",
@@ -85,6 +92,13 @@ SACCT_HDR = {
     "allocnodes": "AllocNodes",
     "submitline": "SubmitLine",
     "derivedexitcode": "DerivedExitCode",
+    "ncpus": "NCPUS",
+    "reqmem": "ReqMem",
+    "reqnodes": "ReqNodes",
+    "uid": "UID",
+    "group": "Group",
+    "layout": "Layout",
+    "nodes": "Nodes",
 }
 
 
@@ -132,6 +146,13 @@ def _sacct_rows(state, j, steps=True):
         "allocnodes": str(j.num_nodes),
         "submitline": j.command,
         "derivedexitcode": "0:0",
+        "ncpus": str(acpu if j.start_time is not None else ncpu),
+        "reqmem": f"{j.get('min_memory_mb') or 0}M",
+        "reqnodes": str(j.num_nodes),
+        "uid": "0" if j.user == "root" else str(1000 + sum(map(ord, j.user)) % 500),
+        "group": j.user,
+        "layout": "Unknown",
+        "nodes": compress_hostlist(j.nodelist) or "None assigned",
     }
     rows = [base]
     if not steps or j.start_time is None:
@@ -184,11 +205,23 @@ def sacct(ctx, args):
     noheader = _has(args, "-n", "--noheader")
     parsable = _has(args, "-p", "--parsable", "-P", "--parsable2")
     allocs = _has(args, "-X", "--allocations")
-    if not user and not _has(args, "-a", "--allusers"):
-        user = _USER[-1]  # like the real tool, root sees other users' jobs only with -a
-    cols = [
-        c.strip() for c in (fmt or "JobID,JobName,Partition,Account,AllocCPUS,State,ExitCode").split(",") if c.strip()
-    ]
+    # root's accounting view covers every user (the help page says so); others see their own jobs
+    if not user and not ids and not _has(args, "-a", "--allusers") and _USER[-1] != "root":
+        user = _USER[-1]
+    brief, long_ = _has(args, "-b", "--brief"), _has(args, "-l", "--long")
+    since, until = _opt(args, "-S", "--starttime"), _opt(args, "-E", "--endtime")
+    for flag, val in (("-S", since), ("-E", until)):
+        if val is not None and not re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?|now(-\d+(seconds|minutes|hours|days|weeks)?)?|today|yesterday|midnight|\d{2}:\d{2}(:\d{2})?",
+            val,
+        ):
+            raise _err(f"sacct: error: Invalid time specified for {flag}: {val}")
+    default_cols = "JobID,JobName,Partition,Account,AllocCPUS,State,ExitCode"
+    if brief:
+        default_cols = "JobID,State,ExitCode"
+    elif long_:
+        default_cols = "JobID,JobName,Partition,Account,AllocCPUS,NCPUS,NNodes,NodeList,State,ExitCode,Elapsed,Timelimit,Start,End,ReqTRES,AllocTRES"
+    cols = [c.strip() for c in (fmt or default_cols).split(",") if c.strip()]
     spec = []
     for c in cols:
         name, _, w = c.partition("%")
@@ -206,7 +239,13 @@ def sacct(ctx, args):
             want = {s_.upper() for s_ in states.split(",")}
             if j.state not in want and STATE_CODES.get(j.state) not in want:
                 continue
-        rows.extend(_sacct_rows(state, j, steps=not allocs))
+        if (
+            since
+            and re.fullmatch(r"\d{4}-\d{2}-\d{2}.*", since)
+            and (j.end_time is not None and _ts(state, j.end_time) < since)
+        ):
+            continue
+        rows.extend(_sacct_rows(state, j, steps=not allocs and not brief))
     out = []
     if parsable:
         if not noheader:

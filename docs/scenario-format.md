@@ -69,7 +69,13 @@ explanation: |
   Why this is the fix, and what each piece of evidence meant.
 edge_cases:
   - Exam traps, variations, and what changes on other hardware.
+expect:                      # optional: what key steps must print when the solution is replayed
+  "dmesg | grep -i xid":
+    - "Xid"
+    - "79"
 ```
+
+`expect` maps a solution step (its exact command line) to substrings its output must contain. `greenray validate` replays the solution and reports a step that prints none of them, so a tool that goes quiet or wrong on the path a learner follows is caught, not only a check that stays red. Placeholders from `variants` work in both the step and the substrings.
 
 ## Variants
 

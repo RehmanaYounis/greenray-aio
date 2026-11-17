@@ -183,7 +183,7 @@
   lab: tsh-power-cap-persistence
   question: |
     Training on one node is 25% slower than on its identical neighbors.
-    nvidia-smi -q -d PERFORMANCE shows on all GPUs:
+    The clock event reasons reported for all GPUs are:
       Clocks Event Reasons
           Idle                              : Not Active
           Applications Clocks Setting       : Not Active
@@ -400,20 +400,6 @@
     - The node is missing the nvidia.com/mig.config label
     - Prometheus isn't scraping the node
     - The NVIDIA Container Toolkit on the host isn't installed or isn't configured as the runtime containerd uses for these pods, so the driver libraries aren't injected into the plugin container
-- id: tsh-031
-  domain: Troubleshooting and Optimization
-  difficulty: easy
-  question: |
-    A pod is stuck with:
-      Failed to pull image "nvcr.io/nvidia/tritonserver:24.05-py3":
-      ... 401 Unauthorized
-    Other pods in a different namespace pull the same image fine. What is the
-    MOST likely cause?
-  choices:
-    - The pod's namespace has no nvcr.io pull secret, or the pod doesn't reference it in imagePullSecrets
-    - The node has no GPUs
-    - The image tag was deleted
-    - The device plugin is crashing
 - id: tsh-032
   domain: Troubleshooting and Optimization
   difficulty: medium

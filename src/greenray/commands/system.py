@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import fnmatch
 import re
 import time
@@ -10,33 +11,51 @@ from datetime import timedelta
 from ..core import audit, clock
 from ..core.errors import CommandError
 from . import command
+from .common import int_arg, opt
 
 # ---------------------------------------------------------------- files
 
 
-def _read(ctx, path):
+def _read(ctx, path, tool="cat"):
     files = ctx.node.files
     if path not in files:
-        raise CommandError(f"cat: {path}: No such file or directory")
+        raise CommandError(f"{tool}: {path}: No such file or directory", 2 if tool == "grep" else 1)
     return files[path]
 
 
 @command("cat", help="print files (also: cat > file <<EOF ... EOF)")
 def cat(ctx, args):
-    if not args:
-        return ctx.stdin
-    return "".join(_read(ctx, a) for a in args if not a.startswith("-"))
+    text = (
+        "".join(_read(ctx, a) for a in args if not a.startswith("-"))
+        if [a for a in args if not a.startswith("-")]
+        else ctx.stdin
+    )
+    if "-n" in args or "--number" in args:
+        return "".join(f"{i:6}\t{line}" for i, line in enumerate(text.splitlines(True), 1))
+    return text
 
 
-@command("ls", help="list files")
+def _ls_row(ctx, path, name):
+    """One ``ls -l`` line; sizes come from the simulated file, dates from the simulated clock."""
+    dirs = known_dirs(ctx)
+    is_dir = path.rstrip("/") in dirs and path not in ctx.node.files
+    size = 4096 if is_dir else len(ctx.node.files.get(path, ""))
+    mode = "drwxr-xr-x" if is_dir else ("-rwxr-xr-x" if name.endswith(".sh") else "-rw-r--r--")
+    stamp = clock.stamp(ctx.state, "%b %e %H:%M")
+    return f"{mode} 1 root root {size:>8} {stamp} {name}"
+
+
+@command("ls", help="list files (-a shows dotfiles, -l long form)")
 def ls(ctx, args):
+    flags = "".join(a[1:] for a in args if a.startswith("-") and not a.startswith("--"))
+    show_all, long = "a" in flags or "--all" in args, "l" in flags
     paths = [a for a in args if not a.startswith("-")] or [ctx.cwd]
     files = sorted(ctx.node.files)
     dirs = known_dirs(ctx)
     out = []
     for p in paths:
         if p in ctx.node.files:
-            out.append(p)
+            out.append(_ls_row(ctx, p, p) if long else p)
             continue
         prefix = p.rstrip("/") + "/"
         children = {f[len(prefix) :].split("/")[0] for f in files if f.startswith(prefix)}
@@ -44,7 +63,12 @@ def ls(ctx, args):
         globbed = [f for f in files if fnmatch.fnmatch(f, p)]
         if not children and not globbed and p.rstrip("/") not in dirs:
             raise CommandError(f"ls: cannot access '{p}': No such file or directory", 2)
+        if not show_all:
+            children = {c for c in children if not c.startswith(".")}
         names = sorted(children) or globbed
+        if long:
+            out.extend(_ls_row(ctx, prefix + n if n not in files else n, n) for n in names)
+            continue
         if ctx.colorize:  # ls --color=auto: directories bold blue, scripts bold green
             names = [
                 f"\033[01;34m{n}\033[0m"
@@ -177,63 +201,147 @@ def noop(ctx, args):
     return ""
 
 
-@command("sed", help="sed -i 's/old/new/[g]' file  (in-place edit)")
+@command("sed", help="sed [-n] [-i] [-E] 's/old/new/[g]' | '/re/d' | 'Np' | 'Nd' [file]  (-i edits in place)")
 def sed(ctx, args):
-    inplace = False
+    inplace = quiet = ere = False
     exprs, files = [], []
     it = iter(args)
     for a in it:
         if a == "-i" or a.startswith("-i"):
             inplace = True
+        elif a == "-n":
+            quiet = True
+        elif a in ("-E", "-r", "--regexp-extended"):
+            ere = True
         elif a == "-e":
-            exprs.append(next(it))
+            e = next(it, None)
+            if e is None:
+                raise CommandError(
+                    "sed: option requires an argument -- 'e'\nUsage: sed [OPTION]... {script-only-if-no-other-script} [input-file]..."
+                )
+            exprs.append(e)
+        elif a.startswith("-") and len(a) > 1 and not exprs:
+            raise CommandError(f"sed: invalid option -- '{a[1:]}'")
         elif not exprs and not a.startswith("-"):
             exprs.append(a)
         else:
             files.append(a)
+    if not exprs:
+        raise CommandError("Usage: sed [OPTION]... {script-only-if-no-other-script} [input-file]...")
     text = _read(ctx, files[0]) if files else ctx.stdin
     for e in exprs:
-        text = _apply_sed(e, text)
+        text = _apply_sed(e, text, quiet=quiet, ere=ere)
     if inplace and files:
         ctx.node.files[files[0]] = text
         return ""
     return text
 
 
-def _apply_sed(expr: str, text: str) -> str:
-    m = re.match(r"^(/(?P<addr>[^/]*)/)?(?P<cmd>[sd])(?P<rest>.*)$", expr)
-    if not m:
-        raise CommandError(f"sed: unsupported expression: {expr}")
-    addr = m.group("addr")
-    if m.group("cmd") == "d":
-        return "".join(l for l in text.splitlines(True) if not (addr and re.search(addr, l)))
-    rest = m.group("rest")
-    delim = rest[0]
-    parts = rest[1:].split(delim)
-    if len(parts) < 3:
-        raise CommandError("sed: unterminated `s' command")
-    pat, rep, flags = parts[0], parts[1], parts[2]
-    rep = re.sub(r"\\(\d)", r"\\\1", rep).replace("&", r"\g<0>")
-    count = 0 if "g" in flags else 1
-    out = []
-    for line in text.splitlines(True):
-        if addr is None or re.search(addr, line):
-            line = re.sub(pat, rep, line, count=count)
-        out.append(line)
+def _bre_to_python(pat: str) -> str:
+    r"""POSIX basic regex (sed's default) -> Python: \( \) \{ \} \| \+ \? are special, the bare ones literal."""
+    out, i = [], 0
+    while i < len(pat):
+        c = pat[i]
+        if c == "\\" and i + 1 < len(pat):
+            n = pat[i + 1]
+            out.append(n if n in "(){}|+?" else c + n)
+            i += 2
+            continue
+        out.append("\\" + c if c in "(){}|+?" else c)
+        i += 1
     return "".join(out)
+
+
+def _split_unescaped(s: str, delim: str) -> list[str]:
+    parts, cur, i = [], [], 0
+    while i < len(s):
+        c = s[i]
+        if c == "\\" and i + 1 < len(s):
+            # an escaped delimiter is the delimiter itself; other escapes stay for the regex engine
+            cur.append(s[i + 1] if s[i + 1] == delim else c + s[i + 1])
+            i += 2
+            continue
+        if c == delim:
+            parts.append("".join(cur))
+            cur = []
+        else:
+            cur.append(c)
+        i += 1
+    parts.append("".join(cur))
+    return parts
+
+
+def _apply_sed(expr: str, text: str, quiet: bool = False, ere: bool = False) -> str:
+    m = re.match(
+        r"^(?:/(?P<addr>(?:[^/\\]|\\.)*)/|(?P<line>\d+)(?:,(?P<upto>\d+|\$))?|(?P<last>\$))?(?P<cmd>[sdp])(?P<rest>.*)$",
+        expr,
+    )
+    if not m:
+        raise CommandError(f"sed: -e expression #1, char {len(expr)}: unknown command: `{expr[:1]}'")
+    conv = (lambda s: s) if ere else _bre_to_python
+    addr, line_no, last, upto = m.group("addr"), m.group("line"), m.group("last"), m.group("upto")
+    lines = text.splitlines(True)
+
+    def selected(i: int, line: str) -> bool:
+        if addr is not None:
+            return re.search(conv(addr), line) is not None
+        if line_no is not None:
+            if upto is not None:
+                return int(line_no) <= i <= (len(lines) if upto == "$" else int(upto))
+            return i == int(line_no)
+        if last:
+            return i == len(lines)
+        return True
+
+    try:
+        if m.group("cmd") == "d":
+            return "".join(l for i, l in enumerate(lines, 1) if not selected(i, l))
+        if m.group("cmd") == "p":
+            picked = [l for i, l in enumerate(lines, 1) if selected(i, l)]
+            return "".join(picked) if quiet else "".join(l + l if selected(i, l) else l for i, l in enumerate(lines, 1))
+        rest = m.group("rest")
+        if not rest:
+            raise CommandError("sed: -e expression #1, char 1: unterminated `s' command")
+        parts = _split_unescaped(rest[1:], rest[0])
+        if len(parts) < 3:
+            raise CommandError(f"sed: -e expression #1, char {len(expr)}: unterminated `s' command")
+        pat, rep, flags = conv(parts[0]), parts[1], parts[2]
+        rep = re.sub(r"\\(\d)", r"\\g<\1>", rep).replace("&", r"\g<0>")
+        count = 0 if "g" in flags else 1
+        out = []
+        for i, line in enumerate(lines, 1):
+            if selected(i, line):
+                line = re.sub(pat, rep, line, count=count)
+            if not quiet or ("p" in flags and selected(i, line)):
+                out.append(line)
+        return "".join(out)
+    except re.error as e:
+        raise CommandError(f"sed: -e expression #1, char {len(expr)}: {e}") from None
 
 
 # ---------------------------------------------------------------- text filters
 
 
-@command("grep", "egrep", help="filter lines (-i -v -c -E -A/-B supported)")
+@command("grep", "egrep", help="filter lines (-i -v -c -n -o -l -w -E -e -A/-B/-C supported)")
 def grep(ctx, args):
-    flags, pattern, files = set(), None, []
+    flags, patterns, files = set(), [], []
     after = before = 0
-    it = iter(args)
+    explicit = []  # -e PATTERN, wherever it appears: every positional is then a file
+    rest, it = [], iter(args)
+    for a in it:
+        if a in ("-e", "--regexp"):
+            explicit.append(next(it, ""))
+        elif a.startswith("--regexp="):
+            explicit.append(a.split("=", 1)[1])
+        else:
+            rest.append(a)
+    patterns.extend(explicit)
+    it = iter(rest)
     for a in it:
         ctx_opt = re.fullmatch(r"-([ABC])(\d*)|--(after|before)-context=(\d+)|--context=(\d+)", a)
-        if ctx_opt and pattern is None:
+        if a == "--":
+            files.extend(it)
+        elif ctx_opt and not patterns:
             which = ctx_opt.group(1) or {"after": "A", "before": "B"}.get(ctx_opt.group(3) or "", "C")
             raw = ctx_opt.group(2) or ctx_opt.group(4) or ctx_opt.group(5) or next(it, "")
             if not raw.isdigit():
@@ -241,57 +349,234 @@ def grep(ctx, args):
             n = int(raw)
             after = n if which in ("A", "C") else after
             before = n if which in ("B", "C") else before
-        elif a.startswith("-") and pattern is None and len(a) > 1:
+        elif a.startswith("--") and len(a) > 2:
+            flags.add(
+                {
+                    "ignore-case": "i",
+                    "invert-match": "v",
+                    "count": "c",
+                    "line-number": "n",
+                    "only-matching": "o",
+                    "files-with-matches": "l",
+                    "word-regexp": "w",
+                    "extended-regexp": "E",
+                    "fixed-strings": "F",
+                    "no-filename": "h",
+                    "with-filename": "H",
+                }.get(a[2:], a[2:])
+            )
+        elif a.startswith("-") and len(a) > 1:
             flags.update(a[1:])
-        elif pattern is None:
-            pattern = a
+        elif not patterns:
+            patterns.append(a)
         else:
             files.append(a)
-    if pattern is None:
-        raise CommandError("usage: grep [-ivcE] PATTERN [FILE]", 2)
-    text = "".join(_read(ctx, f) for f in files) if files else ctx.stdin
-    rx = re.compile(pattern, re.I if "i" in flags else 0)
-    lines = text.splitlines()
-    hits = [i for i, l in enumerate(lines) if bool(rx.search(l)) != ("v" in flags)]
-    if "c" in flags:
-        return f"{len(hits)}\n"
-    if not hits:
-        raise CommandError("", 1)
-    keep = sorted({j for i in hits for j in range(max(0, i - before), min(len(lines), i + after + 1))})
-    if ctx.colorize and "v" not in flags:  # Ubuntu aliases grep to grep --color=auto
-        return "\n".join(rx.sub(lambda m: f"\033[01;31m\033[K{m.group(0)}\033[m\033[K", lines[j]) for j in keep) + "\n"
-    return "\n".join(lines[j] for j in keep) + "\n"
+    if not patterns:
+        raise CommandError("Usage: grep [OPTION]... PATTERNS [FILE]...\nTry 'grep --help' for more information.", 2)
+    pats = [re.escape(p) if "F" in flags else p for p in patterns]
+    if "w" in flags:
+        pats = [rf"\b(?:{p})\b" for p in pats]
+    try:
+        rx = re.compile("|".join(f"(?:{p})" for p in pats), re.I if "i" in flags else 0)
+    except re.error as e:
+        raise CommandError(f"grep: {e}", 2) from None
+    sources = [(f, _read(ctx, f, "grep")) for f in files] if files else [(None, ctx.stdin)]
+    with_name = ("H" in flags or len(sources) > 1) and "h" not in flags
+    out, total, matched_files = [], 0, []
+    for name, text in sources:
+        lines = text.splitlines()
+        hits = [i for i, l in enumerate(lines) if bool(rx.search(l)) != ("v" in flags)]
+        total += len(hits)
+        if hits:
+            matched_files.append(name or "(standard input)")
+        if "c" in flags or "l" in flags:
+            if "c" in flags:
+                out.append(f"{name}:{len(hits)}" if with_name else str(len(hits)))
+            continue
+        prefix = f"{name}:" if with_name else ""
+        if "o" in flags:
+            for i in hits:
+                for m in rx.finditer(lines[i]):
+                    out.append(prefix + (f"{i + 1}:" if "n" in flags else "") + m.group(0))
+            continue
+        keep = sorted({j for i in hits for j in range(max(0, i - before), min(len(lines), i + after + 1))})
+        for j in keep:
+            line = lines[j]
+            if ctx.colorize and "v" not in flags:  # Ubuntu aliases grep to grep --color=auto
+                line = rx.sub(lambda m: f"\033[01;31m\033[K{m.group(0)}\033[m\033[K", line)
+            sep = ":" if j in hits else "-"
+            out.append(prefix + (f"{j + 1}{sep}" if "n" in flags else "") + line)
+    if "l" in flags:
+        out = matched_files
+    if total == 0:  # grep prints its counts but still exits 1 when nothing matched
+        raise CommandError("\n".join(out), 1)
+    return "\n".join(out) + "\n"
 
 
 @command("head")
 def head(ctx, args):
-    n = _num_arg(args, 10)
+    n = _num_arg(args, 10, "head")
     return "\n".join(_input(ctx, args).splitlines()[:n]) + "\n"
 
 
 @command("tail")
 def tail(ctx, args):
-    n = _num_arg(args, 10)
     lines = _input(ctx, args).splitlines()
+    for i, a in enumerate(args):
+        if a == "-n" and i + 1 < len(args) and args[i + 1].startswith("+") and args[i + 1][1:].isdigit():
+            return "\n".join(lines[int(args[i + 1][1:]) - 1 :]) + "\n"
+    n = _num_arg(args, 10, "tail")
     return "\n".join(lines[-n:]) + "\n"
 
 
 @command("wc")
 def wc(ctx, args):
-    text = _input(ctx, args)
-    if "-l" in args:
-        return f"{len(text.splitlines())}\n"
-    return f"{len(text.splitlines())} {len(text.split())} {len(text)}\n"
+    text = _input(ctx, args, "wc")
+    counts = {"l": len(text.splitlines()), "w": len(text.split()), "c": len(text.encode()), "m": len(text)}
+    want = [c for a in args if a.startswith("-") and not a.startswith("--") for c in a[1:] if c in counts]
+    want += [a[2:][0] for a in args if a in ("--lines", "--words", "--bytes", "--chars")]
+    if not want:
+        want = ["l", "w", "c"]
+    return " ".join(str(counts[c]) for c in want) + "\n"
 
 
 @command("sort")
 def sort_(ctx, args):
-    lines = sorted(_input(ctx, args).splitlines(), reverse="-r" in args)
+    flags = "".join(a[1:] for a in args if a.startswith("-") and not a.startswith("--") and a not in ("-k", "-t"))
+    key_spec, sep = opt(args, "-k", "--key"), opt(args, "-t", "--field-separator")
+    numeric, unique, rev = "n" in flags or "--numeric-sort" in args, "u" in flags or "--unique" in args, "r" in flags
+    if key_spec and not re.fullmatch(r"\d+(,\d+)?[nr]*", key_spec):
+        raise CommandError(f"sort: invalid key {key_spec!r}", 2)
+    lines = _input(ctx, args, "sort", value_flags=("-k", "-t")).splitlines()
+    field = int(key_spec.split(",")[0]) if key_spec else None
+    numeric = numeric or bool(key_spec and "n" in key_spec)
+    rev = rev or bool(key_spec and "r" in key_spec)
+
+    def num(s):
+        m = re.match(r"\s*(-?\d+(?:\.\d+)?)", s)
+        return float(m.group(1)) if m else 0.0
+
+    def key(line):
+        part = line
+        if field:
+            cols = line.split(sep) if sep else line.split()
+            part = cols[field - 1] if field <= len(cols) else ""
+        return num(part) if numeric else part
+
+    lines.sort(key=key, reverse=rev)
+    if unique:
+        seen, kept = set(), []
+        for line in lines:
+            k = key(line)
+            if k not in seen:
+                seen.add(k)
+                kept.append(line)
+        lines = kept
     return "\n".join(lines) + "\n"
 
 
-@command("awk", help="limited: awk '{print $N}'")
+@command("awk", help="awk [-F SEP] 'PATTERN {print $N, $NF, NR} END {print ...}' [FILE]")
 def awk(ctx, args):
+    return _awk(ctx, args)
+
+
+def _awk(ctx, args):
+    """The subset administrators type at a prompt: field printing with a regex or comparison guard, NR and END."""
+    sep = opt(args, "-F")
+    rest = [a for a in args if a not in ("-F", sep)]
+    rest = [a for a in rest if not (a.startswith("-F") and len(a) > 2)]
+    if sep is None:
+        packed = next((a for a in args if a.startswith("-F") and len(a) > 2), None)
+        sep = packed[2:] if packed else None
+    prog = rest[0] if rest else ""
+    files = rest[1:]
+    text = "".join(_read(ctx, f, "awk") for f in files) if files else ctx.stdin
+    lines = text.splitlines()
+    m = re.fullmatch(
+        r"\s*(?:BEGIN\s*\{(?P<begin>[^}]*)\}\s*)?(?:(?P<guard>[^{}]+?)\s*)?(?:\{(?P<body>[^}]*)\})?\s*(?:END\s*\{(?P<end>[^}]*)\}\s*)?",
+        prog,
+    )
+    if not m or not prog.strip():
+        raise CommandError(f"awk: cmd. line:1: {prog}\nawk: cmd. line:1: ^ syntax error", 2)
+    begin, guard, body, end = m.group("begin"), (m.group("guard") or "").strip(), m.group("body"), m.group("end")
+    if body is None and guard:
+        body = "print"
+    total = {"sum": 0.0}
+    out = []
+
+    def fields_of(line):
+        return line.split(sep) if sep else line.split()
+
+    def value(tok, cols, nr):
+        tok = tok.strip()
+        if tok == "NR":
+            return str(nr)
+        if tok == "NF":
+            return str(len(cols))
+        if tok == "$0":
+            return line_text[0]
+        if tok == "$NF":
+            return cols[-1] if cols else ""
+        mm = re.fullmatch(r"\$(\d+)", tok)
+        if mm:
+            i = int(mm.group(1))
+            return cols[i - 1] if 0 < i <= len(cols) else (line_text[0] if i == 0 else "")
+        if tok.startswith('"') and tok.endswith('"'):
+            return tok[1:-1]
+        if tok == "sum":
+            return str(int(total["sum"]) if total["sum"] == int(total["sum"]) else total["sum"])
+        return tok
+
+    def guard_ok(line, cols, nr):
+        if not guard:
+            return True
+        if guard.startswith("/") and guard.endswith("/"):
+            return re.search(guard[1:-1], line) is not None
+        if guard.startswith("!/") and guard.endswith("/"):
+            return re.search(guard[2:-1], line) is None
+        mm = re.fullmatch(r"(.+?)\s*(==|!=|>=|<=|>|<|~|!~)\s*(.+)", guard)
+        if not mm:
+            raise CommandError(f"awk: cmd. line:1: {guard}\nawk: cmd. line:1: ^ unsupported pattern", 2)
+        a, op, b = value(mm.group(1), cols, nr), mm.group(2), value(mm.group(3), cols, nr)
+        if op in ("~", "!~"):
+            hit = re.search(b.strip("/"), a) is not None
+            return hit if op == "~" else not hit
+        try:
+            fa, fb = float(a), float(b)
+            a, b = fa, fb
+        except ValueError:
+            pass
+        return {"==": a == b, "!=": a != b, ">=": a >= b, "<=": a <= b, ">": a > b, "<": a < b}[op]
+
+    def run_body(code, cols, nr):
+        for stmt in [s.strip() for s in code.split(";") if s.strip()]:
+            if stmt == "print":
+                out.append(line_text[0])
+            elif stmt.startswith("print"):
+                expr = stmt[5:].strip()
+                parts = [p for p in re.split(r",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", expr)] if expr else ["$0"]
+                out.append(" ".join(value(p, cols, nr) for p in parts))
+            elif re.fullmatch(r"sum\s*\+=\s*\S+", stmt):
+                with contextlib.suppress(ValueError):
+                    total["sum"] += float(value(stmt.split("+=")[1], cols, nr) or 0)
+            else:
+                raise CommandError(f"awk: cmd. line:1: {stmt}\nawk: cmd. line:1: ^ unsupported statement", 2)
+
+    line_text = [""]
+    if begin:
+        run_body(begin, [], 0)
+    for nr, line in enumerate(lines, 1):
+        line_text[0] = line
+        cols = fields_of(line)
+        if guard_ok(line, cols, nr) and body:
+            run_body(body, cols, nr)
+    if end:
+        line_text[0] = lines[-1] if lines else ""
+        run_body(end, fields_of(line_text[0]), len(lines))
+    return "\n".join(out) + "\n" if out else ""
+
+
+def _awk_old(ctx, args):
     prog = next((a for a in args if not a.startswith("-")), "")
     fields = [int(x) for x in re.findall(r"\$(\d+)", prog)]
     out = []
@@ -301,18 +586,26 @@ def awk(ctx, args):
     return "\n".join(out) + "\n"
 
 
-def _num_arg(args, default):
+def _num_arg(args, default, tool="head"):
     for i, a in enumerate(args):
         if a == "-n" and i + 1 < len(args):
-            return int(args[i + 1])
+            v = args[i + 1]
+            if not v.isdigit():
+                raise CommandError(f"{tool}: invalid number of lines: '{v}'")
+            return int(v)
         if re.fullmatch(r"-\d+", a):
             return int(a[1:])
     return default
 
 
-def _input(ctx, args):
-    files = [a for a in args if not a.startswith("-") and not a.isdigit()]
-    return "".join(_read(ctx, f) for f in files) if files else ctx.stdin
+def _input(ctx, args, tool="cat", value_flags=("-n",)):
+    files, it = [], iter(args)
+    for a in it:
+        if a in value_flags:  # an option value, not a file
+            next(it, None)
+        elif not a.startswith("-") and not a.isdigit():
+            files.append(a)
+    return "".join(_read(ctx, f, tool) for f in files) if files else ctx.stdin
 
 
 # ---------------------------------------------------------------- hosts
@@ -506,26 +799,97 @@ def service(ctx, args):
     raise CommandError("usage: service <name> <action>")
 
 
-@command("journalctl", help="journalctl -u <unit>")
+@command("journalctl", help="journalctl [-u UNIT] [-k] [-b] [-n N] [-p PRIO] [--since WHEN] [-f]")
 def journalctl(ctx, args):
-    unit = None
-    for i, a in enumerate(args):
-        if a in ("-u", "--unit") and i + 1 < len(args):
-            unit = args[i + 1].removesuffix(".service")
+    unit, tail, prio, kernel, since = None, None, None, False, None
+    it = iter(args)
+    for a in it:
+        if a in ("-u", "--unit"):
+            unit = next(it, "").removesuffix(".service")
+        elif a.startswith("--unit="):
+            unit = a.split("=", 1)[1].removesuffix(".service")
         elif a.startswith("-u") and len(a) > 2 and not a.startswith("--"):
             unit = a[2:].removesuffix(".service")
-        elif a.startswith("-xeu"):
-            unit = args[i + 1].removesuffix(".service") if i + 1 < len(args) else None
-    if unit:
-        lines = ctx.node.journal.get(unit, [])
-        return ("\n".join(lines) + "\n") if lines else "-- No entries --\n"
-    lines = [l for log in ctx.node.journal.values() for l in log]
-    return "\n".join(lines) + "\n" if lines else "-- No entries --\n"
+        elif a.startswith("-xeu") or a.startswith("-eu"):
+            unit = next(it, "").removesuffix(".service")
+        elif a in ("-n", "--lines"):
+            tail = int_arg(next(it, ""), "Failed to parse lines", 1, minimum=0)
+        elif a.startswith("--lines="):
+            tail = int_arg(a.split("=", 1)[1], "Failed to parse lines", 1, minimum=0)
+        elif a.startswith("-n") and a[2:].isdigit():
+            tail = int(a[2:])
+        elif a in ("-p", "--priority"):
+            prio = next(it, "")
+        elif a.startswith("--priority="):
+            prio = a.split("=", 1)[1]
+        elif a in ("-k", "--dmesg"):
+            kernel = True
+        elif a in ("--since", "-S"):
+            since = next(it, "")
+        elif a.startswith("--since="):
+            since = a.split("=", 1)[1]
+        elif a in ("-b", "--boot", "-x", "-e", "-f", "--follow", "--no-pager", "-r", "--reverse", "-a", "--all"):
+            continue
+        elif a.startswith("-"):
+            raise CommandError(f"journalctl: unrecognized option '{a}'", 1)
+    if kernel:
+        lines = [l for l in ctx.node.dmesg]
+    elif unit:
+        lines = list(ctx.node.journal.get(unit, []))
+        if not lines and ctx.node.services.get(unit) == "active":
+            # a unit that has run since boot has at least its start in the journal
+            booted = clock.booted(ctx.state).strftime("%b %d %H:%M:%S")
+            lines = [
+                f"{booted} {ctx.host} systemd[1]: Starting {unit}.service...",
+                f"{booted} {ctx.host} systemd[1]: Started {unit}.service.",
+            ]
+    else:
+        lines = [l for log in ctx.node.journal.values() for l in log]
+    if prio:
+        levels = {
+            "emerg": 0,
+            "alert": 1,
+            "crit": 2,
+            "err": 3,
+            "error": 3,
+            "warning": 4,
+            "warn": 4,
+            "notice": 5,
+            "info": 6,
+            "debug": 7,
+        }
+        top = levels.get(prio.split("..")[-1].lower(), int(prio) if prio.isdigit() else 7)
+        if top <= 4:
+            lines = [
+                l
+                for l in lines
+                if re.search(r"error|fail|fatal|warn|Xid|refused|denied|not responding|killed", l, re.I)
+            ]
+    if since:
+        m = re.search(r"(\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2})?)", since)
+        if m:
+            lines = [
+                l
+                for l in lines
+                if (lm := re.match(r"(\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2})?)", l)) is None or lm.group(1) >= m.group(1)
+            ]
+    if tail is not None:
+        lines = lines[-tail:] if tail else []
+    if "-r" in args or "--reverse" in args:
+        lines = lines[::-1]
+    return ("\n".join(lines) + "\n") if lines else "-- No entries --\n"
 
 
-@command("dmesg", help="kernel ring buffer (look for NVRM: Xid)")
+@command("dmesg", help="kernel ring buffer (look for NVRM: Xid); -T human times, -l LEVEL filters")
 def dmesg(ctx, args):
     lines = list(ctx.node.dmesg)
+    level = opt(args, "-l", "--level")
+    if level:
+        top = {"emerg": 0, "alert": 1, "crit": 2, "err": 3, "warn": 4, "notice": 5, "info": 6, "debug": 7}.get(
+            level.split(",")[-1], 7
+        )
+        if top <= 4:
+            lines = [l for l in lines if re.search(r"error|fail|fatal|warn|Xid|fallen off|AER|taint|timeout", l, re.I)]
     if "-T" in args or "--ctime" in args:
         boot = clock.booted(ctx.state)
 
@@ -575,6 +939,18 @@ KNOWN_MODULES = frozenset(
 )
 
 
+# which loaded modules hold a reference to which (lsmod's "Used by" column, and what -r refuses)
+MODULE_DEPS = {
+    "nvidia_uvm": ["nvidia"],
+    "nvidia_modeset": ["nvidia"],
+    "nvidia_drm": ["nvidia_modeset"],
+    "nvidia_peermem": ["nvidia", "ib_core"],
+    "mlx5_ib": ["mlx5_core", "ib_core"],
+    "ib_uverbs": ["ib_core"],
+    "rdma_ucm": ["ib_core"],
+}
+
+
 @command("modprobe", help="modprobe [-r] <module>")
 def modprobe(ctx, args):
     remove = "-r" in args or "--remove" in args
@@ -588,6 +964,9 @@ def modprobe(ctx, args):
         if remove:
             if m == "nvidia" and any(g.processes for g in ctx.node.gpus):
                 raise CommandError("modprobe: FATAL: Module nvidia is in use.")
+            holders = [d for d, deps in MODULE_DEPS.items() if m in deps and d in ctx.node.modules]
+            if holders:
+                raise CommandError(f"modprobe: FATAL: Module {m} is in use.")
             if m in ctx.node.modules:
                 ctx.node.modules.remove(m)
             if m == "nvidia":

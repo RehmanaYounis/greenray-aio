@@ -387,6 +387,10 @@ def _start(state, j, chosen, add_procs=True):
     loc = [_numa_local(j, n) for n in chosen]
     j.numa_local = None if any(x is None for x in loc) or not loc else all(loc)
     j.start_time = state.slurm.clock
+    if j.get("stdout_pattern") and "%N" in j.stdout_pattern:
+        from .steps import _expand_pattern
+
+        j.stdout = _expand_pattern(j.stdout_pattern, j)
     if j.batch and add_procs:
         pname = _proc_name(j)
         for n, idx in chosen.items():

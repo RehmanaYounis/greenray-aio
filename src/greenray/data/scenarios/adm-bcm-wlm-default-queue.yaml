@@ -82,15 +82,15 @@ checks:
     expr: "any(j.name == 'infer-smoke' and j.partition == '{queue}' for j in slurm.jobs)"
   - desc: you found the cause in the logs (journalctl -u cmd, the BCM event log or the slurmctld journal)
     kind: evidence
-    expr: ran(r'^(journalctl|cmsh .*events|less|cat|tail|grep)')
+    expr: ran(r'^journalctl.*cmd|^cmsh .*events|^(diff|grep|cat|less).*slurm\\.conf')
   - desc: slurm.conf was not edited by hand this time
     kind: safety
-    expr: not ran(r'^(nano|vim?|sed -i|tee)\b.*slurm\.conf$') and not ran(r'^cp .*slurm\.conf$')
+    expr: generated('bcm-head', '/etc/slurm/slurm.conf')
 hints:
   - "Reproduce first: submit the team's script with sbatch, then scontrol show partition. Which partitions does the controller know this morning, and what does grep PartitionName /etc/slurm/slurm.conf say? Compare the file with /root/slurm.conf.cr131."
   - "Who writes slurm.conf on a BCM cluster? Read the first lines of the file, journalctl -u cmd on bcm-head around 03:00 and cmsh -c \"main; events\". A hand edit lasts until CMDaemon writes the file again."
   - "The partitions CMDaemon writes come from its own Slurm configuration: cmsh -c \"wlm; use slurm; jobqueue; list\". A queue that is not there is not in the next slurm.conf either. add, set and commit work in that submode like everywhere else in cmsh; show on a queue lists its properties."
-  - "Only one queue can be the default. Change defq first, then add {queue}; each object needs its own commit. Afterwards systemctl restart cmd on bcm-head is the real test: the partition must still be there."
+  - "Slurm uses one default queue; cmsh warns if two are flagged and Slurm keeps the last one. Change defq first, then add {queue}; each object needs its own commit. Afterwards systemctl restart cmd on bcm-head is the real test: the partition must still be there."
 references:
   - NVIDIA Base Command Manager 10 Administrator Manual, Slurm configuration in cmsh (wlm mode, job queues)
   - Slurm slurm.conf man page (PartitionName, Default, MaxTime)

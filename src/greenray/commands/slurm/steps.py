@@ -193,11 +193,26 @@ def _exec_task(ctx, j, host, argv, container):
         return _container_python(code, j, len(gidx)), 0
     if container and prog == "cat" and argv[1:] == ["/etc/os-release"]:
         return 'PRETTY_NAME="Ubuntu 22.04.4 LTS"\nNAME="Ubuntu"\nVERSION_ID="22.04"', 0
+    if prog == "nproc":
+        return str(j.cpus_per_task if j.get("cpus_per_task") else node.get("cpus", 224)), 0
     if prog in ("bash", "sh") and "-c" in argv:
         from ...core.shell import Shell
 
         sh = Shell(state, host)
-        return sh.run(argv[argv.index("-c") + 1]), 0
+        sh.ctx.cwd = j.work_dir
+        saved_env = dict(node.env)
+        node.env.update(_job_env(j, host))
+        if gidx:
+            node.env["CUDA_VISIBLE_DEVICES"] = ",".join(str(i) for i in range(len(gidx)) if constrain) or ",".join(
+                map(str, gidx)
+            )
+        node.env["SLURM_PROCID"] = str(_TASK.get("global", 0))
+        node.env["SLURM_LOCALID"] = str(_TASK.get("local") or 0)
+        try:
+            return sh.run(argv[argv.index("-c") + 1]), 0
+        finally:
+            node.env.clear()
+            node.env.update(saved_env)
     if prog == "env" and not argv[1:]:
         env = dict(node.env)
         env.update(_job_env(j, host))
@@ -216,8 +231,11 @@ def _exec_task(ctx, j, host, argv, container):
     except CommandError as e:
         out, code = str(e), e.code
         if "command not found" in out:
-            out = f"slurmstepd: error: execve(): {argv[0]}: No such file or directory"
-            code = 2
+            if j.batch and not _TASK.get("per_node", 1) > 1:
+                out = f"/var/spool/slurmd/job{j.id:05d}/slurm_script: line 4: {argv[0]}: command not found"
+            else:
+                out = f"slurmstepd: error: execve(): {argv[0]}: No such file or directory"
+            code = 127
     finally:
         node.env.clear()
         node.env.update(saved)
@@ -323,7 +341,7 @@ def _run_step(ctx, j, opts, argv):
         for k in range(per):
             if task >= total:
                 break
-            _TASK.update({"local": k, "per_node": per})
+            _TASK.update({"local": k, "per_node": per, "global": task})
             try:
                 text, code = _exec_task(ctx, j, host, argv, bool(image))
             finally:

@@ -37,3 +37,10 @@ edge_cases:
   - "Changing the partition with scontrol update is the same mistake with a shorter life: it lasts until the next reconfigure. Make the change in cmsh and let it reach the controller through cmd."
   - "On a cluster where BCM does not manage Slurm (the header of slurm.conf says so), editing the file and reconfiguring is the right procedure. Always read the header first."
   - "A queue's nodes must be known devices; cmsh refuses a hostlist that names a node BCM has never heard of. Expand the hostlist with scontrol show hostnames if you are unsure what dgx-[01-04] contains."
+expect:
+  'sbatch /home/{user}/infer/run.sbatch':
+    - 'Submitted batch job'
+  'journalctl -u cmd':
+    - 'wrote /etc/slurm/slurm.conf'
+  'scontrol show partition {queue}':
+    - 'Default=YES'

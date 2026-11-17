@@ -48,7 +48,8 @@ def _meta(folder: Path) -> dict:
 
 
 def commands_with_help() -> list[str]:
-    return sorted(_index())
+    """Commands that have a help page; a page marked ``manual_only`` (a configuration file) is left out."""
+    return sorted(name for name, folder in _index().items() if not _meta(folder).get("manual_only"))
 
 
 def _read(folder: Path, name: str) -> str | None:

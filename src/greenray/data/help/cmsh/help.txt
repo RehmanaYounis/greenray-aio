@@ -10,6 +10,7 @@ Valid options:
 Commands inside cmsh are grouped into modes. Enter a mode by typing its
 name; 'help' lists the commands available in the current mode.
 
-Modes: device, category, softwareimage, partition, user, group, profile, main
+Modes: device, category, softwareimage, partition, user, group, profile, wlm,
+       configurationoverlay, monitoring, main
 
 (GreenRay AIO simulates the options listed above.)

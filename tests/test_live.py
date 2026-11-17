@@ -35,7 +35,7 @@ def test_clock_advances_per_command_and_rolls_back_with_crashes():
     s.run("hostname")
     s.run("hostname")
     assert clock.now(s.ctx.state) - t0 >= __import__("datetime").timedelta(seconds=2 * clock.TICK)
-    assert abs(t0.timestamp() - time.time()) < 60  # the session starts "now"
+    assert t0 == clock.START  # every session starts on the day the scenarios are set on
 
 
 def test_time_bearing_commands_use_the_clock():

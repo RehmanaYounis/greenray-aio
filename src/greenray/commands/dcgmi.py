@@ -30,6 +30,7 @@ from ..core.errors import CommandError
 from ..core.state import AttrDict
 from . import HOOKS_REBOOT, HOOKS_SERVICE, command
 from .common import err as _err
+from .common import int_arg
 from .common import opt as _opt
 
 DCGM_VERSION = "3.3.6"
@@ -200,6 +201,16 @@ def _box(title, rows):
 def _discovery(ctx, args):
     host, node = _host(ctx, args)
     vis = _visible(node)
+    if "-c" in args or "--compute-hierarchy" in args:
+        out = ["Instance Hierarchy", "+-------------------------------------------------------------+"]
+        for g in vis:
+            out.append(f"| GPU {g.index}, {g.name} (UUID: {g.uuid})")
+            for gi in g.gpu_instances:
+                out.append(f"|   I: GPU Instance (EntityID: {gi.id}), profile: MIG {gi.profile}")
+                for ci in [c for c in g.compute_instances if c.gi == gi.id]:
+                    out.append(f"|     C: Compute Instance (EntityID: {ci.id}), profile: MIG {ci.profile}")
+        out.append("+-------------------------------------------------------------+")
+        return "\n".join(out) + "\n"
     out = [
         f"{len(vis)} GPU{'s' if len(vis) != 1 else ''} found.",
         "+--------+----------------------------------------------------------------------+",
@@ -270,6 +281,8 @@ def _group(ctx, args):
         _dcgm(state).health_watches.get(host, {}).pop(d, None)
         return f"Successfully removed group {d}\n"
     if gid is not None and ("-a" in args or "--add" in args or "-r" in args or "--remove" in args):
+        if str(gid) in ("0", "1"):
+            raise _err("Error: Cannot modify the default group.\nReturn: The Group is not found.", 255)
         if gid not in groups:
             raise _err(f"Error: The Group is not found.\nGroup ID {gid} not found.", 255)
         add = _opt(args, "-a", "--add")
@@ -749,9 +762,9 @@ def _stats(ctx, args):
             "+====================================+=========================================+",
             "|-----  Execution Stats  ------------+-----------------------------------------|",
             "| Start Time                         | Mon Oct 19 09:00:00 2026                |",
-            "| End Time                         * | Still Running                           |",
-            "| Total Execution Time (sec)       * | Still Running                           |",
-            f"| No. of Processes                   | {len(gpus):<39} |",
+            f"| End Time                         {'*' if not (rec and rec.get('stopped')) else ' '} | {'Still Running' if not (rec and rec.get('stopped')) else 'Mon Oct 19 10:15:13 2026':<39} |",
+            f"| Total Execution Time (sec)       {'*' if not (rec and rec.get('stopped')) else ' '} | {'Still Running' if not (rec and rec.get('stopped')) else '4513':<39} |",
+            f"| No. of Processes                   | {len(gpus) if sj else 0:<39} |",
             "+-----  Performance Stats  ----------+-----------------------------------------+",
             "| Energy Consumed (Joules)           | 1243211                                 |",
             "| Power Usage (Watts)                | Avg: 612.4, Max: 698.1, Min: 71.2       |",
@@ -801,11 +814,16 @@ def _dmon(ctx, args):
     if sel:
         ids = _parse_entities(sel, node)
         gpus = [g for g in gpus if g.index in ids]
-    count = int(_opt(args, "-c", "--count", default="1") or 1)
+    count = int_arg(
+        _opt(args, "-c", "--count", default="1") or 1, "Error: Invalid value for -c/--count. Must be a number.", 2
+    )
+    delay = int_arg(
+        _opt(args, "-d", "--delay", default="1000"), "Error: Invalid value for -d/--delay. Must be a number.", 2
+    )
     hdr = "#Entity   " + "".join(f"{FIELDS[f][0]:<12}" for f in fids)
     units = "ID        " + "".join(f"{FIELDS[f][1]:<12}" for f in fids)
     count = max(1, min(count, 3))
-    stream = live.Stream(ctx, header=[hdr.rstrip(), units.rstrip()], delay=int(_opt(args, "-d", default="1000")) / 1000)
+    stream = live.Stream(ctx, header=[hdr.rstrip(), units.rstrip()], delay=delay / 1000)
     for k in range(count):
         rows = []
         for g in gpus:

@@ -66,7 +66,7 @@ checks:
     expr: ran(r'^(nvidia-smi|lsmod|dpkg|journalctl|uname|dmesg)', '{node}')
   - desc: you read the node's settings in cmsh before changing them
     kind: evidence
-    expr: ran_before(r'^cmsh .*(show|get |list)', r'^cmsh .*set ')
+    expr: ran_before(r'^cmsh .*(show|get |list|usedby)', r'^cmsh .*set ')
   - desc: "{node} is back in category dgx-h100, committed"
     expr: bcm.devices['{node}'].category == 'dgx-h100' and not bcm.uncommitted
   - desc: "{node} was re-provisioned from the DGX OS image"

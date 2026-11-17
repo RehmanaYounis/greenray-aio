@@ -19,6 +19,13 @@ import json
 class AttrDict(dict):
     """dict with attribute access; nested dicts are converted on assignment."""
 
+    @classmethod
+    def register_yaml(cls) -> None:
+        """yaml.safe_dump looks representers up by exact type, so a subclass needs its own entry."""
+        import yaml
+
+        yaml.SafeDumper.add_representer(cls, yaml.SafeDumper.represent_dict)
+
     def __getattr__(self, key):
         try:
             return self[key]
@@ -64,6 +71,9 @@ class AttrList(list):
 
     def __deepcopy__(self, memo):
         return wrap(copy.deepcopy(list(self), memo))
+
+
+AttrDict.register_yaml()
 
 
 def wrap(value):

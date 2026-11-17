@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from ..core import live
+from ..core import clock, live
 from ..core.errors import CommandError
 from . import HOOKS_REBOOT, HOOKS_SERVICE, command
+from .common import int_arg
 from .common import opt as _opt
 
 # H100 80GB MIG GPU-instance profiles: name -> (profile id, compute slices, memory slices, max count)
@@ -18,6 +19,16 @@ MIG_PROFILES = {
     "7g.80gb": (0, 7, 8, 1),
 }
 PROFILE_BY_ID = {v[0]: k for k, v in MIG_PROFILES.items()}
+# where each profile may start on an H100 80GB (its compute-slice offsets), as ``mig -lgipp`` prints them
+MIG_PLACEMENTS = {
+    "1g.10gb": [0, 1, 2, 3, 4, 5, 6],
+    "1g.10gb+me": [0, 1, 2, 3, 4, 5, 6],
+    "1g.20gb": [0, 2, 4, 6],
+    "2g.20gb": [0, 2, 4],
+    "3g.40gb": [0, 4],
+    "4g.40gb": [0],
+    "7g.80gb": [0],
+}
 PROFILE_MEM_MIB = {
     "1g.10gb": 9856,
     "1g.10gb+me": 9856,
@@ -455,15 +466,17 @@ def _mig(ctx, args):
                 6,
             )
         return "\n".join(out) + "\n"
-    if flag in ("-lgipp",):
-        return (
-            "".join(
-                f"GPU  {g.index} Profile ID {MIG_PROFILES[p][0]} Placements: {{0,1,2,3,4,5,6}}:1\n"
-                for g in gpus
-                for p in MIG_PROFILES
-            )
-            + ""
-        )
+    if flag in ("-lgipp", "--list-gpu-instance-possible-placements"):
+        out = []
+        for g in gpus:
+            if not g.mig_mode:
+                continue
+            for p, (pid, cs, _ms, _mx) in MIG_PROFILES.items():
+                starts = ",".join(str(s) for s in MIG_PLACEMENTS[p])
+                out.append(f"GPU  {g.index} Profile ID {pid:>2} Placements: {{{starts}}}:{cs}")
+        if not out:
+            raise CommandError("No GPU instance profiles found: MIG mode is not enabled on the selected GPU(s).", 6)
+        return "\n".join(out) + "\n"
     if flag in ("-cgi", "--create-gpu-instance"):
         spec = _opt(args, "-cgi", "--create-gpu-instance")
         also_ci = "-C" in args or "--default-compute-instance" in args
@@ -488,13 +501,22 @@ def _mig(ctx, args):
                 used_c = sum(MIG_PROFILES[i.profile][1] for i in g.gpu_instances)
                 used_m = sum(MIG_PROFILES[i.profile][2] for i in g.gpu_instances)
                 same = sum(1 for i in g.gpu_instances if i.profile == name)
-                if used_c + cs > 7 or used_m + ms > 8 or same >= mx:
+                taken = {
+                    s for i in g.gpu_instances for s in range(i.placement, i.placement + MIG_PROFILES[i.profile][1])
+                }
+                start = next((s for s in MIG_PLACEMENTS[name] if not any(x in taken for x in range(s, s + cs))), None)
+                if used_c + cs > 7 or used_m + ms > 8 or same >= mx or start is None:
                     raise CommandError(
-                        f"Unable to create a GPU instance on GPU {g.index} using profile {pid}: Insufficient Resources",
+                        "\n".join(
+                            out
+                            + [
+                                f"Unable to create a GPU instance on GPU {g.index} using profile {pid}: Insufficient Resources"
+                            ]
+                        ),
                         6,
                     )
                 gid = max([i.id for i in g.gpu_instances] + [0]) + 1
-                g.gpu_instances.append({"id": gid, "profile": name, "profile_id": pid, "placement": used_c})
+                g.gpu_instances.append({"id": gid, "profile": name, "profile_id": pid, "placement": start})
                 out.append(
                     f"Successfully created GPU instance ID {gid:>2} on GPU {g.index:>2} using profile MIG {name} (ID {pid:>2})"
                 )
@@ -591,6 +613,8 @@ def nvidia_smi(ctx, args):
         return _nvlink(ctx, args[1:])
     if args and args[0] == "dmon":
         return _dmon(ctx, args[1:])
+    if args and args[0] == "pmon":
+        return _pmon(ctx, args[1:])
     if not args:
         return _table(ctx)
     if "-h" in args or "--help" in args:
@@ -598,7 +622,9 @@ def nvidia_smi(ctx, args):
             "Usage: nvidia-smi [OPTION]...\n  -L  list GPUs\n  -q [-d SECTION]  query (MEMORY,ECC,TEMPERATURE,POWER,CLOCK,PERFORMANCE,ROW_REMAPPER,COMPUTE)\n"
             "  --query-gpu=FIELDS --format=csv[,noheader,nounits]\n  -i ID  select GPU\n  -pm 0|1  persistence mode\n"
             "  -pl WATTS  power limit\n  -r  reset GPU\n  -e 0|1  ECC mode\n  -c MODE  compute mode\n  -mig 0|1  MIG mode\n"
-            "  -lgc MIN,MAX / -rgc  lock/reset GPU clocks\n  mig ...  MIG instance management\n  topo -m  topology\n  nvlink -s  NVLink status\n"
+            "  -lgc MIN,MAX / -rgc  lock/reset GPU clocks\n  -ac MEM,SM / -rac  applications clocks\n"
+            "  --query-compute-apps=FIELDS --format=csv  processes per GPU\n  pmon [-c N]  process monitor\n"
+            "  mig ...  MIG instance management\n  topo -m  topology\n  nvlink -s|-e|-c  NVLink status, error counters, capabilities\n"
         )
     gpus = _selected(ctx, args)
     if "-L" in args or "--list-gpus" in args:
@@ -613,6 +639,9 @@ def nvidia_smi(ctx, args):
     q = _opt(args, "--query-gpu")
     if q:
         return _query_csv(ctx, gpus, q, _opt(args, "--format"))
+    qa = _opt(args, "--query-compute-apps")
+    if qa:
+        return _query_apps(ctx, gpus, qa, _opt(args, "--format"))
     if "-q" in args or "--query" in args:
         d = _opt(args, "-d", "--display")
         return _query_full(ctx, _visible(gpus), set(d.upper().split(",")) if d else set())
@@ -648,6 +677,8 @@ def nvidia_smi(ctx, args):
         return "\n".join(out + ["All done."]) + "\n"
     ecc = _opt(args, "-e", "--ecc-config")
     if ecc is not None:
+        if ecc not in ("0", "1"):
+            raise CommandError(f"Invalid ECC config value: {ecc}. Valid values are 0 (disabled) or 1 (enabled).", 1)
         on = ecc == "1"
         out = []
         for g in _visible(gpus):
@@ -725,7 +756,28 @@ def nvidia_smi(ctx, args):
             + "All done.\n"
         )
     if "-rgc" in args or "--reset-gpu-clocks" in args:
-        return "".join(f"All done. GPU clocks reset for GPU {g.bus_id}\n" for g in _visible(gpus))
+        for g in _visible(gpus):
+            g.sm_clock_mhz = 1980 if g.utilization else 345  # back to the driver's own management
+        return "".join(f"GPU clocks reset to default for GPU {g.bus_id}\n" for g in _visible(gpus)) + "All done.\n"
+    ac = _opt(args, "-ac", "--applications-clocks")
+    if ac is not None:
+        mem, _, sm = ac.partition(",")
+        if not (mem.isdigit() and sm.isdigit()):
+            raise CommandError(f"Invalid value for applications clocks: {ac} (expected MEM,SM)", 1)
+        if int(sm) > _visible(gpus)[0].max_sm_clock_mhz:
+            raise CommandError(
+                f"Specified clock combination {ac} is not supported for GPU {_visible(gpus)[0].bus_id}.", 1
+            )
+        for g in _visible(gpus):
+            g.app_sm_clock_mhz = int(sm)
+        return (
+            "".join(f'Applications clocks set to "(MEM {mem}, SM {sm})" for GPU {g.bus_id}\n' for g in _visible(gpus))
+            + "All done.\n"
+        )
+    if "-rac" in args or "--reset-applications-clocks" in args:
+        for g in _visible(gpus):
+            g.app_sm_clock_mhz = g.max_sm_clock_mhz
+        return "".join(f"All done. Applications clocks reset to default for GPU {g.bus_id}\n" for g in _visible(gpus))
     if "-i" in args or "--id" in args:
         return _table(ctx, args)
     raise CommandError("Invalid combination of input arguments. Please run 'nvidia-smi -h' for help.", 2)
@@ -771,10 +823,78 @@ def _topo(ctx):
 def _nvlink(ctx, args):
     gpus = _selected(ctx, args)
     out = []
+    if "-e" in args or "--errorcounters" in args:
+        for g in gpus:
+            out.append(f"GPU {g.index}: {g.name} (UUID: {g.uuid})")
+            for l in range(g.nvlink_count):
+                bad = l in g.nvlink_down
+                out += [
+                    f"\t Link {l}: Replay Errors: {3 if bad else 0}",
+                    f"\t Link {l}: Recovery Errors: {1 if bad else 0}",
+                    f"\t Link {l}: CRC Errors: {12 if bad else 0}",
+                ]
+        return "\n".join(out) + "\n"
+    if "-c" in args or "--capabilities" in args:
+        for g in gpus:
+            out.append(f"GPU {g.index}: {g.name} (UUID: {g.uuid})")
+            for l in range(g.nvlink_count):
+                out += [f"\t Link {l}, P2P is supported: true", f"\t Link {l}, Access to system memory supported: true"]
+        return "\n".join(out) + "\n"
+    if not ("-s" in args or "--status" in args):
+        raise CommandError("Invalid combination of input arguments. Please run 'nvidia-smi nvlink -h' for help.", 2)
     for g in gpus:
         out.append(f"GPU {g.index}: {g.name} (UUID: {g.uuid})")
         for l in range(g.nvlink_count):
             out.append(f"\t Link {l}: " + ("<inactive>" if l in g.nvlink_down else "26.562 GB/s"))
+    return "\n".join(out) + "\n"
+
+
+def _query_apps(ctx, gpus, fields_spec, fmt):
+    """``--query-compute-apps``: one CSV row per process on the selected GPUs."""
+    allowed = {"pid", "process_name", "used_memory", "gpu_uuid", "gpu_bus_id", "gpu_name", "timestamp"}
+    fields = [f.strip() for f in fields_spec.split(",") if f.strip()]
+    bad = [f for f in fields if f not in allowed]
+    if bad:
+        raise CommandError(f'Field "{bad[0]}" is not a valid field to query.', 2)
+    if not fmt or "csv" not in fmt:
+        raise CommandError("Invalid combination of input arguments. Please run 'nvidia-smi -h' for help.", 2)
+    noheader, nounits = "noheader" in fmt, "nounits" in fmt
+    units = {"used_memory": " [MiB]"}
+    out = [] if noheader else [", ".join(f + ("" if nounits else units.get(f, "")) for f in fields)]
+    for g in _visible(gpus):
+        for p in g.processes:
+            vals = {
+                "pid": str(p.get("pid", 0)),
+                "process_name": p.get("name", ""),
+                "used_memory": f"{p.get('mem_mib', 0)}" + ("" if nounits else " MiB"),
+                "gpu_uuid": g.uuid,
+                "gpu_bus_id": g.bus_id,
+                "gpu_name": g.name,
+                "timestamp": clock.stamp(ctx.state, "%Y/%m/%d %H:%M:%S.000"),
+            }
+            out.append(", ".join(vals[f] for f in fields))
+    return "\n".join(out) + "\n"
+
+
+def _pmon(ctx, args):
+    """``nvidia-smi pmon``: one line per GPU process, like a one-shot top for the GPUs."""
+    count = int_arg(_opt(args, "-c", "--count", default="1") or "1", "Invalid value for -c/--count", 1, minimum=1)
+    gpus = _selected(ctx, args)
+    hdr = [
+        "# gpu         pid  type    sm    mem    enc    dec    jpg    ofa    command",
+        "# Idx           #   C/G     %      %      %      %      %      %    name",
+    ]
+    out = []
+    for _ in range(min(count, 3)):
+        out += hdr if not out else []
+        for g in _visible(gpus):
+            if g.processes:
+                for p in g.processes:
+                    out.append(
+                        f"{g.index:>5} {p.get('pid', 0):>11}     C {g.utilization:>5} {min(99, g.memory_used_mib * 100 // max(1, g.memory_total_mib)):>6}      0      0      0      0    {p.get('name', '')[:14]}"
+                    )
+            else:
+                out.append(f"{g.index:>5}           -     -     -      -      -      -      -      -    -")
     return "\n".join(out) + "\n"
 
 

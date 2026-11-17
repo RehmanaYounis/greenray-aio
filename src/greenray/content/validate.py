@@ -34,9 +34,12 @@ def _check_scenario(s: sc.Scenario) -> str | None:
     shell = Shell(s.build_state())
     if all(ok for _, ok, _ in s.grade(shell)):
         return "already solved before any action"
-    sc.replay_solution(s, shell)
+    outputs = sc.replay_solution(s, shell)
     failed = [desc + (f" ({err})" if err else "") for desc, ok, err in s.grade(shell) if not ok]
-    return f"solution leaves checks failing: {failed}" if failed else None
+    if failed:
+        return f"solution leaves checks failing: {failed}"
+    bad = sc.output_problems(s, outputs)
+    return f"solution output: {'; '.join(bad)}" if bad else None
 
 
 def fix_steps(s: sc.Scenario) -> list[str]:

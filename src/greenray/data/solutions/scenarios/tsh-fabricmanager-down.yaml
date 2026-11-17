@@ -31,3 +31,8 @@ edge_cases:
   - "nvidia-smi -q shows 'Fabric > State: In Progress / Completed' on H100. 'In Progress' for a long time also points to FM/NVSwitch trouble."
   - "Restarting FM while CUDA jobs are running is disruptive. Drain the node first on a production cluster."
   - "Fabric Manager is not used on PCIe GPUs or on systems without NVSwitch. Don't 'fix' error 802 on such nodes by installing it."
+expect:
+  'nv-fabricmanager --version':
+    - 'Fabric Manager version'
+  'systemctl status nvidia-fabricmanager':
+    - 'nvidia-fabricmanager.service'

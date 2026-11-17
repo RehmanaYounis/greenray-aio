@@ -76,6 +76,13 @@ MENU_WORDS = {
 }
 
 
+def _positive(value: str) -> int:
+    n = int(value)
+    if n < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return n
+
+
 def menu(ui: UI) -> None:
     ui.out(ui.banner(__version__, "Hands-on labs for AI infrastructure operations · NCP-AIO exam prep"))
     data = progress.load()
@@ -84,7 +91,11 @@ def menu(ui: UI) -> None:
     while True:
         ui.out("")
         ui.out(ui.panel(MENU, title="Main menu"))
-        raw = ui.ask("Choice (0-8, q, or help): ").strip()
+        try:
+            raw = ui.ask("Choice (0-8, q, or help): ").strip()
+        except KeyboardInterrupt:
+            ui.out(ui.dim("\n(q leaves; Ctrl-C again at the prompt does nothing)"))
+            continue
         words = raw.lower().removeprefix("greenray").split()
         choice = MENU_WORDS.get(words[0], words[0]) if words else ""
         if choice in ("help", "?", "h"):
@@ -100,7 +111,11 @@ def menu(ui: UI) -> None:
             if not key:
                 list_scenarios(ui)
                 ui.set_completer([w for s in sc.load_all() for w in (s.code, s.id)], lambda: None)
-                key = ui.ask("\nLab code or id (blank to go back): ").strip()
+                try:
+                    key = ui.ask("\nLab code or id (blank to go back): ").strip()
+                except KeyboardInterrupt:
+                    ui.out("")
+                    key = ""
             if key:
                 try:
                     run_lab(ui, sc.find(key))
@@ -210,8 +225,8 @@ def build_parser() -> argparse.ArgumentParser:
     mock = sub.add_parser("mock", help="full mock exam: 30 questions + 3 labs in 120 minutes")
     mock.add_argument("--labs-only", action="store_true", help="the 3 labs alone in 40 minutes (exam-day pacing)")
     ex = sub.add_parser("exam", help="timed question drill")
-    ex.add_argument("-n", type=int, default=60, help="number of questions (default 60)")
-    ex.add_argument("-m", type=int, default=120, help="minutes (default 120)")
+    ex.add_argument("-n", type=_positive, default=60, help="number of questions (default 60)")
+    ex.add_argument("-m", type=_positive, default=120, help="minutes (default 120)")
     ex.add_argument("-d", "--domain", choices=DOMAINS)
     sub.add_parser("sandbox", help="healthy cluster, nothing graded")
     sub.add_parser("progress", help="your scores and weakest domain")

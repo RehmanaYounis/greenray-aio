@@ -20,10 +20,34 @@ def load() -> dict:
     if path.exists():
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-            return {**EMPTY, **data}
+            if isinstance(data, dict):
+                return _normalise({**EMPTY, **data})
         except json.JSONDecodeError:
-            path.rename(path.with_suffix(".corrupt.json"))  # keep it for inspection, start fresh
+            pass
+        path.rename(path.with_suffix(".corrupt.json"))  # keep it for inspection, start fresh
     return {"scenarios": {}, "exams": []}
+
+
+def _normalise(data: dict) -> dict:
+    """Records written by older versions lack fields added since; fill them so nothing downstream guesses."""
+    scenarios = data.get("scenarios")
+    data["scenarios"] = scenarios if isinstance(scenarios, dict) else {}
+    for rec in data["scenarios"].values():
+        if isinstance(rec, dict):
+            rec.setdefault("attempts", 0)
+            rec.setdefault("passed", False)
+            rec.setdefault("best_seconds", None)
+            rec.setdefault("clean_passes", 0)
+            rec.setdefault("independent_passes", 0)
+            rec.setdefault("last", None)
+    exams = data.get("exams")
+    data["exams"] = [e for e in (exams if isinstance(exams, list) else []) if isinstance(e, dict)]
+    for e in data["exams"]:
+        e.setdefault("per_domain", {})
+        e.setdefault("kind", "questions")
+        for k, v in (("score", 0.0), ("total", 0), ("correct", 0), ("minutes", 0), ("date", "")):
+            e.setdefault(k, v)
+    return data
 
 
 def save(data: dict) -> None:

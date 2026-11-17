@@ -1,0 +1,33 @@
+SALLOC(1)                      Slurm Commands                      SALLOC(1)
+
+NAME
+       salloc - obtain a job allocation and run a shell inside it
+
+SYNOPSIS
+       salloc [OPTIONS]
+
+DESCRIPTION
+       salloc asks slurmctld for resources, waits until they are granted
+       and then starts an interactive shell on the submit host with the
+       allocation's environment (SLURM_JOB_ID, SLURM_JOB_NODELIST). Job
+       steps are started from that shell with srun; srun --pty bash moves
+       you onto an allocated node. Leaving the shell (exit) or scancel
+       releases the allocation. In this lab salloc exports the variables
+       into the current shell instead of opening a new one, so the
+       allocation ends with scancel.
+
+OPTIONS
+       -N, --nodes N           Nodes.           -n, --ntasks N   Tasks.
+       -c, --cpus-per-task N   CPUs per task.   -t, --time T     Limit.
+       -p, --partition NAME    Partition.       -w, --nodelist   Nodes.
+       --gres=gpu:N, -G N, --gpus-per-node=N   GPUs.
+       --exclusive             Whole nodes.     -J, --job-name   Name.
+       -A, --account, -q, --qos, -C, --constraint, --reservation
+
+       --pty is an srun option, not a salloc one: salloc --pty is an
+       error. Use salloc ... followed by srun --pty bash.
+
+SEE ALSO
+       srun(1), sbatch(1), scancel(1)
+
+GreenRay AIO                     lab manual                       SALLOC(1)

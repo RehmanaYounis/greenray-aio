@@ -33,6 +33,13 @@ def installed_packages(node):
     drv = node.driver_version.split(".")[0]
     if node.gpus:
         pkgs[f"nvidia-driver-{drv}-server"] = (f"{node.driver_version}-0ubuntu1", "NVIDIA Server Driver metapackage")
+        if node.get("nvswitches"):
+            from ..ops import fm_version
+
+            pkgs[f"nvidia-fabricmanager-{drv}"] = (f"{fm_version(node)}-1", "Fabric Manager for NVSwitch based systems")
+        pkgs["datacenter-gpu-manager"] = ("1:3.3.6", "NVIDIA Datacenter GPU Manager")
+        if "nvsm" in node.services:
+            pkgs["nvsm"] = ("24.09.01", "NVIDIA System Management")
     if toolkit_installed(node):
         for p, (desc, _size) in CTK_PKGS.items():
             pkgs[p] = (_ctk_version(), desc)

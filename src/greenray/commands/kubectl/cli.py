@@ -182,7 +182,17 @@ def kubectl(ctx, args: list[str]) -> str:
     k8s_init(state)
     if not args or args[0] in ("-h", "--help", "help"):
         return HELP_TEXT
-    verb, rest = args[0], args[1:]
+    leading: list[str] = []
+    while args and args[0].startswith("-"):  # kubectl -n llm describe pod ...
+        if "=" in args[0] or args[0] not in ("-n", "--namespace", "--context", "--kubeconfig", "-s", "--server"):
+            leading += args[:1]
+            args = args[1:]
+        else:
+            leading += args[:2]
+            args = args[2:]
+    if not args:
+        return HELP_TEXT
+    verb, rest = args[0], args[1:] + leading
     pos, opts, cmd = parse_args(rest, verb)
     if isinstance(opts.get("filename"), str):
         opts["filename"] = [opts["filename"]]

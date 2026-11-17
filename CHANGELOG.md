@@ -2,6 +2,28 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.5.1] - 2026-11-18
+
+Three read-only audits drove the simulator the way a learner would and compared it with the real tools; about ninety findings were reproduced and are fixed here, each with a test.
+
+### Fixed
+- Inputs that crashed the simulator now get the tool's own error: malformed numbers and times for `sbatch`, `srun`, `salloc`, `scontrol update`, `sacctmgr` (a bad QOS value used to be stored and then crash every later `sbatch`), cmsh `bmcsettings`, `kubectl create ns`, `--field-selector`, `jsonpath`, `scale --replicas`, `helm rollback`, `dcgmi dmon`, `head`, `tail`, `sed`; cmsh `pexec`; removing a category or image that devices still use is refused; the GPU Operator DaemonSets print as YAML.
+- Scenario grading: `tsh-first-look-at-logs` no longer passes a ticket that says "room"; `sacct -j` shows other users' jobs; `tsh-which-gpu-is-which` accepts the CSV report its own hint suggests; state names in drain and resume checks are case-insensitive and every reset path counts; evidence checks that any `cat`, a bare `nvidia-smi` on the head or a `kubectl` in the wrong namespace used to satisfy now need the real evidence; a `show` before a `set` inside one `cmsh -c` script counts as reading first; `#SBATCH -G 1`, several options on one `#SBATCH` line, any key order in a `nodeSelector`, `nvidia-smi -q -i N` and `dpkg -l | grep` are accepted as the correct alternatives they are; "slurm.conf was not edited by hand" compares the file with what cmd generates; two checks that were true before any work was done now need the work.
+- Text: stray quotes and a wrong pronoun in four briefings, job times in `tsh-xid79-drained-node`, a hint in `wkl-slurm-pending-reasons` that said to raise a limit the check needs lowered, four last hints that handed over the full fix command; the xid79 solution collects `nvidia-bug-report.sh` before the reboot, as question tsh-001 keys.
+- Questions: eight `lab:` links pointed at scenarios that do not teach the point; five near-duplicates removed (181 questions); tsh-015 no longer gives away tsh-017.
+- App: Ctrl-C or end of input at a yes/no prompt in a lab, the mock or the menu declines instead of leaving the program and losing the attempt; a mock that runs out of input ends; a drill with nothing answered records nothing; `-n` and `-m` must be positive; a labs-only mock says it has no questions instead of recommending `q`; old or odd `progress.json` files are read without an "Unknown scenario" message; the debrief no longer promises `retry` in guided mode and describes the ordering checks correctly; checks that were already true when a lab opened are shown dim as "true from the start".
+- One clock: `date`, `uptime`, the login banner and `docker ps` now sit on the same day as Slurm, kubectl, cmsh and the scenario journals (19 October 2026).
+- Slurm output: `scontrol -o`, options anywhere on the line, `OverSubscribe` and `AllowGroups` on partitions; `sacct -b`, `-l`, `-S`, `-E`, the `NCPUS`, `ReqMem` and `ReqNodes` fields, and root sees every user as the help says; `squeue -O`; `%N` in output names is the node the job ran on; `srun -c N nproc` prints N and `bash -c` steps see `SLURM_PROCID`, `SLURM_LOCALID` and `CUDA_VISIBLE_DEVICES`; a missing command in a batch script fails like bash with exit code 127; `scancel -s SIGNAL` and `--me`; `srun --mpi=list`; `sacctmgr` options anywhere, `-P` without a trailing bar, `show tres`, the job ids that block a QOS delete.
+- cmsh: IP and MAC addresses are validated and duplicate IPs refused; `set hostname` renames the node; `drain --reason=x` and a real drain timestamp; `slurmsubmit` and `slurmaccounting` roles; `cmsh -h` and `man cmsh` list every mode; DGX nodes list `nvidia-fabricmanager`, `datacenter-gpu-manager` and `nvsm` in `dpkg -l`; `kubectl -n NS VERB` works.
+- Text tools honour their options: `grep -o -n -l -w -H -h -e -F` and `-c` exits 1 without a match, `sort -n -u -k -t`, `wc -w -c`, `cat -n`, `ls -l -a` with bare names in the current directory and dotfiles hidden, `awk` guards, `-F`, `$NF`, `NR`, `BEGIN`/`END` and sums, `sed` with POSIX groups, escaped delimiters, `-n`, `-E`, line addresses and ranges, `tail -n +N`, `xargs -n1` and `-I`, old-style `tar czf`, `diff` change letters and `-` for stdin, `jq` pipes, `length`, `keys`, `.[]`, `select` and `-r`, and each tool's own error prefix.
+- `journalctl -u -k -b -n -p --since -r` and `dmesg -l` filter; a healthy unit shows its start in the journal; `modprobe -r` refuses a module another loaded module uses.
+- GPU tools: `nvidia-smi -rgc` resets the clocks, `-ac`/`-rac`, `pmon`, `--query-compute-apps`, `nvlink -e` and `-c`, `-e` validated, MIG placements as on an H100 with the successes printed before a failure; `dcgmi stats -j` after `-x` shows the end time, the built-in groups cannot be modified, `discovery -c`.
+- Containers and network: `docker ps -q` and `--format`, `inspect` ids match `ps`, CREATED from the clock; `ngc registry image pull`, `--format_type json|csv`, the right wording for an unsupported entity; `ip route` and `ip link show DEV`; `helm list -o json|yaml` and a stable LAST DEPLOYED; `kubectl` no longer offers `go-template`.
+- Help and man pages: `grep --help` lists what works; `man scontrol`, `man slurm.conf`, `man sacct` and `man salloc` exist; `nvidia-smi -h` lists the new options.
+
+### Added
+- Solutions may carry `expect:` lines naming what key steps must print; `greenray validate` and the test suite replay them, so a tool that goes quiet on a solution step is caught.
+
 ## [1.5.0] - 2026-11-17
 
 ### Added

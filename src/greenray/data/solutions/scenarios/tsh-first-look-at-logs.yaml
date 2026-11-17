@@ -34,3 +34,11 @@ edge_cases:
   - "sacct output is truncated to column widths; use --format with a width (State%20) or -p for parsable output when a word is cut off, as with OUT_OF_ME+."
   - "journalctl -u slurmd on the node and journalctl -u slurmctld on the head node tell different halves of the story: the node knows why a step ended, the controller knows when the allocation was released."
   - "On a BCM cluster the GPU nodes may have small or no local journals (diskless or tmpfs /var/log). Then the detail is in the central syslog or in BCM's event log."
+expect:
+  'sacct -j {job} --format=JobID,JobName,State,ExitCode,NodeList':
+    - 'OUT_OF_ME+'
+    - '{node}'
+  'journalctl -u slurmd | grep {job}':
+    - 'oom'
+  "dmesg | grep -i -B1 -A1 'out of memory'":
+    - 'out of memory: Killed process'

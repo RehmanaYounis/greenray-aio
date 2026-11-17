@@ -1,20 +1,21 @@
-"""Simulated wall clock: starts at the real time of the session and moves a few seconds per command.
+"""Simulated wall clock: the day every scenario is set on, moving a few seconds per command.
 
-Commands that print dates read it, so a lab looks like it is happening now rather
-than on the day the scenario was written.
+Slurm, kubectl, cmsh and the scenario journals all date their output 19 October 2026, so
+``date``, ``uptime`` and the login banner start there too instead of at the real time; a learner
+comparing a journal line with ``date`` sees one day, not two.
 """
 
 from __future__ import annotations
 
-import time
 from datetime import datetime, timedelta
 
+START = datetime(2026, 10, 19, 10, 15, 13)  # the same instant cmsh stamps its events with
 BOOT_AGE = timedelta(days=12, hours=3, minutes=11)  # how long the nodes have been "up"
 TICK = 2.0  # seconds a typical command takes
 
 
 def init(state) -> None:
-    state.flags.setdefault("clock", time.time())
+    state.flags.setdefault("clock", START.timestamp())
 
 
 def now(state) -> datetime:

@@ -28,6 +28,17 @@ def err(msg: str, code: int = 1) -> CommandError:
     return CommandError(msg, code)
 
 
+def int_arg(value, message: str, code: int = 1, minimum: int | None = None) -> int:
+    """``value`` as an int, or the tool's own complaint instead of a Python traceback."""
+    try:
+        n = int(str(value).strip())
+    except (TypeError, ValueError):
+        raise CommandError(message, code) from None
+    if minimum is not None and n < minimum:
+        raise CommandError(message, code)
+    return n
+
+
 def columns(rows: Sequence[Sequence[object]], gap: int = 3) -> str:
     """Left-aligned columns separated by ``gap`` spaces, the layout of kubectl and docker listings."""
     if not rows:

@@ -53,7 +53,7 @@ checks:
   - desc: you looked at the node labels (kubectl get nodes -L/--show-labels or describe node)
     expr: "ran(r'kubectl get (nodes|node|no)\\b.*(-L|--show-labels|-l )') or ran(r'kubectl describe (node|nodes|no)\\b')"
   - desc: /root/cuda-test.yaml still has a nodeSelector, now matching the H100 product label
-    expr: "re.search(r'nodeSelector:\\s*\\n\\s*nvidia\\.com/gpu\\.product:\\s*[\"\\']?NVIDIA-H100-80GB-HBM3[\"\\']?\\s*$', file('bcm-head', '/root/cuda-test.yaml'), re.M) is not None"
+    expr: "re.search(r'nodeSelector:(\\s*\\n\\s+[\\w./-]+:[^\\n]*)*?\\s*\\n\\s+nvidia\\.com/gpu\\.product:\\s*[\"\\']?NVIDIA-H100-80GB-HBM3[\"\\']?\\s*$', file('bcm-head', '/root/cuda-test.yaml'), re.M) is not None"
   - desc: the cuda-test pod runs on a DGX node (Running or Completed)
     expr: "any(p.name == 'cuda-test' and p.status in ('Running', 'Completed', 'Succeeded') and (p.node or '').startswith('dgx-') for p in pods('default'))"
   - desc: no cuda-test pod is left Pending

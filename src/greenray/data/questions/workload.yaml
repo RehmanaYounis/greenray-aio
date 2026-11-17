@@ -78,7 +78,6 @@
 - id: wkl-007
   domain: Workload Management
   difficulty: medium
-  lab: wkl-slurm-pending-reasons
   question: |
     A job was submitted with --nodelist=dgx-03. It stays pending with reason
     ReqNodeNotAvail. sinfo shows dgx-03 as "drain". What should the user do?
@@ -101,7 +100,7 @@
 - id: wkl-009
   domain: Workload Management
   difficulty: hard
-  lab: wkl-slurm-pending-reasons
+  lab: adm-slurm-partition-qos
   question: |
     Idle GPUs exist in the partition, yet a user's new 4-GPU job is pending:
       JOBID PARTITION NAME USER ST TIME NODES NODELIST(REASON)

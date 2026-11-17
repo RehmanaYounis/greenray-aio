@@ -75,7 +75,7 @@ def _load(rel: str) -> dict:
 
 
 def scenario_solution(scenario_id: str) -> dict:
-    """``{solution, explanation, edge_cases}`` for a scenario, or ``{}``."""
+    """``{solution, explanation, edge_cases, expect}`` for a scenario, or ``{}``."""
     return _load(f"scenarios/{scenario_id}.yaml")
 
 

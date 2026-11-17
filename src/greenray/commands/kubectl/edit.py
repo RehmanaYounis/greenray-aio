@@ -447,6 +447,11 @@ def cmd_scale(state, pos: list[str], opts: dict) -> str:
     d = next((d for d in state.k8s.deployments if d.namespace == ns_of(opts) and d.name == name), None)
     if d is None:
         raise CommandError(f'Error from server (NotFound): deployments.apps "{name}" not found', 1)
+    if not str(opts["replicas"]).isdigit():
+        raise CommandError(
+            f'error: invalid argument "{opts["replicas"]}" for "--replicas" flag: strconv.ParseInt: parsing "{opts["replicas"]}": invalid syntax',
+            1,
+        )
     d.replicas = int(opts["replicas"])
     return f"deployment.apps/{name} scaled\n"
 

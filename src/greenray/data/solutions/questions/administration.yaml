@@ -387,16 +387,6 @@ adm-045:
     head node, there is nothing to edit on the nodes, and lsmod lists every
     loaded module.
 
-adm-046:
-  answer: [0]
-  explanation: |
-    scontrol update changes the controller's in-memory configuration and is
-    gone when slurmctld re-reads slurm.conf, which on BCM happens at every
-    regeneration. The durable place is the job queue in cmsh (set maxtime,
-    commit), after which CMDaemon writes the file and reconfigures slurmctld.
-    slurmctld never writes slurm.conf, a restart is not required, and MaxTime
-    is a partition property.
-
 adm-047:
   answer: [0]
   explanation: |

@@ -64,9 +64,9 @@ setup:
       st.next_job_id = 3003
 checks:
   - desc: the script asks for 8 GPUs per node (--gres=gpu:8, --gpus-per-node=8, or --gpus=16 with 2 nodes)
-    expr: re.search(r'(?m)^#SBATCH\s+(--gres[= ]gpu:(h100:)?8|--gpus-per-node[= ](h100:)?8|--gpus[= ](h100:)?16|-G\s*16)\s*$', file('bcm-head', '/root/llama-2node.sbatch')) is not None
+    expr: re.search(r'(?m)^#SBATCH\s.*(--gres[= ]gpu:(h100:)?8|--gpus-per-node[= ](h100:)?8|--gpus[= ](h100:)?16|-G\s*16)(\s|$)', file('bcm-head', '/root/llama-2node.sbatch')) is not None
   - desc: the script asks for 8 tasks per node and exclusive nodes
-    expr: re.search(r'(?m)^#SBATCH\s+(--ntasks-per-node[= ]8|--ntasks[= ]16|-n\s*16)\s*$', file('bcm-head', '/root/llama-2node.sbatch')) is not None and re.search(r'(?m)^#SBATCH\s+--exclusive\b', file('bcm-head', '/root/llama-2node.sbatch')) is not None
+    expr: re.search(r'(?m)^#SBATCH\s.*(--ntasks-per-node[= ]8|--ntasks[= ]16|-n\s*16)(\s|$)', file('bcm-head', '/root/llama-2node.sbatch')) is not None and re.search(r'(?m)^#SBATCH\s.*--exclusive\b', file('bcm-head', '/root/llama-2node.sbatch')) is not None
   - desc: a new llama-2node job got 2 whole nodes x 8 GPUs with 8 tasks per node and did not fail
     expr: any(j.id != 3001 and j.name == 'llama-2node' and j.num_nodes == 2 and j.gpus_per_node == 8 and j.ntasks_per_node == 8 and j.exclusive and j.state in ('RUNNING', 'COMPLETED') and j.get('final_state') != 'FAILED' for j in slurm.jobs)
   - desc: all 16 ranks reported 8 local GPUs in the job's output

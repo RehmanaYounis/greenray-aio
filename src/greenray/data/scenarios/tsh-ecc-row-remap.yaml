@@ -8,11 +8,11 @@ tags: [ecc, row-remapping, xid, nvidia-smi, slurm, drain]
 briefing: |
   Monitoring raised an alert overnight: "{node} GPU {gpu}: uncorrectable ECC error,
   row remapping pending". {user}'s 8-GPU training job {job} is still running on
-  "{node}. It survived because her code checkpoints and retries, but the job log"
+  {node}. It survived because their code checkpoints and retries, but the job log
   shows a CUDA error and a restart from checkpoint.
 
   Confirm what the GPU reports. Get {node} healthy again without throwing away
-  "{user}'s work (the job is requeue-safe: it restarts from its last checkpoint),"
+  {user}'s work (the job is requeue-safe: it restarts from its last checkpoint),
   and put the node back into service.
 objectives:
   - Confirm the row-remapper state of GPU {gpu} on {node}
@@ -46,12 +46,12 @@ setup:
       st.next_job_id = {job} + 1
 checks:
   - desc: you checked the row remapper / ECC state on {node}
-    expr: ran(r'nvidia-smi .*(ROW_REMAPPER|remapped_rows|-d ECC|-q)', '{node}') or ran(r'dcgmi (diag|health)', '{node}')
+    expr: ran(r'nvidia-smi .*(ROW_REMAPPER|remapped_rows|-d ECC|(^|\\s)-q(\\s|$))', '{node}') or ran(r'dcgmi (diag|health)', '{node}')
   - desc: "{node} was drained for the maintenance"
     expr: len(slurm.nodes['{node}'].get('drain_log', [])) > 0
   - desc: the node was drained before the GPU was reset or the node rebooted
     kind: safety
-    expr: ran_before(r'(scontrol update .*state=drain|cmsh .*drain)', r'(nvidia-smi .*-r\b|^reboot|scontrol reboot)')
+    expr: ran_before(r'(?i)(scontrol update .*state=drain|cmsh .*drain)', r'(?i)(nvidia-smi .*(-r\b|--gpu-reset)|^reboot|scontrol reboot|cmsh .*(reboot|power))')
   - desc: nothing was rebooted, powered off or set DOWN with {user}'s job still on it
     kind: safety
     expr: not audit('reboot_with_jobs') and not audit('power_off_with_jobs') and not audit('node_down_with_jobs')
@@ -59,8 +59,8 @@ checks:
     expr: not nodes['{node}'].gpus[{gpu}].remap_pending and not nodes['{node}'].gpus[{gpu}].remap_failure
   - desc: "{user}'s job {job} was requeued (not simply killed)"
     expr: jobs(id={job})[0].get('restarts', 0) > 0 and jobs(id={job})[0].state in ('PENDING', 'RUNNING', 'COMPLETED')
-  - desc: "{node} is back in service"
-    expr: slurm.nodes['{node}'].state in ('IDLE', 'MIXED', 'ALLOCATED') and not slurm.nodes['{node}'].get('drain')
+  - desc: "{node} is back in service (resumed after the maintenance)"
+    expr: slurm.nodes['{node}'].state in ('IDLE', 'MIXED', 'ALLOCATED') and not slurm.nodes['{node}'].get('drain') and len(slurm.nodes['{node}'].get('drain_log', [])) > 0
 hints:
   - "On {node}: nvidia-smi -q -d ROW_REMAPPER (or --query-gpu=index,remapped_rows.pending,remapped_rows.failure --format=csv). Pending: Yes means the spare row is reserved but only takes effect after a GPU reset."
   - "A reset needs the GPU to be idle. Drain the node first so no new job lands on it: scontrol update nodename={node} state=drain reason=\"...\"."
