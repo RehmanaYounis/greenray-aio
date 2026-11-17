@@ -5,8 +5,9 @@ Only the one-shot forms are supported because the lab shell is line based:
     cmsh -c "device; use dgx-01; set category dgx-h100; commit"
     cmsh -f /root/commands.cmsh
 
-Modes: device, category, softwareimage, partition, user, group, profile, wlm, configurationoverlay, main.
-Submodes: roles, bmcsettings, fsmounts (category/device), jobqueue (wlm), kernelmodules (softwareimage).
+Modes: device, category, softwareimage, partition, user, group, profile, wlm, configurationoverlay,
+monitoring, main. Submodes: roles, bmcsettings, fsmounts (category/device), jobqueue (wlm),
+kernelmodules (softwareimage), measurable/action/trigger (monitoring).
 Changes are *staged* in ``state.bcm.uncommitted`` until ``commit``, exactly as
 in real cmsh (forgetting ``commit`` is the classic mistake). Staged changes are
 kept for the whole lab session so that a later ``cmsh -c "device; commit"``
@@ -21,7 +22,7 @@ Also here: ``chroot`` / ``cm-chroot-sw-img`` into a software image and ``cmha``.
 from __future__ import annotations
 
 # Importing the modules runs their @command registrations and installs the hooks.
-from . import head, image, model, shell, wlm  # noqa: F401
+from . import head, image, model, monitoring, shell, wlm  # noqa: F401
 from .head import cmha, getent_cmd, id_cmd
 from .image import chroot
 from .model import (

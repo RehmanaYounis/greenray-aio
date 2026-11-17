@@ -1,0 +1,72 @@
+id: adm-bcm-monitoring-hot-node
+code: adm-15
+title: Make BCM drain a node whose GPUs run hot
+domain: Administration
+difficulty: medium
+time_limit_min: 20
+tags: [bcm, cmsh, monitoring, trigger, drain, temperature]
+briefing: |
+  Facilities ticket FAC-77, this morning:
+
+    "One of the two CRAC units for row B failed over the weekend and will be
+    repaired on Thursday. Until then, GPU temperatures in that row will climb
+    whenever the room warms up. We will not get a call every time it happens."
+
+  {node} is already affected: its eight GPUs sit at 91 C with no load on them,
+  while the other DGX nodes are at 34 C. Training runs start this afternoon
+  and a run that lands on a hot node loses hours to thermal slowdown.
+
+  Nobody wants to watch sensors for three days. Configure Base Command
+  Manager so that any DGX node whose GPU temperature goes above {threshold} C
+  is drained in Slurm automatically, and undrained again when it cools
+  down, then confirm the result on {node}. Do not drain anything by hand and
+  do not touch the power limits of the GPUs.
+objectives:
+  - "A committed BCM monitoring trigger drains a node when its GPU temperature exceeds {threshold} C and undrains it when the temperature returns below"
+  - "{node} is DRAIN with the trigger's reason, the other nodes are untouched"
+  - "No node was drained by hand and no GPU power limit was changed"
+variants:
+  - {"node": "dgx-02", "threshold": 85}
+  - {"node": "dgx-03", "threshold": 80}
+setup:
+  - python: |
+      from greenray.commands.cmsh import bcm_init
+      from greenray.commands.cmsh.monitoring import monitoring_init
+      bcm = bcm_init(state)
+      monitoring_init(state)
+      n = state.nodes['{node}']
+      for g in n.gpus:
+          g.temp_c = 91
+          g.mem_temp_c = 88
+      n.sel = [
+          "   1 | 10/17/2026 | 22:14:03 | Temperature Inlet Temp | Upper Non-critical going high | Asserted",
+          "   2 | 10/18/2026 | 03:40:51 | Temperature GPU Max Temp | Upper Non-critical going high | Asserted",
+      ]
+      bcm.events.extend([
+          "2026-10-17 22:14:05 [warning] bcm-head: {node}: inlet temperature 31 C (threshold 30 C)",
+          "2026-10-18 03:40:55 [warning] bcm-head: {node}: GPU temperature 89 C",
+      ])
+checks:
+  - desc: "a committed trigger watches gpu_temp with > {threshold}, drain on enter, undrain on leave"
+    expr: "any(t.get('expression') and t.expression.measurable == 'gpu_temp' and t.expression.operator == '>' and t.expression.value == {threshold} and 'drain' in t.get('enteractions', []) and 'undrain' in t.get('leaveactions', []) and not t.get('disabled') for t in bcm.monitoring.triggers.values()) and not bcm.uncommitted"
+  - desc: "{node} is drained by the trigger (reason names it)"
+    expr: "slurm.nodes['{node}'].drain and slurm.nodes['{node}'].reason.startswith('BCM trigger')"
+  - desc: the other DGX nodes are idle and not drained
+    expr: "all(not slurm.nodes[h].drain and slurm.nodes[h].state == 'IDLE' for h in ('dgx-01', 'dgx-02', 'dgx-03', 'dgx-04') if h != '{node}')"
+  - desc: no node was drained by hand
+    kind: safety
+    expr: "not ran(r'^scontrol update .*state=drain') and not ran(r'^cmsh .*\\bdrain -n')"
+  - desc: no GPU power limit was changed
+    kind: safety
+    expr: "all(g.power_limit_w == 700 for h in nodes if h.startswith('dgx-') for g in nodes[h].gpus)"
+  - desc: you read the temperatures before committing the trigger
+    kind: evidence
+    expr: ran_before(r'^(cmsh .*latestmetricdata|nvidia-smi.*(TEMPERATURE|temperature)|ipmitool .*sdr|nvidia-smi)', r'^cmsh .*trigger.*commit')
+hints:
+  - "See what BCM sees: cmsh -c \"device; latestmetricdata -n {node}\" lists every metric it samples, with the GPU temperature among them. Compare with a cool node. nvidia-smi -q -d TEMPERATURE on the node says the same from the OS side."
+  - "BCM's monitoring mode has three submodes: measurable (what is sampled), action (what can be done: drain, undrain, poweroff, mail) and trigger (which expression runs which actions). Lists in each tell you the names to use."
+  - "A trigger has an expression such as a measurable, an operator and a value, enter actions that run when it becomes true and leave actions that run when it becomes false again. Quote the expression when you set it, and commit the trigger."
+  - "A trigger that is committed while its condition already holds fires at once: sinfo -R should show {node} with the trigger's reason, and cmsh -c \"main; events\" records the firing. If nothing happened, compare the threshold with the actual reading."
+references:
+  - NVIDIA Base Command Manager 10 Administrator Manual, monitoring (measurables, actions, triggers)
+  - NVIDIA Base Command Manager 10 Administrator Manual, cmsh monitoring mode and latestmetricdata

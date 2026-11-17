@@ -1,0 +1,85 @@
+id: tsh-nvswitch-firmware-partial-update
+code: tsh-19
+title: One DGX runs NCCL at a fifth of the speed of its neighbours
+domain: Troubleshooting and Optimization
+difficulty: hard
+time_limit_min: 25
+tags: [nvsm, firmware, nvswitch, nvlink, nccl, dgx, drain]
+briefing: |
+  From the platform channel:
+
+    "{user}'s single-node benchmark (all_reduce_perf, 8 GPUs) gives about
+    240 GB/s on {node} and about 480 GB/s on every other DGX. Same image, same
+    driver, same container. {user} is re-running it on {node} right now as
+    job {job} and is happy for that job to be cancelled if it helps; the real
+    training run is waiting for the node."
+
+  Last week's maintenance applied a firmware bundle to {node} and the window
+  closed before the technician finished; the ticket says "verify later".
+  Fabric Manager is running, nvidia-smi shows eight healthy GPUs, and nothing
+  is in the Slurm reason field.
+
+  Find out why {node} is slow, fix it, and hand the node back to Slurm at full
+  speed. No other node may be touched, and {node} must not be rebooted or
+  reflashed while a job runs on it.
+objectives:
+  - "The cause is identified from the node's own tools (nvsm, nvidia-smi nvlink, the NCCL test)"
+  - "{node} runs a consistent NVSwitch firmware set, every NVLink is active, and all_reduce_perf is back to the cluster's figure"
+  - "{node} is IDLE in Slurm again, not drained, not down"
+  - "No reboot or firmware update happened while job {job} ran, and the other nodes were untouched"
+variants:
+  - {"node": "dgx-03", "user": "dave", "job": 2410}
+  - {"node": "dgx-01", "user": "alice", "job": 2388}
+setup:
+  - python: |
+      from greenray.commands.nvsm import break_nvswitch_firmware
+      n = state.nodes['{node}']
+      break_nvswitch_firmware(n)
+      n.journal['nvsm'] = [
+          "2026-10-12 23:51:07 {node} nvsm[1842]: firmware update: NVSwitch 0 -> 96.10.73.00.02 done",
+          "2026-10-12 23:53:40 {node} nvsm[1842]: firmware update: NVSwitch 1 -> 96.10.73.00.02 done",
+          "2026-10-12 23:55:02 {node} nvsm[1842]: firmware update: NVSwitch 2: cancelled by operator (SIGTERM)",
+          "2026-10-12 23:55:02 {node} nvsm[1842]: firmware update: 2 of 4 NVSwitch devices updated; run again to finish",
+      ]
+      state.slurm.users['{user}'] = {'name': '{user}', 'default_account': 'root'}
+      state.slurm.jobs.append({
+          'id': {job}, 'name': 'allreduce-check', 'user': '{user}', 'partition': 'defq', 'state': 'RUNNING',
+          'exit_code': '0:0', 'num_nodes': 1, 'gpus_per_node': 8, 'nodelist': ['{node}'],
+          'submit_time': -1500, 'start_time': -1200, 'end_time': None, 'batch': True,
+          'command': '/home/{user}/bench/allreduce.sbatch', 'duration': None, 'time_limit': None})
+      state.slurm.next_job_id = {job} + 1
+      sn = state.slurm.nodes['{node}']
+      sn.state = 'ALLOCATED'
+      sn.gres_used = 'gpu:h100:8'
+      sn.alloc_cpus = 224
+      state.flags['nccl_runs'] = [
+          {'prog': 'all_reduce_perf', 'hosts': ['dgx-02'], 'ngpus': 8, 'ok': True, 'busbw': 479.86, 'transport': 'NVLink', 'launcher': 'dgx-02'},
+          {'prog': 'all_reduce_perf', 'hosts': ['{node}'], 'ngpus': 8, 'ok': True, 'busbw': 239.97, 'transport': 'NVLink', 'launcher': '{node}'},
+      ]
+checks:
+  - desc: "you asked the node about its own health or versions (nvsm) before changing anything"
+    kind: evidence
+    expr: ran_before(r'^nvsm show (health|versions|alerts)', r'^(nvsm update|reboot|scontrol reboot|cmsh .*(reboot|power))')
+  - desc: "{node} runs the same NVSwitch firmware on every switch, with no update left pending"
+    expr: "len(set(nodes['{node}'].firmware.nvswitch)) == 1 and not nodes['{node}'].get('firmware_pending')"
+  - desc: "every NVLink on {node} is active again"
+    expr: "not any(g.nvlink_down for g in nodes['{node}'].gpus)"
+  - desc: "an 8-GPU all_reduce_perf on {node} reached the cluster's figure (over 450 GB/s) after the fix"
+    expr: "any(r['hosts'] == ['{node}'] and r['ngpus'] == 8 and r['busbw'] > 450 for r in flags.get('nccl_runs', [])[2:])"
+  - desc: "{node} is IDLE in Slurm, not drained, not down"
+    expr: "slurm.nodes['{node}'].state == 'IDLE' and not slurm.nodes['{node}'].drain and not slurm.nodes['{node}'].down"
+  - desc: "no reboot or firmware update while a job ran on {node}"
+    kind: safety
+    expr: not audit('reboot_with_jobs') and not audit('firmware_update_with_jobs') and not audit('power_off_with_jobs')
+  - desc: the other DGX nodes were not rebooted, drained or reflashed
+    kind: safety
+    expr: "all(bcm.devices[h].get('reboots', 0) == 0 and not slurm.nodes[h].drain and not nodes[h].get('firmware_pending') for h in ('dgx-01', 'dgx-02', 'dgx-03', 'dgx-04') if h != '{node}')"
+hints:
+  - "Reproduce on the node: run all_reduce_perf with all eight GPUs on {node} and on a good node. A single-node run travels over NVLink; nvidia-smi nvlink -s and nvidia-smi topo -m show whether every link is up."
+  - "Links that are down on every GPU at once point at the fabric between the GPUs, the NVSwitches, not at a GPU. The DGX has its own tool for the hardware the OS does not see: nvsm show health, then nvsm show versions. journalctl -u nvsm shows what last week's maintenance did."
+  - "A firmware update is applied at a reboot, and neither may happen under a running job. Drain the node first (the job's owner said it can go), then stage the update with nvsm and reboot through cmsh or scontrol reboot."
+  - "After the reboot, prove it before handing the node back: nvsm show health, nvidia-smi nvlink -s, and the benchmark again. Then undrain, and check sinfo."
+references:
+  - NVIDIA DGX H100 User Guide, NVSM (nvsm show health, show versions, update firmware)
+  - NVIDIA DGX H100 Firmware Update Guide (update order, reboot after NVSwitch firmware)
+  - nccl-tests README (all_reduce_perf, bus bandwidth)

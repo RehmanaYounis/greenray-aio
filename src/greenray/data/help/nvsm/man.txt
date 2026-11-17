@@ -1,0 +1,51 @@
+NVSM(1)                        User Commands                        NVSM(1)
+
+NAME
+       nvsm - NVIDIA System Management CLI for DGX systems
+
+SYNOPSIS
+       nvsm show health | show versions | show alerts
+       nvsm dump health
+       nvsm update firmware --type <nvswitch|bmc|bios|all> [--force]
+
+DESCRIPTION
+       nvsm talks to the NVSM daemon (nvsm.service) that runs on every DGX
+       system. It checks the hardware the operating system cannot see on
+       its own: NVSwitches and their firmware, power supplies, fans,
+       drives, the BMC, and the consistency of the firmware set.
+
+COMMANDS
+       show health
+              Runs every health check and prints a summary line
+              ("Healthy" or "Unhealthy") followed by one line per check.
+              A failing check names the component and the reason.
+
+       show versions
+              Prints the firmware and software versions of the system:
+              BMC, BIOS, each GPU's VBIOS, each NVSwitch's firmware, the
+              ConnectX adapters, the GPU driver and Fabric Manager. A
+              staged update is listed as pending.
+
+       show alerts
+              The health checks that currently fail, as alerts.
+
+       dump health
+              Writes a compressed bundle with the health report, versions,
+              kernel and service logs and the SEL under /tmp, for a
+              support case.
+
+       update firmware --type TYPE
+              Stages a firmware update for the given component. The
+              update is applied when the system reboots. nvsm refuses to
+              stage an update while jobs run on the node; drain the node
+              in the workload manager first.
+
+EXAMPLES
+       nvsm show health
+       nvsm show versions | grep -i nvswitch
+       nvsm update firmware --type nvswitch && reboot
+
+SEE ALSO
+       nvidia-smi(1), dcgmi(1), ipmitool(1)
+
+GreenRay AIO                     lab manual                         NVSM(1)

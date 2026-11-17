@@ -2,6 +2,14 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] - 2026-11-17
+
+### Added
+- BCM monitoring in `cmsh`: `monitoring` mode with the `measurable`, `action` and `trigger` submodes. Measurables are read from the simulated nodes (GPU temperature, power, utilisation, ECC errors, load, memory, free space, and the PASS/FAIL health checks for managed services, dmesg, GPU health, disk space); the built-in actions are `drain`, `undrain`, `poweroff`, `poweron`, `reboot`, `killprocess` and mail, and script actions can be added. A trigger (`set expression 'gpu_temp > 85'`, `set enteractions drain`, `set leaveactions undrain`) is evaluated after every command and on commit: its enter actions run once when a node crosses the threshold and its leave actions once when it recovers, each firing recorded in the BCM event log and the cmd journal. Device mode gains `latestmetricdata` and `latesthealthdata`.
+- `nvsm` on the DGX nodes: `show health`, `show versions`, `show alerts`, `dump health` and `update firmware --type nvswitch|bmc|bios|all`, with the firmware set modelled per node. An inconsistent NVSwitch firmware set takes half the NVLinks down, which `nvidia-smi nvlink -s` and the NCCL tests already show; an update is staged and applied by a reboot, and is refused while jobs run on the node unless forced (an audit event).
+- Two scenarios: `adm-bcm-monitoring-hot-node` (adm-15, two variants: make BCM drain a hot node and undrain it when it cools) and `tsh-nvswitch-firmware-partial-update` (tsh-19, hard, two variants: one DGX runs NCCL at half speed after an interrupted firmware update). 53 scenarios in all.
+- Eight questions on triggers, their actions and where firings are logged, `latestmetricdata`, script actions, and `nvsm`. 186 questions in all.
+
 ## [1.4.0] - 2026-11-17
 
 ### Added

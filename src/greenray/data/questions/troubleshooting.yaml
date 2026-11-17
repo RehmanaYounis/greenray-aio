@@ -500,3 +500,41 @@
     - A100 doesn't track memory errors
     - Page retirement on A100 is only reported through Slurm
     - A100 and later GPUs handle memory errors with row remapping instead of page retirement, so they should check the row remapper status (nvidia-smi -q -d ROW_REMAPPER)
+- id: tsh-039
+  domain: Troubleshooting and Optimization
+  difficulty: medium
+  lab: tsh-nvswitch-firmware-partial-update
+  question: |
+    On one DGX H100 a single-node all_reduce_perf reaches half the bus
+    bandwidth of the other nodes. nvidia-smi nvlink -s shows the same nine
+    links inactive on every GPU; Fabric Manager is active and nvidia-smi shows
+    all GPUs healthy. Which tool answers whether the NVSwitches themselves are
+    the problem?
+  choices:
+    - nvsm show health and nvsm show versions, which check the NVSwitches and report their firmware
+    - dcgmi diag -r 1, which flashes the NVSwitch firmware if it is wrong
+    - systemctl restart nvidia-fabricmanager, which repairs the links
+    - ipmitool sel list, which lists NVSwitch firmware versions
+- id: tsh-040
+  domain: Troubleshooting and Optimization
+  difficulty: medium
+  lab: tsh-nvswitch-firmware-partial-update
+  question: |
+    nvsm show health on a DGX reports "NVSwitch firmware: versions differ" and
+    a job is running on the node. What is the correct order of operations?
+  choices:
+    - Drain the node, let the job finish or cancel it with its owner's agreement, stage the update with nvsm update firmware, reboot, verify with nvsm show health and the NCCL test, resume the node
+    - Run nvsm update firmware --force right away; the running job is unaffected because firmware is applied at the next reboot
+    - Reboot the node first so the job is requeued, then update the firmware
+    - Restart Fabric Manager; it reflashes the switches to a matching version
+- id: tsh-041
+  domain: Troubleshooting and Optimization
+  difficulty: easy
+  lab: tsh-nvswitch-firmware-partial-update
+  question: |
+    What is the difference between nvsm show health and nvsm dump health?
+  choices:
+    - show health prints the current health checks on the terminal; dump health writes a compressed support bundle (health, versions, logs) under /tmp for a support case
+    - show health is read-only; dump health resets the health counters
+    - show health covers GPUs only; dump health covers the whole system
+    - There is none; dump is an alias of show

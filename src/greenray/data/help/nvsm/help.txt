@@ -1,0 +1,16 @@
+nvsm 24.09.01
+
+usage: nvsm <command> [options...]
+
+       -h, --help     Print this help text
+
+Commands:
+	show health             Run every health check and print a summary (GPUs, NVSwitch, NVLink, fans, PSUs, storage, firmware)
+	show versions           Firmware and software versions: BMC, BIOS, VBIOS, NVSwitch, ConnectX, driver, Fabric Manager
+	show alerts             Active alerts (the health checks that currently fail)
+	dump health             Collect a support bundle under /tmp for NVIDIA Enterprise Support
+	update firmware         Stage a firmware update; the system applies it at the next reboot
+	    --type TYPE         Firmware to update: nvswitch, bmc, bios or all
+	    --force             Update even while jobs run on the node (not recommended)
+
+(GreenRay AIO simulates the options listed above.)

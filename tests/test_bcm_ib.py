@@ -266,6 +266,86 @@ def test_setup_wizards_point_at_cmsh():
     assert "dana" in s.run("cm-kubernetes-setup --list-users")
 
 
+# ---------------------------------------------------------------- BCM monitoring (triggers)
+
+
+def _heat(s, host, temp):
+    for g in s.ctx.state.nodes[host].gpus:
+        g.temp_c = temp
+
+
+HOT = "cmsh -c \"monitoring; trigger; add hot; set expression 'gpu_temp > 85'; set enteractions drain; set leaveactions undrain; commit\""
+
+
+def test_monitoring_lists_measurables_actions_and_latest_data():
+    s = sh()
+    assert "gpu_temp" in s.run('cmsh -c "monitoring; measurable; list"')
+    assert "drain" in s.run('cmsh -c "monitoring; action; list"')
+    _heat(s, "dgx-02", 91)
+    assert "91 C" in s.run('cmsh -c "device; latestmetricdata -n dgx-02"')
+    assert "PASS" in s.run('cmsh -c "device; latesthealthdata -n dgx-02"')
+    s.ctx.state.nodes["dgx-02"].services["slurmd"] = "failed"
+    assert "FAIL" in s.run('cmsh -c "device; latesthealthdata -n dgx-02"')
+
+
+def test_trigger_properties_are_validated():
+    s = sh()
+    s.run('cmsh -c "monitoring; trigger; add t"')  # staged, so the checks below run on an existing object
+    for cmd, msg in (
+        ("set expression 'gpu_temp >> 85'", "must look like"),
+        ("set expression 'nosuch > 85'", "unknown measurable"),
+        ("set expression 'gpu_temp > hot'", "not a number"),
+        ("set expression 'ssh2node > 1'", "health check"),
+        ("set enteractions nosuch", "unknown action"),
+        ("set severity loud", "severity must be"),
+    ):
+        out = s.run(f'cmsh -c "monitoring; trigger; use t; {cmd}" && echo OK')
+        assert msg in out and "OK" not in out, (cmd, out)
+    out = s.run('cmsh -c "monitoring; action; remove drain" && echo OK')
+    assert "built-in" in out and "OK" not in out
+
+
+def test_trigger_drains_on_enter_and_undrains_on_leave():
+    s = sh()
+    _heat(s, "dgx-02", 91)
+    out = s.run(HOT)
+    assert "fired for dgx-02" in out and "drain: drained" in out
+    sn = s.ctx.state.slurm.nodes["dgx-02"]
+    assert sn.drain and sn.reason == "BCM trigger hot" and sn.state == "DRAIN"
+    assert "dgx-02" in s.run('cmsh -c "monitoring; trigger; use hot; show"')
+    s.run("sinfo")  # the condition still holds: no second firing
+    assert sum("fired for dgx-02" in e for e in s.ctx.state.bcm.events) == 1
+    _heat(s, "dgx-02", 40)
+    s.run("sinfo")  # any command evaluates the triggers
+    assert not sn.drain and sn.state == "IDLE"
+    assert any("cleared for dgx-02" in e and "undrained" in e for e in s.ctx.state.bcm.events)
+    assert any("monitoring: trigger hot" in line for line in s.ctx.state.nodes["bcm-head"].journal["cmd"])
+
+
+def test_trigger_undrain_leaves_a_manual_drain_alone():
+    s = sh()
+    _heat(s, "dgx-03", 91)
+    s.run(HOT)
+    s.run("scontrol update nodename=dgx-03 state=drain reason=hands")
+    _heat(s, "dgx-03", 40)
+    s.run("sinfo")
+    sn = s.ctx.state.slurm.nodes["dgx-03"]
+    assert sn.drain and sn.reason == "hands"
+
+
+def test_disabled_trigger_and_script_action():
+    s = sh()
+    s.run('cmsh -c "monitoring; action; add scriptaction page-oncall; set script /cm/local/page.sh; commit"')
+    assert "/cm/local/page.sh" in s.run('cmsh -c "monitoring; action; list"')
+    _heat(s, "dgx-04", 95)
+    s.run(
+        "cmsh -c \"monitoring; trigger; add hot; set expression 'gpu_temp > 85'; set enteractions drain,page-oncall; set disabled yes; commit\""
+    )
+    assert not s.ctx.state.slurm.nodes["dgx-04"].get("drain")
+    out = s.run('cmsh -c "monitoring; trigger; use hot; set disabled no; commit"')
+    assert "page-oncall: ran" in out and s.ctx.state.slurm.nodes["dgx-04"].drain
+
+
 # ---------------------------------------------------------------- InfiniBand
 
 

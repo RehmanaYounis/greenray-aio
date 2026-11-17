@@ -64,6 +64,9 @@ KIND_TITLE = {
     "group": "Groups",
     "profile": "Profiles",
     "wlm": "WLM instances",
+    "trigger": "Triggers",
+    "action": "Actions",
+    "measurable": "Measurables",
     "jobqueue": "Job queues",
     "configurationoverlay": "Configuration overlays",
 }
@@ -77,6 +80,7 @@ MODES = (
     "profile",
     "wlm",
     "configurationoverlay",
+    "monitoring",
     "main",
 )
 EXCLUDE_LISTS = (
@@ -150,6 +154,8 @@ PROPS = {
     "jobqueue": {
         p: p for p in ("name", "nodes", "maxtime", "defaulttime", "default", "state", "qos", "allowqos", "options")
     },
+    "trigger": {p: p for p in ("name", "expression", "enteractions", "leaveactions", "severity", "disabled")},
+    "action": {"name": "name", "script": "script", "description": "description"},
     "configurationoverlay": {
         "name": "name",
         "priority": "priority",
@@ -169,6 +175,8 @@ READONLY = {
     "wlm": {"name", "type", "version"},
     "jobqueue": {"name"},
     "configurationoverlay": {"name", "roles"},
+    "trigger": {"name"},
+    "action": {"name", "description"},
 }
 
 

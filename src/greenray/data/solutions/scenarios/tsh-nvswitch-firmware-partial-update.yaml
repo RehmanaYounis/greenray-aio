@@ -1,0 +1,44 @@
+# Private solution for scenario tsh-nvswitch-firmware-partial-update
+solution:
+  - squeue
+  - ssh {node}
+  - nvidia-smi nvlink -s -i 0
+  - nvidia-smi topo -m
+  - nvsm show health
+  - nvsm show versions
+  - journalctl -u nvsm
+  - exit
+  - scontrol update nodename={node} state=drain reason="NVSwitch firmware partial update"
+  - scancel {job}
+  - ssh {node}
+  - nvsm update firmware --type nvswitch
+  - reboot
+  - ssh {node}
+  - nvsm show health
+  - nvidia-smi nvlink -s -i 0
+  - all_reduce_perf -b 8G -e 8G -g 8
+  - exit
+  - scontrol update nodename={node} state=resume
+  - sinfo
+explanation: |
+  A single-node all_reduce_perf never leaves the NVLink fabric, so half the
+  bandwidth on one node means half the fabric. nvidia-smi nvlink -s shows links
+  9 to 17 inactive on every GPU, which is not one bad GPU but the switches those
+  links go through. The operating system cannot say more; the DGX's own
+  management daemon can. nvsm show health reports the NVSwitch firmware check
+  as failed, nvsm show versions shows two switches on the new firmware and two
+  on the old, and the nvsm journal has the interrupted update from last week.
+  The switches on different firmware cannot form one fabric, so the links
+  between them stay down while Fabric Manager, the driver and the GPUs are all
+  fine.
+
+  The fix is to finish the update. Firmware is applied at a reboot and nvsm
+  refuses to stage it under a running job, so the order is: drain the node,
+  cancel the benchmark its owner offered up, stage the NVSwitch update, reboot,
+  verify (nvsm show health, nvidia-smi nvlink -s, the benchmark back at the
+  cluster's figure), and only then resume the node in Slurm.
+edge_cases:
+  - "nvsm update firmware --force skips the running-job check. The job dies at the reboot anyway; the flag exists for emergencies, not for saving a drain."
+  - "A reboot without draining first makes Slurm mark the node DOWN with 'Node unexpectedly rebooted'. Drain, reboot, resume is the sequence that leaves no surprise state behind."
+  - "Fabric Manager being active does not prove the fabric is healthy; it configures whatever switches it finds. The version mismatch that stops Fabric Manager from starting is a different fault (driver versus Fabric Manager package)."
+  - "nvsm dump health collects everything support asks for in one archive; take it before the reboot if the case may be escalated, because the reboot clears the evidence."

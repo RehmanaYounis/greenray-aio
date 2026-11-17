@@ -272,6 +272,20 @@ ipmitool:
     - "sdr                     sensor readings (fans, temperatures, PSUs)"
     - "power status|on|off|cycle"
 
+nvsm:
+  summary: NVIDIA System Management CLI on a DGX (health, firmware versions, support dump)
+  purpose: Asks the NVSM daemon about the hardware the OS cannot see by itself, such as the NVSwitches and their firmware, PSUs, fans, drives and the BMC.
+  when: A DGX behaves differently from its neighbours after maintenance, or before and after a firmware update.
+  options:
+    - "show health            every health check with OK/FAIL and a reason"
+    - "show versions          BMC, BIOS, VBIOS, NVSwitch, ConnectX, driver and Fabric Manager versions"
+    - "show alerts            the checks that currently fail"
+    - "dump health            support bundle under /tmp"
+    - "update firmware --type nvswitch|bmc|bios|all   stage an update, applied at the next reboot"
+  read:
+    - "Health Summary: Unhealthy means at least one [FAIL] line; read the reason on that line."
+    - "NVSwitch firmware must be the same on every switch; differing versions break the NVLink fabric."
+
 numactl:
   summary: NUMA topology and memory/CPU binding
   purpose: Shows NUMA nodes and their CPUs, or runs a program bound to particular nodes.

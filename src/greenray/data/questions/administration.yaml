@@ -564,3 +564,64 @@
     - scontrol update is durable because slurmctld writes the change back to slurm.conf
     - Only a restart of slurmctld can change MaxTime
     - MaxTime is a property of the node category in BCM
+- id: adm-047
+  domain: Administration
+  difficulty: medium
+  lab: adm-bcm-monitoring-hot-node
+  question: |
+    In BCM a monitoring trigger has enter actions and leave actions. When do
+    they run?
+  choices:
+    - Enter actions run once when the trigger's expression becomes true for a node; leave actions run once when it becomes false again
+    - Enter actions run every sampling interval while the expression is true; leave actions run every interval while it is false
+    - Enter actions run when the trigger is committed; leave actions run when it is removed
+    - Enter actions run on the head node; leave actions run on the compute node
+- id: adm-048
+  domain: Administration
+  difficulty: medium
+  lab: adm-bcm-monitoring-hot-node
+  question: |
+    A BCM trigger with the built-in drain action fires for a DGX node that is
+    running a four-hour job. What happens to the job?
+  choices:
+    - Nothing; the node goes DRAINING, the job runs to completion and no new jobs are scheduled onto the node
+    - The job is cancelled immediately so the node can be drained
+    - The job is requeued on another node
+    - The job is suspended until the trigger's leave action runs
+- id: adm-049
+  domain: Administration
+  difficulty: easy
+  lab: adm-bcm-monitoring-hot-node
+  question: |
+    Which cmsh command shows the most recent metric samples BCM holds for a
+    node (GPU temperature, power, load)?
+  choices:
+    - 'device; latestmetricdata -n <node>'
+    - 'monitoring; measurable; show <node>'
+    - 'device; use <node>; show metrics'
+    - 'monitoring; trigger; list -n <node>'
+- id: adm-050
+  domain: Administration
+  difficulty: medium
+  lab: adm-bcm-monitoring-hot-node
+  question: |
+    Where does an administrator see that a BCM monitoring trigger fired, and
+    for which node and reading?
+  choices:
+    - In the BCM event log (cmsh -c "main; events") and the CMDaemon journal on the head node
+    - In /var/log/slurm/slurmctld.log only
+    - In the trigger's own log file under /cm/local/apps/cmd/triggers/
+    - It is not logged; only the node's Slurm state changes
+- id: adm-051
+  domain: Administration
+  difficulty: hard
+  lab: adm-bcm-monitoring-hot-node
+  question: |
+    An administrator wants BCM to run a site script (which pages the on-call
+    engineer) when a health check fails on any node, in addition to draining
+    it. How is this set up in cmsh?
+  choices:
+    - In monitoring mode, add a script action (action; add scriptaction <name>; set script <path>; commit), then list it together with drain in the trigger's enter actions
+    - Edit /etc/slurm/slurm.conf and set HealthCheckProgram to the script
+    - Put the script in the node's crontab; BCM triggers cannot run scripts
+    - Add the script to the software image's kernelmodules list

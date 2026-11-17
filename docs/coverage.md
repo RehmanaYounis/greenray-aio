@@ -49,6 +49,7 @@ Three hard scenarios where the symptom sits in one system and the cause in anoth
 | Topic | Hands-on scenarios |
 | --- | --- |
 | BCM monitoring, node status, power control | `adm-bcm-power-and-status`, `adm-bcm-cmsh-inventory` |
+| BCM health checks, triggers and automatic actions | `adm-bcm-monitoring-hot-node` |
 | BCM patching and image synchronisation (grabimage / imageupdate) | `ins-bcm-softwareimage-update`, `adm-bcm-grabimage-sync`, `tsh-node-lost-driver-after-category-change` |
 | BCM users and roles | `adm-bcm-user-role` |
 | Slurm partitions, QOS and limits | `adm-slurm-partition-qos`, `adm-slurm-partition-time-limit` |
@@ -82,6 +83,7 @@ Three hard scenarios where the symptom sits in one system and the cause in anoth
 | DCGM diagnostics | `tsh-dcgm-diag-failure` |
 | Thermal and power throttling | `tsh-thermal-throttle`, `tsh-power-cap-persistence` |
 | Fabric Manager / NVSwitch | `tsh-fabricmanager-down` |
+| DGX firmware and NVSwitch health (nvsm) | `tsh-nvswitch-firmware-partial-update` |
 | InfiniBand link problems | `tsh-ib-port-down` |
 | NCCL and multi-node performance | `tsh-nccl-ib-hca`, `tsh-nccl-slow-after-image-update` |
 | GPUDirect RDMA (Magnum IO) | `tsh-gpudirect-peermem` |

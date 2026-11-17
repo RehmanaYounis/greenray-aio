@@ -18,6 +18,8 @@ HOOKS_SERVICE: list = []
 HOOKS_REBOOT: list = []
 # fn(state) called once when a shell opens on a freshly built cluster, after the scenario setup
 HOOKS_STATE: list = []
+# fn(state) called after every command, for things that watch the cluster (BCM monitoring triggers)
+HOOKS_TICK: list = []
 
 
 def command(*names: str, help: str = "", override: bool = False):
