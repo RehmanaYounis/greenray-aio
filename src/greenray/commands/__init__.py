@@ -16,6 +16,8 @@ HELP: dict = {}
 HOOKS_SERVICE: list = []
 # fn(ctx, node) called when a node reboots
 HOOKS_REBOOT: list = []
+# fn(state) called once when a shell opens on a freshly built cluster, after the scenario setup
+HOOKS_STATE: list = []
 
 
 def command(*names: str, help: str = "", override: bool = False):

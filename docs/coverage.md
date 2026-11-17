@@ -34,7 +34,8 @@ Three hard scenarios where the symptom sits in one system and the cause in anoth
 | Topic | Hands-on scenarios |
 | --- | --- |
 | Install and configure Base Command Manager; add and provision nodes | `ins-bcm-add-node-category`, `ins-bcm-softwareimage-update` |
-| Set up a workload manager through BCM (Slurm) | `ins-slurm-gres-config` |
+| BCM configuration overlays and roles | `ins-bcm-overlay-new-category` |
+| Set up a workload manager through BCM (Slurm) | `ins-slurm-gres-config`, `ins-bcm-overlay-new-category`, `adm-bcm-wlm-new-queue` |
 | Initialise Kubernetes on NVIDIA hosts; GPU Operator | `ins-gpu-operator-preinstalled-driver` |
 | Network Operator, RDMA for pods | `ins-network-operator-rdma` |
 | Container runtime for GPUs (NVIDIA Container Toolkit) | `ins-container-toolkit-docker` |
@@ -51,6 +52,7 @@ Three hard scenarios where the symptom sits in one system and the cause in anoth
 | BCM patching and image synchronisation (grabimage / imageupdate) | `ins-bcm-softwareimage-update`, `adm-bcm-grabimage-sync`, `tsh-node-lost-driver-after-category-change` |
 | BCM users and roles | `adm-bcm-user-role` |
 | Slurm partitions, QOS and limits | `adm-slurm-partition-qos`, `adm-slurm-partition-time-limit` |
+| BCM-managed Slurm configuration (wlm mode, generated slurm.conf) | `adm-bcm-wlm-default-queue`, `adm-bcm-wlm-new-queue` |
 | Slurm accounts and fairshare | `adm-slurm-fairshare-accounts` |
 | MIG configuration | `adm-mig-h100-1g` |
 | MIG in Kubernetes | `adm-k8s-mig-mixed-strategy`, `wkl-k8s-replica-pending-after-mig` |

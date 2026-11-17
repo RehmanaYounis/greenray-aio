@@ -634,3 +634,66 @@
     - Install Slurm only on the head node; BCM forwards jobs to nodes over SSH
     - Install Kubernetes first; Slurm is installed automatically by the GPU Operator
     - Use BCM's workload manager setup wizard (cm-wlm-setup) to deploy Slurm, assign the server and client roles, and generate the configuration including GPU GRES
+- id: ins-053
+  domain: Installation and Deployment
+  difficulty: medium
+  lab: ins-bcm-overlay-new-category
+  question: |
+    cm-wlm-setup finished on a BCM cluster. In cmsh, which objects hold the
+    assignment of the Slurm server, client, submit and accounting roles to the
+    head node and to the GPU node category?
+  choices:
+    - The configuration overlays (configurationoverlay mode), one per role group, each listing the categories and nodes it applies to
+    - The partition object in partition mode
+    - The job queues under wlm mode
+    - The roles submode of the base partition
+- id: ins-054
+  domain: Installation and Deployment
+  difficulty: medium
+  lab: ins-bcm-overlay-new-category
+  question: |
+    An administrator creates a new node category for a group of DGX nodes and
+    moves the nodes into it. After their reboot the nodes are absent from sinfo,
+    not even DOWN. What is the most likely cause?
+  choices:
+    - The new category is not listed on the configuration overlays that carry the slurmclient role, so the nodes lost the role and CMDaemon regenerated slurm.conf without them
+    - slurmd is not part of the software image and must be installed with apt on every node
+    - The nodes need to be added to the partition with scontrol create
+    - MUNGE keys are regenerated whenever a node changes category
+- id: ins-055
+  domain: Installation and Deployment
+  difficulty: hard
+  lab: ins-bcm-overlay-new-category
+  question: |
+    cm-wlm-setup creates both a slurm-client overlay (priority 500) and a
+    slurm-client-gpu overlay (priority 450) for GPU nodes. Why are there two
+    overlays that assign the same slurmclient role?
+  choices:
+    - The GPU overlay carries the role's GPU settings (the Gres definitions written to slurm.conf); its priority ranks it against the plain client overlay for nodes covered by both
+    - One is for the head node and one for the compute nodes
+    - slurm-client is Slurm 23 and slurm-client-gpu is the legacy Slurm 20 role
+    - The second overlay is a backup that is only used when the first is deleted
+- id: ins-056
+  domain: Installation and Deployment
+  difficulty: easy
+  lab: ins-bcm-overlay-new-category
+  question: |
+    Which cmsh command sequence adds the category dgx-h100-b to the existing
+    slurm-client configuration overlay and makes the change effective?
+  choices:
+    - 'configurationoverlay; use slurm-client; append categories dgx-h100-b; commit'
+    - 'category; use dgx-h100-b; set overlay slurm-client; commit'
+    - 'device; foreach -c dgx-h100-b (roles; assign slurmclient)'
+    - 'wlm; use slurm; set clients dgx-h100-b; commit'
+- id: ins-057
+  domain: Installation and Deployment
+  difficulty: medium
+  question: |
+    cm-kubernetes-setup has deployed Kubernetes on a BCM cluster. A new team
+    member needs to use kubectl against the cluster with their own BCM account.
+    What is the BCM way to give them access?
+  choices:
+    - Run cm-kubernetes-setup --add-user <name> for the existing BCM user, which creates their Kubernetes role binding and kubeconfig
+    - Copy /root/.kube/config into the user's home directory
+    - Create the user with kubectl create user and share the cluster admin token
+    - Add the user to the docker group on the head node

@@ -219,6 +219,8 @@ def tokenize(text: str, lookup, substitute) -> list[str]:
 class Shell:
     def __init__(self, state, host: str = HEAD, color: bool = False):
         self.ctx = Context(state=state, host=host, color=color)
+        for fn in commands.HOOKS_STATE:
+            fn(state)
 
     def _lookup(self, name: str) -> str:
         if name == "HOSTNAME":

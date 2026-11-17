@@ -1,0 +1,78 @@
+id: ins-bcm-overlay-new-category
+code: ins-10
+title: A node moved to a new category is not in sinfo at all
+domain: Installation and Deployment
+difficulty: medium
+time_limit_min: 15
+tags: [bcm, cmsh, configurationoverlay, roles, slurm, category]
+briefing: |
+  Handover note from the morning shift:
+
+    "For the kernel-parameter pilot I created the category dgx-h100-b (a clone
+    of dgx-h100, same image) and moved dgx-04 into it, then rebooted the node.
+    dgx-04 is up, nvidia-smi is fine, but it has disappeared from sinfo: not
+    down, not drained, simply not there. Jobs that ask for four nodes are
+    pending. I have not touched Slurm."
+
+  Find out why dgx-04 is no longer a Slurm node and fix it so that the node
+  registers with its eight GPUs. The pilot needs dgx-04 to stay in dgx-h100-b,
+  so do not move it back. dgx-01 to dgx-03 are fine and must stay that way.
+objectives:
+  - dgx-04 is in Slurm again, IDLE, with gres gpu:h100:8, while staying in category dgx-h100-b
+  - The configuration overlays that give nodes the slurmclient role cover dgx-h100-b, committed
+  - slurm.conf on bcm-head lists dgx-04 again with its GPUs
+  - The other three nodes and the dgx-h100 category are untouched
+setup:
+  - python: |
+      from greenray.commands.cmsh import bcm_init
+      from greenray.commands.cmsh.wlm import wlm_init, regenerate
+      bcm = bcm_init(state)
+      wlm_init(state)
+      cat = wrap(dict(bcm.categories['dgx-h100']))
+      cat.name = 'dgx-h100-b'
+      cat.kernelparameters = 'rd.driver.blacklist=nouveau nvidia.NVreg_EnableGpuFirmware=0'
+      bcm.categories['dgx-h100-b'] = cat
+      bcm.devices['dgx-04'].category = 'dgx-h100-b'
+      regenerate(state, 'cmd started')
+      state.bcm.events = [e for e in bcm.events if 'cmd started' not in e]
+      n = state.nodes['dgx-04']
+      del n.services['slurmd']
+      state.slurm.nodes.pop('dgx-04', None)
+      n.journal['cmd'] = [
+          "2026-10-19 07:52:10 dgx-04 cmd[2210]: node-installer: install mode AUTO, image dgx-os-6.2-h100-image, category dgx-h100-b",
+          "2026-10-19 07:56:41 dgx-04 cmd[2210]: node-installer: finished, booting local disk",
+          "2026-10-19 07:58:03 dgx-04 cmd[2210]: Info: roles for this node: (none)",
+      ]
+      bcm.events.extend([
+          "2026-10-19 07:40:12 [notice] bcm-head: category dgx-h100-b added (clone of dgx-h100)",
+          "2026-10-19 07:41:30 [notice] bcm-head: category of dgx-04 changed to dgx-h100-b",
+          "2026-10-19 07:41:30 [notice] bcm-head: category of dgx-04 changed; slurm.conf regenerated, slurmctld reconfigured",
+          "2026-10-19 07:51:55 [notice] bcm-head: dgx-04: reboot requested from cmsh",
+          "2026-10-19 07:58:03 [notice] bcm-head: dgx-04: node provisioned (reboot, install mode AUTO, image dgx-os-6.2-h100-image)",
+      ])
+      state.nodes['bcm-head'].journal.setdefault('slurmctld', []).append(
+          "2026-10-19 07:41:31 bcm-head slurmctld[2211]: Reconfigure: read /etc/slurm/slurm.conf, 3 nodes, 1 partitions")
+checks:
+  - desc: dgx-04 is a Slurm node again, IDLE, with gres gpu:h100:8
+    expr: "'dgx-04' in slurm.nodes and slurm.nodes['dgx-04'].state == 'IDLE' and slurm.nodes['dgx-04'].gres == 'gpu:h100:8'"
+  - desc: the slurm-client and slurm-client-gpu overlays cover category dgx-h100-b, committed
+    expr: "'dgx-h100-b' in bcm.overlays['slurm-client'].categories and 'dgx-h100-b' in bcm.overlays['slurm-client-gpu'].categories and not bcm.uncommitted"
+  - desc: slurm.conf on bcm-head lists dgx-04 with Gres=gpu:h100:8
+    expr: "any(re.match(r'NodeName=\\S*04', l) and 'Gres=gpu:h100:8' in l for l in file('bcm-head', '/etc/slurm/slurm.conf').splitlines()) or any(l.startswith('NodeName=dgx-[01-04]') and 'Gres=gpu:h100:8' in l for l in file('bcm-head', '/etc/slurm/slurm.conf').splitlines())"
+  - desc: dgx-04 stayed in category dgx-h100-b
+    kind: safety
+    expr: "bcm.devices['dgx-04'].category == 'dgx-h100-b'"
+  - desc: the other nodes and the dgx-h100 category were left alone
+    kind: safety
+    expr: "all(bcm.devices[n].category == 'dgx-h100' for n in ('dgx-01', 'dgx-02', 'dgx-03')) and 'dgx-h100' in bcm.overlays['slurm-client'].categories and bcm.categories['dgx-h100'].softwareimage == 'dgx-os-6.2-h100-image'"
+  - desc: you read the overlays or the node's roles before changing anything
+    kind: evidence
+    expr: ran_before(r'^cmsh .*(configurationoverlay.*(list|show|get)|roles|events)', r'^cmsh .*(append|set|add) ')
+hints:
+  - "A node that is absent from sinfo, rather than down, has no NodeName line in slurm.conf. Check grep NodeName /etc/slurm/slurm.conf on bcm-head and the slurmctld journal: how many nodes did the last reconfigure read?"
+  - "On a BCM cluster the node list comes from the roles, and the Slurm roles are handed out by configuration overlays: cmsh -c \"configurationoverlay; list\". Look at the Categories column of the overlays that carry slurmclient and compare it with the category dgx-04 is in now."
+  - "An overlay covers the categories and nodes listed on it. append categories <name> adds one; commit applies it, and CMDaemon then regenerates slurm.conf and starts slurmd where the role is new. There are two client overlays; the one with the lower priority number is the one that tells Slurm about the GPUs."
+  - "After the commits, sinfo should show four nodes and scontrol show node dgx-04 should list Gres=gpu:h100:8. If the node is there without GPUs, one of the two overlays is still missing the category."
+references:
+  - NVIDIA Base Command Manager 10 Administrator Manual, configuration overlays and roles
+  - NVIDIA Base Command Manager 10 Administrator Manual, Slurm setup (cm-wlm-setup, slurm-client and slurm-client-gpu overlays)

@@ -49,6 +49,8 @@ KIND_COLL = {
     "category": "categories",
     "softwareimage": "softwareimages",
     "partition": "partitions",
+    "wlm": "wlm",
+    "configurationoverlay": "overlays",
     "user": "users",
     "group": "groups",
     "profile": "profiles",
@@ -61,8 +63,22 @@ KIND_TITLE = {
     "user": "Users",
     "group": "Groups",
     "profile": "Profiles",
+    "wlm": "WLM instances",
+    "jobqueue": "Job queues",
+    "configurationoverlay": "Configuration overlays",
 }
-MODES = ("device", "category", "softwareimage", "partition", "user", "group", "profile", "main")
+MODES = (
+    "device",
+    "category",
+    "softwareimage",
+    "partition",
+    "user",
+    "group",
+    "profile",
+    "wlm",
+    "configurationoverlay",
+    "main",
+)
 EXCLUDE_LISTS = (
     "excludelistgrab",
     "excludelistgrabnew",
@@ -130,6 +146,17 @@ PROPS = {
     },
     "group": {"name": "name", "id": "gid", "groupid": "gid", "members": "members"},
     "profile": {"name": "name", "description": "description"},
+    "wlm": {"name": "name", "type": "type", "version": "version"},
+    "jobqueue": {
+        p: p for p in ("name", "nodes", "maxtime", "defaulttime", "default", "state", "qos", "allowqos", "options")
+    },
+    "configurationoverlay": {
+        "name": "name",
+        "priority": "priority",
+        "categories": "categories",
+        "nodes": "nodes",
+        "roles": "roles",
+    },
 }
 READONLY = {
     "device": {"type", "status", "hostname"},
@@ -139,6 +166,9 @@ READONLY = {
     "user": {"name"},
     "group": {"name"},
     "profile": {"name"},
+    "wlm": {"name", "type", "version"},
+    "jobqueue": {"name"},
+    "configurationoverlay": {"name", "roles"},
 }
 
 
@@ -205,9 +235,14 @@ def effective_image(state, dev_name):
 
 
 def effective_roles(state, dev_name):
+    """Roles from the device, its category and every configuration overlay that covers it."""
     dev = state.bcm.devices[dev_name]
     cat = state.bcm.categories.get(dev.get("category") or "") or {}
-    return sorted(set(dev.get("roles", [])) | set(cat.get("roles", [])))
+    roles = set(dev.get("roles", [])) | set(cat.get("roles", []))
+    for ov in (state.bcm.get("overlays") or {}).values():
+        if dev_name in ov.get("nodes", []) or dev.get("category") in ov.get("categories", []):
+            roles.update(ov.get("roles", []))
+    return sorted(roles)
 
 
 def effective_installmode(state, dev_name):
@@ -334,6 +369,9 @@ def provision(ctx, host, reason="reboot"):
         for svc in ("nvidia-persistenced", "nvidia-dcgm", "nvidia-fabricmanager"):
             if svc in node.services:
                 node.services[svc] = "inactive"
+    for m in img.get("kernelmodules", []):
+        if m not in node.modules:
+            node.modules.append(m)
     roles = effective_roles(state, host)
     if "slurmclient" in roles:
         node.services["slurmd"] = "active"
@@ -391,7 +429,7 @@ def expand_nodes(spec: str) -> list[str]:
 
 def _split_cmds(text: str) -> list[str]:
     """Split a cmsh command string on ';' and newlines, honouring quotes."""
-    out, buf, quote = [], [], None
+    out, buf, quote, depth = [], [], None, 0
     for ch in text:
         if quote:
             buf.append(ch)
@@ -400,7 +438,13 @@ def _split_cmds(text: str) -> list[str]:
         elif ch in "'\"":
             quote = ch
             buf.append(ch)
-        elif ch in ";\n":
+        elif ch == "(":
+            depth += 1
+            buf.append(ch)
+        elif ch == ")":
+            depth = max(0, depth - 1)
+            buf.append(ch)
+        elif ch in ";\n" and depth == 0:
             out.append("".join(buf).strip())
             buf = []
         else:

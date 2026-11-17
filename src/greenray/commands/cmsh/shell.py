@@ -10,6 +10,7 @@ from ...core.errors import CommandError
 from ...core.state import HEAD, wrap
 from .. import command
 from ..common import dashed_table
+from ..slurm.common import compress_hostlist
 from .model import (
     DEFAULT_EXCLUDE,
     EXCLUDE_LISTS,
@@ -35,6 +36,7 @@ from .model import (
     provision,
     sync_image,
 )
+from .wlm import overlay_members, regenerate, validate_queue, wlm_init
 
 
 class CmshError(Exception):
@@ -49,10 +51,13 @@ class Cmsh:
         self.ctx = ctx
         self.state = ctx.state
         self.bcm = bcm_init(ctx.state)
+        wlm_init(ctx.state)
         self.mode = None
         self.obj = None
-        self.sub = None  # "roles" | "bmcsettings" | "fsmounts"
+        self.sub = None  # "roles" | "bmcsettings" | "fsmounts" | "kernelmodules"
         self.fsobj = None  # current mountpoint inside the fsmounts submode
+        self.selection: list[str] | None = None  # `range -n ...`: the devices set/get/clear act on
+        self._regen = False  # a wlm or overlay commit rewrites slurm.conf once, at the end
         self.out: list[str] = []
         self.errors = 0
 
@@ -61,6 +66,8 @@ class Cmsh:
         return f"{kind}:{name}"
 
     def coll(self, kind):
+        if kind == "jobqueue":
+            return self.bcm.wlm.slurm.jobqueues
         return self.bcm[KIND_COLL[kind]]
 
     def exists(self, kind, name):
@@ -100,9 +107,11 @@ class Cmsh:
         if not self.mode:
             return f"[{HEAD}]% "
         mstar = "*" if any(v.kind == self.mode for v in self.bcm.uncommitted.values()) else ""
-        p = f"[{HEAD}->{self.mode}{mstar}"
+        p = f"[{HEAD}->wlm[slurm]->jobqueue" if self.mode == "jobqueue" else f"[{HEAD}->{self.mode}{mstar}"
         if self.obj:
             p += f"[{self.obj}{'*' if self.modified(self.mode, self.obj) else ''}]"
+        if self.selection:
+            p += f"[{compress_hostlist(self.selection)}]"
         if self.sub:
             p += f"->{self.sub}"
             if self.sub == "fsmounts" and self.fsobj:
@@ -139,11 +148,33 @@ class Cmsh:
                 self.fsobj = None
             elif self.sub:
                 self.sub = None
+            elif self.selection:
+                self.selection = None
             elif self.obj:
                 self.obj = None
+            elif self.mode == "jobqueue":
+                self.mode, self.obj = "wlm", "slurm"
             else:
                 self.mode = None
             return
+        if cmd == "jobqueue" and self.mode == "wlm":
+            if not self.obj:
+                self.err("No WLM instance selected. Use 'use slurm' first")
+            self.mode, self.obj, self.sub = "jobqueue", None, None
+            if args:
+                self.execute(args)
+            return
+        if cmd == "kernelmodules" and self.mode == "softwareimage":
+            if not self.obj:
+                self.err("No software image selected. Use 'use <image>' first")
+            self.sub = "kernelmodules"
+            if args:
+                self.execute(args)
+            return
+        if cmd == "foreach" and self.mode in ("device", "category"):
+            return self.foreach(args)
+        if cmd == "range" and self.mode == "device":
+            return self.range_(args)
         if cmd in ("quit",):
             return
         if cmd == "help":
@@ -155,7 +186,7 @@ class Cmsh:
             self.p(dashed_table(["Type", "Name", "Operation", "Changed"], rows) if rows else "No modified objects")
             return
         if self.mode is None:
-            if cmd in ("versioninfo", "licenseinfo"):
+            if cmd in ("versioninfo", "licenseinfo", "events"):
                 return getattr(self, "main_" + cmd)()
             self.err(f"Unknown command: {cmd}. Enter a mode first ({', '.join(MODES)})")
         if self.mode == "main":
@@ -169,6 +200,10 @@ class Cmsh:
             return self.bmc_cmd(cmd, args)
         if self.sub == "fsmounts":
             return self.fs_cmd(cmd, args)
+        if self.sub == "kernelmodules":
+            return self.km_cmd(cmd, args)
+        if self.selection and cmd in ("get", "set", "clear", "show") and self.mode == "device":
+            return self.for_selection(cmd, args)
         common = {
             "list": self.list_,
             "use": self.use,
@@ -210,14 +245,16 @@ class Cmsh:
     def help(self):
         base = "list, use <obj>, show, get <prop>, set <prop> <value>, clear <prop>, clone <src> <new>, add, remove, commit, refresh, exit"
         extra = {
-            "device": "status, power on|off|reset|status -n <nodes>, imageupdate [-w] -n <nodes>|-c <category>, grabimage [-w] [-i <image>] <node>, synclog, reboot, drain, undrain, pexec, roles, bmcsettings, fsmounts",
-            "category": "roles, bmcsettings, fsmounts, usedby, append/removefrom excludelist<grab|grabnew|update|syncinstall|fullinstall> '- /path/*'",
+            "device": "status, power on|off|reset|status -n <nodes>, imageupdate [-w] -n <nodes>|-c <category>, grabimage [-w] [-i <image>] <node>, synclog, reboot, drain, undrain, pexec, roles, bmcsettings, fsmounts, foreach -c <cats>|-n <nodes> (cmd; cmd), range -n <nodes>",
+            "category": "roles, bmcsettings, fsmounts, usedby, append/removefrom excludelist<grab|grabnew|update|syncinstall|fullinstall> '- /path/*', foreach -c <cats> (cmd; cmd)",
             "user": "set password|id|email|profile <value>, show",
             "group": "add <name>, set id <gid>, append members <user>, removefrom members <user>",
             "profile": "list, show <profile> (assign one with user; use <u>; set profile <name>)",
-            "softwareimage": "kernelversion, usedby",
+            "wlm": "list, use slurm, show, jobqueue (list, use <q>, add <q>, set nodes|maxtime|defaulttime|default|state|qos|allowqos, remove, commit)",
+            "configurationoverlay": "list, use <overlay>, show, set priority, append/removefrom categories|nodes, add <name>, commit",
+            "softwareimage": "kernelversion, usedby, kernelmodules (list, add <module>, remove <module>, commit)",
             "partition": "bmcsettings",
-            "main": "versioninfo, licenseinfo",
+            "main": "versioninfo, licenseinfo, events",
         }
         if not self.mode:
             self.p("Modes: " + ", ".join(MODES))
@@ -237,7 +274,7 @@ class Cmsh:
 
     # ------------------------------------------------ objects
     def _need_mode(self):
-        if self.mode not in KIND_COLL:
+        if self.mode not in KIND_COLL and self.mode != "jobqueue":
             self.err(
                 "This command needs a mode with objects (device, category, softwareimage, partition, user, group, profile)"
             )
@@ -311,6 +348,37 @@ class Cmsh:
         elif kind == "profile":
             rows = [(n, "yes" if self.view(kind, n).get("builtin") else "no") for n in names]
             self.p(dashed_table(["Name (key)", "Built-in"], rows))
+        elif kind == "wlm":
+            rows = [(n, self.view(kind, n).get("type", ""), self.view(kind, n).get("version", "")) for n in names]
+            self.p(dashed_table(["Name (key)", "Type", "Version"], rows))
+        elif kind == "jobqueue":
+            rows = []
+            for n in names:
+                q = self.view(kind, n)
+                rows.append(
+                    (
+                        n,
+                        q.get("nodes", ""),
+                        q.get("maxtime", "INFINITE"),
+                        "yes" if q.get("default") else "no",
+                        q.get("state", "UP"),
+                    )
+                )
+            self.p(dashed_table(["Name (key)", "Nodes", "Max time", "Default", "State"], rows))
+        elif kind == "configurationoverlay":
+            rows = []
+            for n in names:
+                o = self.view(kind, n)
+                rows.append(
+                    (
+                        n,
+                        o.get("priority", ""),
+                        ",".join(o.get("nodes", [])),
+                        ",".join(o.get("categories", [])),
+                        ",".join(o.get("roles", [])),
+                    )
+                )
+            self.p(dashed_table(["Name (key)", "Priority", "Nodes", "Categories", "Roles"], rows))
 
     def use(self, args):
         self._need_mode()
@@ -436,6 +504,38 @@ class Cmsh:
                 ("Non user", "no"),
                 ("Built-in", "yes" if v.get("builtin") else "no"),
             ]
+        elif self.mode == "wlm":
+            cg = v.get("cgroups", {})
+            rows = [
+                ("Name", name),
+                ("Type", v.get("type", "")),
+                ("Version", v.get("version", "")),
+                ("Job queues", f"<{len(v.get('jobqueues', {}))} in submode>"),
+                ("Cgroups", ", ".join(k for k, on in cg.items() if on) or "none"),
+                ("Server nodes", ",".join(overlay_members(self.state, "slurm-server"))),
+                ("Client nodes", ",".join(n for n in overlay_members(self.state, "slurm-client") if n != HEAD)),
+            ]
+        elif self.mode == "jobqueue":
+            rows = [
+                ("Name", name),
+                ("Nodes", v.get("nodes", "")),
+                ("Max time", v.get("maxtime", "INFINITE")),
+                ("Default time", v.get("defaulttime", "") or "NONE"),
+                ("Default", "yes" if v.get("default") else "no"),
+                ("State", v.get("state", "UP")),
+                ("QOS", v.get("qos", "")),
+                ("Allow QOS", v.get("allowqos", "")),
+                ("Options", v.get("options", "")),
+            ]
+        elif self.mode == "configurationoverlay":
+            rows = [
+                ("Name", name),
+                ("Priority", v.get("priority", "")),
+                ("Nodes", ",".join(v.get("nodes", []))),
+                ("Categories", ",".join(v.get("categories", []))),
+                ("Roles", ",".join(v.get("roles", []))),
+                ("Covered nodes", ",".join(overlay_members(self.state, name))),
+            ]
         self.p(dashed_table(["Parameter", "Value"], rows, [32, 48]))
 
     def _prop(self, prop):
@@ -481,9 +581,29 @@ class Cmsh:
                 self._need_user(m)
         elif field in EXCLUDE_LISTS:
             value = value.replace("\\n", "\n").rstrip("\n") + "\n"
+        elif self.mode == "jobqueue":
+            value = validate_queue(self.bcm, name, prop, value, self.err)
+        elif self.mode == "configurationoverlay":
+            value = self._validate_overlay(prop, value)
         else:
             value = self._validate(prop, value, name)
         self.stage(self.mode, name, field, value)
+
+    def _validate_overlay(self, prop, value):
+        if prop == "priority":
+            if not value.isdigit():
+                self.err("Error: priority must be a number")
+            return int(value)
+        items = [x for x in value.replace(" ", ",").split(",") if x]
+        if prop == "categories":
+            for c in items:
+                if not self.exists("category", c):
+                    self.err(f"Error: category '{c}' does not exist")
+        if prop == "nodes":
+            for n in items:
+                if n not in self.bcm.devices:
+                    self.err(f"Error: device '{n}' does not exist")
+        return items
 
     def _need_user(self, user):
         if user != "root" and not self.exists("user", user):
@@ -518,6 +638,12 @@ class Cmsh:
         elif field in EXCLUDE_LISTS:
             text = str(cur.get(field, "")).rstrip("\n")
             self.stage(self.mode, name, field, (text + "\n" if text else "") + value + "\n")
+        elif self.mode == "configurationoverlay" and field in ("categories", "nodes"):
+            items = list(cur.get(field, []))
+            for x in self._validate_overlay(prop, value):
+                if x not in items:
+                    items.append(x)
+            self.stage(self.mode, name, field, items)
         else:
             self.err(f"Error: property '{prop}' is not a list (use set)")
 
@@ -531,6 +657,9 @@ class Cmsh:
             if value not in [ln.strip() for ln in lines]:
                 self.err(f"Error: '{value}' is not in {prop}")
             self.stage(self.mode, name, field, "\n".join(ln for ln in lines if ln.strip() != value) + "\n")
+        elif self.mode == "configurationoverlay" and field in ("categories", "nodes"):
+            gone = [x for x in value.replace(" ", ",").split(",") if x]
+            self.stage(self.mode, name, field, [x for x in cur.get(field, []) if x not in gone])
         else:
             self.err(f"Error: property '{prop}' is not a list")
 
@@ -568,8 +697,15 @@ class Cmsh:
         field = self._prop(rest[0])
         if self.mode in ("device",) and field in ("softwareimage", "installmode", "nextinstallmode"):
             self.stage(self.mode, name, field, None)
-        elif self.mode == "user" and field in ("password", "email", "profile"):
+        elif (
+            self.mode == "user"
+            and field in ("password", "email", "profile")
+            or self.mode == "jobqueue"
+            and field in ("defaulttime", "qos", "allowqos", "options")
+        ):
             self.stage(self.mode, name, field, "")
+        elif self.mode == "configurationoverlay" and field in ("categories", "nodes"):
+            self.stage(self.mode, name, field, [])
         else:
             self.err(f"Error: property '{rest[0]}' cannot be cleared")
 
@@ -659,6 +795,26 @@ class Cmsh:
                 "disksetup": "default.xml",
                 "bmcsettings": {},
             }
+        elif kind == "jobqueue":
+            if not args:
+                self.err("Usage: add <queue name>")
+            name = args[0]
+            obj = {
+                "name": name,
+                "nodes": "",
+                "maxtime": "INFINITE",
+                "defaulttime": "",
+                "default": False,
+                "state": "UP",
+                "qos": "",
+                "allowqos": "",
+                "options": "",
+            }
+        elif kind == "configurationoverlay":
+            if not args:
+                self.err("Usage: add <overlay name>")
+            name = args[0]
+            obj = {"name": name, "priority": 500, "categories": [], "nodes": [], "roles": []}
         else:
             self.err(f"add is not supported in {kind} mode (use clone)")
         if self.exists(kind, name):
@@ -719,10 +875,24 @@ class Cmsh:
         for k in keys:
             self._apply(self.bcm.uncommitted[k])
             del self.bcm.uncommitted[k]
+        if self._regen:
+            self._regen = False
+            defaults = [q for q in self.bcm.wlm.slurm.jobqueues.values() if q.get("default")]
+            if len(defaults) > 1:
+                self.p(
+                    f"{NOW} [warning] {HEAD}: more than one default job queue ({', '.join(q.name for q in defaults)}); Slurm keeps the last one"
+                )
+            regenerate(self.state, "Slurm configuration committed in cmsh")
+            self.p(f"{NOW} [notice] {HEAD}: Slurm configuration updated; slurmctld reconfigured")
 
     def _apply(self, st):
         kind, name, coll = st.kind, st.name, self.coll(st.kind)
         fields = copy.deepcopy(dict(st.fields))
+        if kind in ("jobqueue", "configurationoverlay", "wlm"):
+            self._regen = True
+        if kind == "softwareimage" and "kernelmodules" in fields:
+            self.p(f"{NOW} [notice] {HEAD}: Initial ramdisk for image {name} is being generated")
+            self.p(f"{NOW} [notice] {HEAD}: Initial ramdisk for image {name} was generated successfully")
         if st.op == "remove":
             coll.pop(name, None)
             return
@@ -964,6 +1134,98 @@ class Cmsh:
                 self.p(f"{NOW} [warning] {HEAD}: {m}")
 
     # ------------------------------------------------ grabimage (node -> image)
+    # ------------------------------------------------ bulk operations and submodes
+    def foreach(self, args):
+        """foreach -c <category> (cmd; cmd) | foreach -n <hostlist> (...): run the commands with each node selected."""
+        if len(args) < 3 or args[0] not in ("-c", "-n"):
+            self.err("Usage: foreach -c <category> (command; ...)  |  foreach -n <hostlist> (command; ...)")
+        if args[0] == "-c":
+            cats = [c for c in args[1].split(",") if c]
+            for c in cats:
+                if not self.exists("category", c):
+                    self.err(f"Error: category '{c}' does not exist")
+            nodes = sorted(n for n, d in self.bcm.devices.items() if d.get("category") in cats)
+        else:
+            nodes = expand_nodes(args[1])
+            for n in nodes:
+                if n not in self.bcm.devices:
+                    self.err(f"Error: device '{n}' does not exist")
+        body = " ".join(args[2:]).strip()
+        if not (body.startswith("(") and body.endswith(")")):
+            self.err("Error: the commands must be enclosed in parentheses")
+        cmds = _split_cmds(body[1:-1])
+        saved_mode, saved_obj = self.mode, self.obj
+        self.mode = "device"
+        try:
+            for n in nodes:
+                self.obj = n
+                for c in cmds:
+                    argv = shlex.split(c)
+                    if argv and argv[0] == "get":
+                        self.p(
+                            f"{n}: ",
+                        )
+                        self.out.pop()
+                        before = len(self.out)
+                        self.execute(argv)
+                        self.out[before:] = [f"{n}: {line}" for line in self.out[before:]]
+                    elif argv:
+                        self.execute(argv)
+        finally:
+            self.mode, self.obj = saved_mode, saved_obj
+
+    def range_(self, args):
+        """range -n <hostlist>: later get/set/clear/show apply to every node in the range until exit."""
+        if len(args) != 2 or args[0] != "-n":
+            self.err("Usage: range -n <hostlist>  (e.g. range -n dgx-01..dgx-04)")
+        nodes = expand_nodes(args[1])
+        for n in nodes:
+            if n not in self.bcm.devices:
+                self.err(f"Error: device '{n}' does not exist")
+        self.selection = nodes
+        self.obj = None
+
+    def for_selection(self, cmd, args):
+        fn = {"get": self.get, "set": self.set_, "clear": self.clear, "show": self.show}[cmd]
+        for n in self.selection:
+            before = len(self.out)
+            fn([n, *args])
+            if cmd == "get":
+                self.out[before:] = [f"{n}: {line}" for line in self.out[before:]]
+
+    def km_cmd(self, cmd, args):
+        """kernelmodules submode of a software image: the modules the ramdisk loads at boot."""
+        from ..system import KNOWN_MODULES
+
+        img = self.view("softwareimage", self.obj)
+        mods = list(img.get("kernelmodules", []))
+        if cmd == "list":
+            self.p(
+                dashed_table(["Name (key)", "Parameters"], [(m, "") for m in mods])
+                if mods
+                else "No kernel modules configured"
+            )
+        elif cmd == "add":
+            if not args:
+                self.err("Usage: add <module>")
+            m = args[0].replace("-", "_")
+            if m not in KNOWN_MODULES:
+                self.err(f"Error: module {m} not found in the image's /lib/modules/{img.get('kernel', '')}")
+            if m not in mods:
+                mods.append(m)
+            self.stage("softwareimage", self.obj, "kernelmodules", mods)
+        elif cmd == "remove":
+            if not args or args[0].replace("-", "_") not in mods:
+                self.err(f"Error: module {args[0] if args else ''} is not configured")
+            mods.remove(args[0].replace("-", "_"))
+            self.stage("softwareimage", self.obj, "kernelmodules", mods)
+        elif cmd == "commit":
+            self.commit([])
+        elif cmd == "show":
+            self.p("\n".join(mods) if mods else "No kernel modules configured")
+        else:
+            self.err(f"Unknown command in kernelmodules submode: {cmd} (list, add, remove, commit)")
+
     def dev_grabimage(self, args):
         wait = "-w" in args or "--wait" in args
         image, rest, it = None, [], iter(a for a in args if a not in ("-w", "--wait"))
@@ -1254,6 +1516,10 @@ class Cmsh:
         del cmd
 
     # ------------------------------------------------ main mode
+    def main_events(self):
+        events = self.bcm.get("events", [])
+        self.p("\n".join(events[-20:]) if events else "No events")
+
     def main_versioninfo(self):
         rows = [
             ("Cluster Manager", self.bcm.version),
