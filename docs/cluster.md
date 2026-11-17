@@ -14,11 +14,11 @@ You start on `bcm-head` as root. `ssh dgx-01` moves your shell to a compute node
 | Area | Commands |
 | --- | --- |
 | GPU | `nvidia-smi` (status, `-q -d`, `--query-gpu`, power, persistence, ECC, reset, MIG, `topo -m`, `nvlink -s`, `dmon`) |
-| Health | `dcgmi` (discovery, groups, health, policy, diag, stats, dmon), `dmesg`, `journalctl`, `systemctl`, `ipmitool` |
+| Health | `dcgmi` (discovery, groups, health, policy, diag, stats, dmon), `nvsm` (show health, show versions, show alerts, dump health, update firmware), `dmesg`, `journalctl`, `systemctl`, `ipmitool` |
 | Slurm | `sinfo`, `squeue`, `scontrol`, `sbatch`, `srun`, `salloc` (with pyxis), `sacct`, `sacctmgr`, `sprio`, `sshare`, `scancel` |
 | Kubernetes | `kubectl` (get, describe, apply, delete, logs, exec, events, taint, label, rollout), `helm` (GPU Operator, Network Operator), the Run:ai CLI |
 | Containers | `docker`, `docker compose`, `enroot`, `ngc`, `nvidia-ctk`, `crictl` |
-| BCM | `cmsh` in one-shot mode (device, category, softwareimage with its `kernelmodules` submode, `foreach` and `range` over nodes, partition, user, `wlm` with its job queues, `configurationoverlay`, power, imageupdate, grabimage, `main; events`), `cm-wlm-setup` and `cm-kubernetes-setup` (explain what the wizards did), `cmha` |
+| BCM | `cmsh` in one-shot mode (device, category, softwareimage with its `kernelmodules` submode, `foreach` and `range` over nodes, partition, user, `wlm` with its job queues, `configurationoverlay`, `monitoring` with its measurables, actions and triggers, `latestmetricdata` and `latesthealthdata`, power, imageupdate, grabimage, `main; events`), `cm-wlm-setup` and `cm-kubernetes-setup` (explain what the wizards did), `cmha` |
 | Fabric | `ibstat`, `ibdiagnet`, `mlxlink`, `perfquery`, NCCL tests (`all_reduce_perf` through `mpirun`), GPUDirect RDMA and GPUDirect Storage checks |
 | DPU | BlueField tools (`mlxconfig`, `bfb-install`, `rshim`, DOCA services) |
 | Shell | `cd`, `pwd`, `ls`, `cat`, `less`, `grep`, `sed -i`, `awk`, `cut`, `sort`, `uniq`, `tr`, `head`, `tail`, `wc`, `find`, `mv`, `cp`, `diff`, `tar`, `date`, `xargs`, `test`, `bash script.sh`, `watch`, `clear`, heredocs, pipes, `&&`, redirects, `$(...)`; `nano`, `vi` and `vim` open your real editor; `--help` and `man` work as on a real node |

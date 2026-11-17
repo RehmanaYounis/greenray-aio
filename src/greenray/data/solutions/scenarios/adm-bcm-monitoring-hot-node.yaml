@@ -1,0 +1,35 @@
+# Private solution for scenario adm-bcm-monitoring-hot-node
+solution:
+  - sinfo
+  - cmsh -c "device; latestmetricdata -n {node}"
+  - cmsh -c "device; latestmetricdata -n dgx-01"
+  - ssh {node} nvidia-smi -q -d TEMPERATURE -i 0
+  - cmsh -c "monitoring; measurable; list"
+  - cmsh -c "monitoring; action; list"
+  - cmsh -c "monitoring; trigger; list"
+  - cmsh -c "monitoring; trigger; add gpu-too-hot; set expression 'gpu_temp > {threshold}'; set enteractions drain; set leaveactions undrain; set severity warning; commit"
+  - cmsh -c "monitoring; trigger; use gpu-too-hot; show"
+  - sinfo -R
+  - cmsh -c "main; events"
+explanation: |
+  BCM samples every node continuously; the readings are what latestmetricdata
+  shows, and gpu_temp on {node} is far above the other nodes. The automation is
+  a monitoring trigger: an expression on a measurable (gpu_temp > {threshold}),
+  the actions to run when the expression becomes true (drain) and the actions
+  to run when it becomes false again (undrain). The built-in drain action sets
+  the node's Slurm state to DRAIN with a reason that names the trigger, so a
+  running job finishes and nothing new lands on the node; undrain clears only
+  a drain the trigger made, so a node an administrator drained for another
+  reason is left alone.
+
+  Nothing happens until the trigger is committed. Because {node} already
+  satisfies the expression, the trigger fires on commit: sinfo -R shows the
+  node drained with the reason "BCM trigger gpu-too-hot", and the BCM event
+  log records the firing with the reading that caused it. When the room cools
+  and the reading drops below {threshold} C the leave action undrains the node,
+  without anyone watching a sensor.
+edge_cases:
+  - "A threshold at the slowdown point is too late: H100 GPUs begin HW thermal slowdown around 85 to 90 C. Pick a value that gives the room a margin."
+  - "The trigger's drain and a manual drain look the same in sinfo. The reason text is the difference: the trigger undrains only what it drained, so a manual drain is never undone by a cooling GPU."
+  - "poweroff is also a built-in action, and the wrong one here: a drained node still finishes its job, a powered-off node kills it."
+  - "Triggers evaluate the measurable per node, so one trigger covers every DGX node; there is no need for one trigger per node or per category."

@@ -12,6 +12,7 @@ NODE_DOWN_WITH_JOBS = "node_down_with_jobs"
 CANCEL_USER_JOB = "cancel_user_job"
 DELETE_RUNNING_POD = "delete_running_pod"
 RUNTIME_RESTART_WITH_CONTAINERS = "runtime_restart_with_containers"
+FIRMWARE_WITH_JOBS = "firmware_update_with_jobs"
 
 
 def record(state, kind: str, host: str, command: str, detail: str = "") -> None:

@@ -386,6 +386,8 @@ class Shell:
                 data, code = str(e), e.code
             except Exception as e:  # a simulator bug, not a user error
                 return self._recover(argv, e, checkpoint, executed_before), INTERNAL_ERROR_CODE
+            for fn in commands.HOOKS_TICK:
+                fn(self.ctx.state)
             if data is None:
                 data = ""
             if redirect and target:

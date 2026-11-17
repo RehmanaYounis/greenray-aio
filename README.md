@@ -42,7 +42,7 @@ Python 3.10 or newer on Linux, WSL, macOS or Windows. Update later with `uv tool
 
 ## How it works
 
-- **51 scenarios** cover every topic of the exam blueprint ([coverage map](https://rehmanayounis.github.io/greenray-aio/coverage/)), from a six-lab on-ramp for the basics to multi-node incidents.
+- **53 scenarios** cover every topic of the exam blueprint ([coverage map](https://rehmanayounis.github.io/greenray-aio/coverage/)), from a six-lab on-ramp for the basics to multi-node incidents.
 - **Guided or incident mode.** Guided shows the objectives and hints. Incident mode shows only the ticket; the root cause stays hidden until the debrief, which then gives you the reference solution, the edge cases and your own commands side by side.
 - **A grader that reads state, evidence and judgment.** Any valid fix passes. Evidence checks confirm you diagnosed before you changed things, and safe-practice checks catch the shortcuts an operations team would not accept: a reboot with a user's job still on the node, a node set DOWN instead of drained, a power limit raised to hide a thermal fault.
 - **Variants.** Scenarios change their node, GPU, job or user between attempts, so a repeat tests understanding, not memory.

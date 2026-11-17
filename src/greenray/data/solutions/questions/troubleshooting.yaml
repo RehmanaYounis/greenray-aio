@@ -330,3 +330,31 @@ tsh-038:
     of the dynamic page retirement used on V100 and earlier. Row remapper status
     is shown in nvidia-smi and DCGM. A100 tracks memory errors in detail. Slurm
     doesn't report GPU page data. Disabling ECC removes error detection.
+
+tsh-039:
+  answer: [0]
+  explanation: |
+    The NVSwitches are not visible to nvidia-smi as devices; the DGX system
+    management daemon (nvsm) checks them and reports each switch's firmware.
+    Links that are down on every GPU at the same positions point at the
+    switches between the GPUs. dcgmi diag tests GPUs and never flashes
+    firmware, restarting Fabric Manager reconfigures whatever switches it finds
+    but cannot fix a firmware mismatch, and the SEL does not hold firmware
+    versions.
+
+tsh-040:
+  answer: [0]
+  explanation: |
+    Firmware is applied at a reboot, and a reboot under a running job kills it
+    and leaves the node DOWN with "unexpectedly rebooted". Drain first so
+    nothing new lands, deal with the running job, stage the update, reboot,
+    verify, then resume. --force only skips nvsm's safety check; the reboot
+    still kills the job. Fabric Manager does not update firmware.
+
+tsh-041:
+  answer: [0]
+  explanation: |
+    show health runs the checks and prints them; dump health collects the same
+    report with versions, kernel and service logs and the SEL into an archive
+    that NVIDIA Enterprise Support asks for. Neither resets anything, and both
+    cover the whole system.

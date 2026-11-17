@@ -396,3 +396,48 @@ adm-046:
     commit), after which CMDaemon writes the file and reconfigures slurmctld.
     slurmctld never writes slurm.conf, a restart is not required, and MaxTime
     is a partition property.
+
+adm-047:
+  answer: [0]
+  explanation: |
+    A trigger reacts to transitions. Enter actions run when a node's reading
+    crosses into the expression (false to true) and leave actions when it
+    crosses back out, once each; they do not repeat every interval, and they
+    are not tied to commit or removal of the trigger. Actions act on the node
+    that crossed, wherever the action itself executes.
+
+adm-048:
+  answer: [0]
+  explanation: |
+    The drain action is a Slurm drain: the node shows DRAINING while the
+    running job finishes and DRAIN afterwards. Nothing is cancelled, requeued
+    or suspended; that is what makes drain the safe action for conditions that
+    are not yet fatal. Killing the job would need a different action
+    (killprocess, or poweroff).
+
+adm-049:
+  answer: [0]
+  explanation: |
+    latestmetricdata (and latesthealthdata for the PASS/FAIL checks) is a
+    device-mode command that prints the last sample of every measurable for
+    the given nodes. The measurable submode lists what can be sampled, not the
+    samples; devices have no "show metrics"; trigger list has no node option.
+
+adm-050:
+  answer: [0]
+  explanation: |
+    CMDaemon records every trigger firing as an event with the node, the
+    measurable, the reading and the actions it ran. The event log is read with
+    main mode's events command; the same lines appear in the cmd journal on the
+    head node. slurmctld only sees the resulting drain, and triggers have no
+    log file of their own.
+
+adm-051:
+  answer: [0]
+  explanation: |
+    Actions are objects in monitoring mode. Besides the built-in ones (drain,
+    undrain, poweroff, reboot, mail) an administrator can add a script action
+    that points at a site script; a trigger's enter actions can list several
+    actions, so drain and the script both run. HealthCheckProgram is Slurm's
+    own NHC and has nothing to do with BCM triggers; cron and kernelmodules are
+    unrelated.

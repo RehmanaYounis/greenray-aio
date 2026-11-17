@@ -36,6 +36,7 @@ from .model import (
     provision,
     sync_image,
 )
+from .monitoring import MEASURABLES, evaluate, expression_text, latest, monitoring_init, validate_trigger
 from .wlm import overlay_members, regenerate, validate_queue, wlm_init
 
 
@@ -52,12 +53,14 @@ class Cmsh:
         self.state = ctx.state
         self.bcm = bcm_init(ctx.state)
         wlm_init(ctx.state)
+        monitoring_init(ctx.state)
         self.mode = None
         self.obj = None
         self.sub = None  # "roles" | "bmcsettings" | "fsmounts" | "kernelmodules"
         self.fsobj = None  # current mountpoint inside the fsmounts submode
         self.selection: list[str] | None = None  # `range -n ...`: the devices set/get/clear act on
         self._regen = False  # a wlm or overlay commit rewrites slurm.conf once, at the end
+        self._eval = False  # a monitoring commit evaluates the triggers once, at the end
         self.out: list[str] = []
         self.errors = 0
 
@@ -68,6 +71,10 @@ class Cmsh:
     def coll(self, kind):
         if kind == "jobqueue":
             return self.bcm.wlm.slurm.jobqueues
+        if kind in ("trigger", "action"):
+            return self.bcm.monitoring[kind + "s"]
+        if kind == "measurable":
+            return MEASURABLES
         return self.bcm[KIND_COLL[kind]]
 
     def exists(self, kind, name):
@@ -107,7 +114,12 @@ class Cmsh:
         if not self.mode:
             return f"[{HEAD}]% "
         mstar = "*" if any(v.kind == self.mode for v in self.bcm.uncommitted.values()) else ""
-        p = f"[{HEAD}->wlm[slurm]->jobqueue" if self.mode == "jobqueue" else f"[{HEAD}->{self.mode}{mstar}"
+        if self.mode == "jobqueue":
+            p = f"[{HEAD}->wlm[slurm]->jobqueue"
+        elif self.mode in ("trigger", "action", "measurable"):
+            p = f"[{HEAD}->monitoring->{self.mode}{mstar}"
+        else:
+            p = f"[{HEAD}->{self.mode}{mstar}"
         if self.obj:
             p += f"[{self.obj}{'*' if self.modified(self.mode, self.obj) else ''}]"
         if self.selection:
@@ -154,9 +166,18 @@ class Cmsh:
                 self.obj = None
             elif self.mode == "jobqueue":
                 self.mode, self.obj = "wlm", "slurm"
+            elif self.mode in ("trigger", "action", "measurable"):
+                self.mode = "monitoring"
             else:
                 self.mode = None
             return
+        if cmd in ("measurable", "action", "trigger") and self.mode == "monitoring":
+            self.mode, self.obj, self.sub = cmd, None, None
+            if args:
+                self.execute(args)
+            return
+        if self.mode == "monitoring" and cmd not in ("help", "refresh", "modified", "quit"):
+            self.err(f"Unknown command in monitoring mode: {cmd} (submodes: measurable, action, trigger)")
         if cmd == "jobqueue" and self.mode == "wlm":
             if not self.obj:
                 self.err("No WLM instance selected. Use 'use slurm' first")
@@ -232,6 +253,8 @@ class Cmsh:
                 "synclog": self.dev_synclog,
                 "reboot": self.dev_reboot,
                 "drain": self.dev_drain,
+                "latestmetricdata": self.dev_latestmetricdata,
+                "latesthealthdata": self.dev_latesthealthdata,
                 "undrain": self.dev_undrain,
                 "pexec": self.dev_pexec,
                 "grabimage": self.dev_grabimage,
@@ -245,13 +268,14 @@ class Cmsh:
     def help(self):
         base = "list, use <obj>, show, get <prop>, set <prop> <value>, clear <prop>, clone <src> <new>, add, remove, commit, refresh, exit"
         extra = {
-            "device": "status, power on|off|reset|status -n <nodes>, imageupdate [-w] -n <nodes>|-c <category>, grabimage [-w] [-i <image>] <node>, synclog, reboot, drain, undrain, pexec, roles, bmcsettings, fsmounts, foreach -c <cats>|-n <nodes> (cmd; cmd), range -n <nodes>",
+            "device": "status, latestmetricdata|latesthealthdata -n <nodes>, power on|off|reset|status -n <nodes>, imageupdate [-w] -n <nodes>|-c <category>, grabimage [-w] [-i <image>] <node>, synclog, reboot, drain, undrain, pexec, roles, bmcsettings, fsmounts, foreach -c <cats>|-n <nodes> (cmd; cmd), range -n <nodes>",
             "category": "roles, bmcsettings, fsmounts, usedby, append/removefrom excludelist<grab|grabnew|update|syncinstall|fullinstall> '- /path/*', foreach -c <cats> (cmd; cmd)",
             "user": "set password|id|email|profile <value>, show",
             "group": "add <name>, set id <gid>, append members <user>, removefrom members <user>",
             "profile": "list, show <profile> (assign one with user; use <u>; set profile <name>)",
             "wlm": "list, use slurm, show, jobqueue (list, use <q>, add <q>, set nodes|maxtime|defaulttime|default|state|qos|allowqos, remove, commit)",
             "configurationoverlay": "list, use <overlay>, show, set priority, append/removefrom categories|nodes, add <name>, commit",
+            "monitoring": "measurable (list, show), action (list, show, add scriptaction <name>, set script), trigger (list, use, show, add <name>, set expression 'gpu_temp > 85'|enteractions|leaveactions|severity|disabled, remove, commit)",
             "softwareimage": "kernelversion, usedby, kernelmodules (list, add <module>, remove <module>, commit)",
             "partition": "bmcsettings",
             "main": "versioninfo, licenseinfo, events",
@@ -274,7 +298,7 @@ class Cmsh:
 
     # ------------------------------------------------ objects
     def _need_mode(self):
-        if self.mode not in KIND_COLL and self.mode != "jobqueue":
+        if self.mode not in KIND_COLL and self.mode not in ("jobqueue", "trigger", "action", "measurable"):
             self.err(
                 "This command needs a mode with objects (device, category, softwareimage, partition, user, group, profile)"
             )
@@ -379,6 +403,34 @@ class Cmsh:
                     )
                 )
             self.p(dashed_table(["Name (key)", "Priority", "Nodes", "Categories", "Roles"], rows))
+        elif kind == "measurable":
+            rows = [(n, *MEASURABLES[n]) for n in names]
+            self.p(dashed_table(["Name (key)", "Type", "Class", "Unit"], rows))
+        elif kind == "action":
+            rows = [
+                (n, "yes" if self.view(kind, n).get("builtin") else "no", self.view(kind, n).get("script", ""))
+                for n in names
+            ]
+            self.p(dashed_table(["Name (key)", "Built-in", "Script"], rows))
+        elif kind == "trigger":
+            rows = []
+            for n in names:
+                tr = self.view(kind, n)
+                rows.append(
+                    (
+                        n,
+                        expression_text(tr.get("expression")),
+                        ",".join(tr.get("enteractions", [])),
+                        ",".join(tr.get("leaveactions", [])),
+                        tr.get("severity", "warning"),
+                        "yes" if tr.get("disabled") else "no",
+                    )
+                )
+            self.p(
+                dashed_table(
+                    ["Name (key)", "Expression", "Enter actions", "Leave actions", "Severity", "Disabled"], rows
+                )
+            )
 
     def use(self, args):
         self._need_mode()
@@ -527,6 +579,27 @@ class Cmsh:
                 ("Allow QOS", v.get("allowqos", "")),
                 ("Options", v.get("options", "")),
             ]
+        elif self.mode == "measurable":
+            mtype, cls, unit = MEASURABLES[name]
+            rows = [("Name", name), ("Type", mtype), ("Class", cls), ("Unit", unit)]
+        elif self.mode == "action":
+            rows = [
+                ("Name", name),
+                ("Built-in", "yes" if v.get("builtin") else "no"),
+                ("Description", v.get("description", "")),
+                ("Script", v.get("script", "")),
+            ]
+        elif self.mode == "trigger":
+            fired = [h for h, on in self.bcm.monitoring.fired.get(name, {}).items() if on]
+            rows = [
+                ("Name", name),
+                ("Expression", expression_text(v.get("expression"))),
+                ("Enter actions", ",".join(v.get("enteractions", []))),
+                ("Leave actions", ",".join(v.get("leaveactions", []))),
+                ("Severity", v.get("severity", "warning")),
+                ("Disabled", "yes" if v.get("disabled") else "no"),
+                ("Active on", ",".join(sorted(fired)) or "none"),
+            ]
         elif self.mode == "configurationoverlay":
             rows = [
                 ("Name", name),
@@ -585,6 +658,13 @@ class Cmsh:
             value = validate_queue(self.bcm, name, prop, value, self.err)
         elif self.mode == "configurationoverlay":
             value = self._validate_overlay(prop, value)
+        elif self.mode == "trigger":
+            value = validate_trigger(prop, value, self.coll("action"), self.err)
+        elif self.mode == "action":
+            if self.view("action", name).get("builtin"):
+                self.err(f"Error: {name} is a built-in action and cannot be changed")
+        elif self.mode == "measurable":
+            self.err("Error: measurables are read-only in the lab")
         else:
             value = self._validate(prop, value, name)
         self.stage(self.mode, name, field, value)
@@ -815,6 +895,23 @@ class Cmsh:
                 self.err("Usage: add <overlay name>")
             name = args[0]
             obj = {"name": name, "priority": 500, "categories": [], "nodes": [], "roles": []}
+        elif kind == "trigger":
+            if not args:
+                self.err("Usage: add <trigger name>")
+            name = args[0]
+            obj = {
+                "name": name,
+                "expression": None,
+                "enteractions": [],
+                "leaveactions": [],
+                "severity": "warning",
+                "disabled": False,
+            }
+        elif kind == "action":
+            if len(args) != 2 or args[0] != "scriptaction":
+                self.err("Usage: add scriptaction <name>")
+            name = args[1]
+            obj = {"name": name, "builtin": False, "description": "Script action", "script": ""}
         else:
             self.err(f"add is not supported in {kind} mode (use clone)")
         if self.exists(kind, name):
@@ -829,6 +926,10 @@ class Cmsh:
             self.err(f"Error: {name} not found")
         if self.mode == "profile" and self.view("profile", name).get("builtin"):
             self.err(f"Error: {name} is a built-in profile and cannot be removed")
+        if self.mode == "action" and self.view("action", name).get("builtin"):
+            self.err(f"Error: {name} is a built-in action and cannot be removed")
+        if self.mode == "measurable":
+            self.err("Error: measurables cannot be removed in the lab")
         if self.mode == "softwareimage" and any(c.get("softwareimage") == name for c in self.bcm.categories.values()):
             self.err(f"Error: software image {name} is in use by a category")
         self.bcm.uncommitted[self._key(self.mode, name)] = {
@@ -884,12 +985,20 @@ class Cmsh:
                 )
             regenerate(self.state, "Slurm configuration committed in cmsh")
             self.p(f"{NOW} [notice] {HEAD}: Slurm configuration updated; slurmctld reconfigured")
+        if self._eval:
+            self._eval = False
+            for line in evaluate(self.state):
+                self.p(line)
 
     def _apply(self, st):
         kind, name, coll = st.kind, st.name, self.coll(st.kind)
         fields = copy.deepcopy(dict(st.fields))
         if kind in ("jobqueue", "configurationoverlay", "wlm"):
             self._regen = True
+        if kind == "trigger":
+            self._eval = True
+            # a trigger committed while its condition already holds fires right away
+            self.bcm.monitoring.fired.pop(name, None)
         if kind == "softwareimage" and "kernelmodules" in fields:
             self.p(f"{NOW} [notice] {HEAD}: Initial ramdisk for image {name} is being generated")
             self.p(f"{NOW} [notice] {HEAD}: Initial ramdisk for image {name} was generated successfully")
@@ -1392,6 +1501,14 @@ class Cmsh:
             self.p(f"{n}: Reboot in progress ...")
             self.p(f"{NOW} [notice] {HEAD}: {n} [ INSTALLING ] (node-installer: install mode {mode}, image {img})")
             self.p(f"{NOW} [notice] {HEAD}: {n} [   UP   ]")
+
+    def dev_latestmetricdata(self, args):
+        nodes, _ = self._nodes_from(args)
+        self.p(latest(self.state, [n for n in nodes if n != HEAD], "metric"))
+
+    def dev_latesthealthdata(self, args):
+        nodes, _ = self._nodes_from(args)
+        self.p(latest(self.state, [n for n in nodes if n != HEAD], "healthcheck"))
 
     def dev_imageupdate(self, args):
         wait = "-w" in args or "--wait" in args

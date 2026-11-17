@@ -239,6 +239,13 @@ BASELINES: dict[tuple[str, str | None], Baseline] = {
     ),
     ("munge", None): Baseline(host="dgx-01", prefix="echo payload | "),
     ("mungekey", None): Baseline(host="dgx-01", setup=("mungekey",)),
+    ("nvsm", None): Baseline(
+        args=("update", "firmware", "--type", "nvswitch"),
+        host="dgx-01",
+        setup=("sbatch --wrap 'sleep 1000' -w dgx-01 --gpus=8",),
+        values={"--type": "nvswitch"},
+        alternatives={"--type": ("update", "firmware")},
+    ),
     ("numactl", None): Baseline(args=("hostname",), host="dgx-01"),
     ("ping", None): Baseline(args=("dgx-02",)),
     ("pwd", None): Baseline(),
