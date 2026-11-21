@@ -1,0 +1,14 @@
+Usage:
+ last [options] [<username>...] [<tty>...]
+
+Show a listing of last logged in users.
+
+Options:
+ -<number>            how many lines to show
+ -n, --limit <number> how many lines to show
+ -h, --help           display this help
+
+The listing ends with the boot record and the start of the wtmp file, which
+is when the node last came up.
+
+(GreenRay AIO simulates the options listed above.)

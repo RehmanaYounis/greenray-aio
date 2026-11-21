@@ -232,10 +232,84 @@ def nvsm(ctx, args):
             return _show_versions(ctx)
         if what == "alerts":
             return _show_alerts(ctx)
+        if what == "gpus":
+            return _show_gpus(ctx)
+        if what == "storage":
+            return _show_storage(ctx)
+        if what == "power":
+            return _show_power(ctx)
+        if what == "fans":
+            return _show_fans(ctx)
+        if what == "version":
+            return "nvsm 24.09.01\n"
     if len(args) >= 2 and args[0] == "dump" and args[1] == "health":
         return _dump_health(ctx)
     if len(args) >= 2 and args[0] == "update" and args[1] == "firmware":
         return _update_firmware(ctx, args[2:])
     raise CommandError(
-        "usage: nvsm show health | show versions | show alerts | dump health | update firmware --type <type>", 2
+        "usage: nvsm show health|versions|alerts|gpus|storage|power|fans|version | dump health | update firmware --type <type>",
+        2,
     )
+
+
+def _show_gpus(ctx) -> str:
+    node = ctx.node
+    out = ["/systems/localhost/gpus"]
+    for g in node.gpus:
+        props = {
+            "Id": f"GPU{g.index}",
+            "Name": g.name,
+            "Health": "Critical" if g.fallen_off_bus or g.ecc_volatile_dbe else ("Warning" if g.nvlink_down else "OK"),
+            "State": "Absent" if g.fallen_off_bus else "Enabled",
+            "PCIeAddress": g.bus_id,
+            "UUID": g.uuid,
+            "VBIOS": g.vbios,
+            "TemperatureCelsius": g.temp_c,
+            "PowerDrawWatts": g.power_draw_w,
+            "MemoryTotalMiB": g.memory_total_mib,
+            "EccUncorrectableErrors": g.ecc_volatile_dbe,
+            "NvlinkDownLinks": len(g.nvlink_down),
+            "MigMode": "Enabled" if g.mig_mode else "Disabled",
+        }
+        out.append(f"  GPU{g.index}:")
+        out += [f"    {k:<24} = {v}" for k, v in props.items()]
+    return "\n".join(out) + "\n"
+
+
+def _show_storage(ctx) -> str:
+    out = ["/systems/localhost/storage", "  Health                    = OK", "  Drives:"]
+    for i in range(10):
+        size = "1.92 TB" if i < 2 else "3.84 TB"
+        role = "OS (RAID 1 /)" if i < 2 else "Data (RAID 0 /raid)"
+        out.append(f"    nvme{i}n1   {size}   Health = OK   SMART = passed   Role = {role}")
+    out += ["  Volumes:", "    md0   RAID 1   1.7T   /        clean", "    md1   RAID 0   28T    /raid    clean"]
+    return "\n".join(out) + "\n"
+
+
+def _show_power(ctx) -> str:
+    node = ctx.node
+    gpu_w = sum(g.power_draw_w for g in node.gpus if not g.fallen_off_bus)
+    total = 1200 + gpu_w
+    out = [
+        "/systems/localhost/power",
+        f"  TotalPowerDrawWatts       = {total}",
+        f"  GpuPowerDrawWatts         = {gpu_w}",
+        "  Health                    = OK",
+        "  PowerSupplies:",
+    ]
+    for i in range(1, 7):
+        out.append(f"    PSU{i}   Status = OK   Input = AC 230 V   Output = {total // 6} W   Firmware = 2.3")
+    out.append("  Redundancy                = Fully redundant (N+2)")
+    return "\n".join(out) + "\n"
+
+
+def _show_fans(ctx) -> str:
+    node = ctx.node
+    fans = node.get("fans") or [{"name": f"FAN{i}", "rpm": 9800 + 40 * i, "status": "ok"} for i in range(1, 11)]
+    out = [
+        "/systems/localhost/fans",
+        "  Health                    = " + ("OK" if all(f["status"] == "ok" for f in fans) else "Critical"),
+    ]
+    for f in fans:
+        out.append(f"    {f['name']:<8} Speed = {f['rpm']} RPM   Status = {'OK' if f['status'] == 'ok' else 'FAIL'}")
+    return "\n".join(out) + "\n"

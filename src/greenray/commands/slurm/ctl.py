@@ -9,6 +9,8 @@ from .. import command
 from ..common import int_arg
 from .affinity import _gpu_core_map
 from .common import (
+    _USER,
+    CONF,
     GRES_CONF,
     HEAD,
     PLUGSTACK,
@@ -22,6 +24,9 @@ from .common import (
     expand_hostlist,
     fmt_elapsed,
     fmt_limit_upper,
+    is_admin,
+    job_id_text,
+    mem_text,
     parse_gres_spec,
     parse_time,
     time_arg,
@@ -35,11 +40,133 @@ from .nodes import (
     _refresh,
     _scontrol_node_state,
     _set_drain,
+    _usable,
     _used_gpu_idx,
     apply_config,
 )
 from .scheduler import _alloc_cpu_count, _begin, _controller_ok, _ensure, _job_gpus, _need_ctl, _part_nodes, schedule
 from .status import _job_tres_per_node
+
+
+def _require_admin(prefix: str) -> None:
+    if not is_admin():
+        raise _err(prefix + "Access/permission denied")
+
+
+RES_FLAGS = ("MAINT", "IGNORE_JOBS", "DAILY", "WEEKLY", "FLEX", "OVERLAP", "SPEC_NODES", "FIRST_CORES", "PART_NODES")
+
+
+def _res_seconds(spec: str) -> int:
+    m = re.fullmatch(r"(\d+)-(\d{1,2}):(\d{2})(?::(\d{2}))?", spec)
+    if m:
+        return int(m.group(1)) * 86400 + int(m.group(2)) * 3600 + int(m.group(3)) * 60 + int(m.group(4) or 0)
+    m = re.fullmatch(r"(\d{1,2}):(\d{2})(?::(\d{2}))?", spec)
+    if m:
+        return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3) or 0)
+    if spec.isdigit():
+        return int(spec) * 60
+    raise _err("scontrol: error: Invalid duration specification")
+
+
+def _reservation(ctx, sub, rest):
+    from .jobs import _begin_time
+
+    state = ctx.state
+    s = state.slurm
+    res = s.setdefault("reservations", {})
+    kv = {}
+    for tok in rest:
+        if "=" in tok:
+            k, v = tok.split("=", 1)
+            kv[k.lower()] = v
+    name = kv.get("reservationname") or kv.get("reservation") or kv.get("name")
+    bare = [tok for tok in rest if "=" not in tok and tok.lower() not in ("reservation", "res")]
+    if not name and bare and sub == "delete":  # scontrol delete reservation maint
+        name = bare[0]
+    if sub == "delete":
+        if not name or name not in res:
+            raise _err("slurm_delete_reservation error: Invalid reservation name")
+        del res[name]
+        return ""
+    if sub == "create":
+        if not name:
+            raise _err("Error creating the reservation: Missing ReservationName")
+        if name in res:
+            raise _err("Error creating the reservation: Duplicate reservation name")
+        res[name] = {"name": name, "nodes": [], "users": [], "accounts": [], "flags": "", "start": s.clock, "end": None}
+        r = res[name]  # the stored (wrapped) record, not the local dict
+    else:
+        if not name or name not in res:
+            raise _err("slurm_update error: Invalid reservation name")
+        r = res[name]
+    if "starttime" in kv:
+        r["start"] = _begin_time("scontrol", state, kv["starttime"])
+    if "duration" in kv:
+        r["end"] = (
+            None if kv["duration"].upper() in ("UNLIMITED", "INFINITE") else r["start"] + _res_seconds(kv["duration"])
+        )
+    if "endtime" in kv:
+        r["end"] = _begin_time("scontrol", state, kv["endtime"])
+    if "nodes" in kv:
+        if kv["nodes"].upper() == "ALL":
+            r["nodes"] = list(s.nodes)
+        else:
+            nodes = expand_hostlist(kv["nodes"])
+            unknown = [n for n in nodes if n not in s.nodes]
+            if unknown:
+                raise _err("Error creating the reservation: Invalid node name specified")
+            r["nodes"] = nodes
+    if "nodecnt" in kv:
+        r["nodes"] = [n for n in s.nodes if _usable(state, n)][
+            : int_arg(kv["nodecnt"], "Error creating the reservation: Invalid node count")
+        ]
+    if "users" in kv:
+        r["users"] = [u for u in kv["users"].split(",") if u]
+    if "accounts" in kv:
+        r["accounts"] = [a for a in kv["accounts"].split(",") if a]
+    if "flags" in kv:
+        flags = [f.upper() for f in kv["flags"].split(",") if f]
+        bad = [f for f in flags if f not in RES_FLAGS]
+        if bad:
+            raise _err(f"Error creating the reservation: Invalid reservation flag: {bad[0]}")
+        r["flags"] = ",".join(flags)
+    if sub == "create":
+        if not r["nodes"]:
+            raise _err("Error creating the reservation: Requested node configuration is not available")
+        if r["end"] is None and "duration" not in kv and "endtime" not in kv:
+            raise _err("Error creating the reservation: Invalid duration specification")
+        if not r["users"] and not r["accounts"]:
+            raise _err("Error creating the reservation: Invalid user")
+        schedule(state)
+        return f"Reservation created: {name}\n"
+    schedule(state)
+    return ""
+
+
+def _show_reservations(state, name):
+    s = state.slurm
+    res = s.get("reservations") or {}
+    if name and name not in res:
+        raise _err("Reservation " + name + " not found")
+    items = [res[name]] if name else list(res.values())
+    if not items:
+        return "No reservations in the system\n"
+    out = []
+    for r in items:
+        start = _ts(state, r["start"])
+        end = _ts(state, r["end"]) if r["end"] is not None else "Unknown"
+        dur = "UNLIMITED" if r["end"] is None else fmt_elapsed(r["end"] - r["start"], long=True)
+        state_txt = "ACTIVE" if r["start"] <= s.clock < (r["end"] if r["end"] is not None else 1 << 62) else "INACTIVE"
+        out.append(
+            f"ReservationName={r['name']} StartTime={start} EndTime={end} Duration={dur}\n"
+            f"   Nodes={compress_hostlist(r['nodes'])} NodeCnt={len(r['nodes'])} CoreCnt={224 * len(r['nodes'])} "
+            f"Features=(null) PartitionName=(null) Flags={r['flags'] or '(null)'}\n"
+            f"   TRES=cpu={224 * len(r['nodes'])}\n"
+            f"   Users={','.join(r['users']) or '(null)'} Groups=(null) Accounts={','.join(r['accounts']) or '(null)'} "
+            f"Licenses=(null) State={state_txt} BurstBuffer=(null)\n"
+            f"   MaxStartDelay=(null)"
+        )
+    return "\n\n".join(out) + "\n"
 
 
 def _oneline(on, text):
@@ -127,6 +254,14 @@ def _show_partition(state, p):
     )
 
 
+def _min_memory(j) -> str:
+    if j.get("mem_per_cpu"):
+        return f"MinMemoryCPU={mem_text(j.mem_per_cpu)}"
+    if j.get("mem_per_gpu"):
+        return f"MinMemoryGPU={mem_text(j.mem_per_gpu)}"
+    return f"MinMemoryNode={mem_text(int(j.get('min_memory_mb') or 0))}"
+
+
 def _show_job(state, j, details=False):
     clock = state.slurm.clock
     run = (
@@ -142,11 +277,19 @@ def _show_job(state, j, details=False):
     ncpu = _alloc_cpu_count(state, j) if j.state == "RUNNING" else j.num_nodes * j.ntasks_per_node * j.cpus_per_task
     rcpu = j.num_nodes * j.ntasks_per_node * j.cpus_per_task
     gp = f",gres/gpu={_job_gpus(j)}" if j.gpus_per_node else ""
-    req_tres = f"cpu={rcpu},mem=0,node={j.num_nodes},billing={rcpu}{gp}"  # scontrol order (cpu,mem,node,billing,gres)
-    alloc_tres = f"cpu={ncpu},mem=0,node={j.num_nodes},billing={ncpu}{gp}"
+    mem = mem_text(int(j.get("min_memory_mb") or 0) * j.num_nodes)
+    req_tres = (
+        f"cpu={rcpu},mem={mem},node={j.num_nodes},billing={rcpu}{gp}"  # scontrol order (cpu,mem,node,billing,gres)
+    )
+    alloc_tres = f"cpu={ncpu},mem={mem},node={j.num_nodes},billing={ncpu}{gp}"
     out = f"StdOut={j.stdout}" if j.stdout else "StdOut=/dev/null"
+    array = (
+        f" ArrayJobId={j.array_job_id} ArrayTaskId={j.array_task_id}"
+        if j.get("array_job_id") is not None
+        else (f" ArrayJobId={j.id} ArrayTaskId={job_id_text(j).split('_', 1)[1]}" if j.get("array_tasks") else "")
+    )
     lines = [
-        f"JobId={j.id} JobName={j.name}",
+        f"JobId={j.id}{array} JobName={j.name}",
         f"   UserId={j.user}({0 if j.user == 'root' else 1000 + sum(map(ord, j.user)) % 500}) GroupId={j.user}({0 if j.user == 'root' else 1000}) MCS_label=N/A",
         f"   Priority={j.priority} Nice={j.nice} Account={j.account} QOS={j.qos}",
         f"   JobState={j.state} Reason={j.reason if j.state == 'PENDING' else 'None'} Dependency={j.dependency or '(null)'}",
@@ -154,7 +297,7 @@ def _show_job(state, j, details=False):
         f"Reboot=0 ExitCode={j.exit_code}",
         f"   RunTime={fmt_elapsed(run, long=True)} TimeLimit={fmt_limit_upper(tl)} "
         f"TimeMin={fmt_limit_upper(j.time_min) if j.get('time_min') is not None else 'N/A'}",
-        f"   SubmitTime={_ts(state, j.submit_time)} EligibleTime={_ts(state, j.submit_time)}",
+        f"   SubmitTime={_ts(state, j.submit_time)} EligibleTime={_ts(state, j.get('eligible_time') if j.get('eligible_time') is not None else j.submit_time)}",
         f"   StartTime={_ts(state, j.start_time) if j.start_time is not None else 'Unknown'} "
         f"EndTime={_ts(state, j.end_time) if j.end_time is not None else 'Unknown'} Deadline=N/A",
         f"   Partition={j.partition} AllocNode:Sid={j.submit_host}:{2000 + j.id % 1000}",
@@ -177,13 +320,14 @@ def _show_job(state, j, details=False):
             gt = j.gpu_type or parse_gres_spec(state.slurm.nodes[n].gres)[0] if n in state.slurm.nodes else None
             gres = f" GRES=gpu{':' + gt if gt else ''}:{len(g)}(IDX:{','.join(_ranges(g))})" if g else ""
             lines.append(f"     Nodes={n} CPU_IDs={cpu_ids} Mem=0{gres}")
+    if j.get("mail_type") or j.get("mail_user"):
+        lines.append(f"   MailUser={j.get('mail_user') or j.user} MailType={(j.get('mail_type') or 'NONE').upper()}")
     if j.container_image:
         lines.append(f"   Comment=pyxis container-image={j.container_image}")
     elif j.get("comment"):
         lines.append(f"   Comment={j.comment}")
     lines += [
-        f"   MinMemoryNode={j.get('min_memory_mb', 0)}M Features={j.get('features') or '(null)'} "
-        f"Reservation={j.get('reservation') or '(null)'}",
+        f"   {_min_memory(j)} Features={j.get('features') or '(null)'} Reservation={j.get('reservation') or '(null)'}",
         f"   Command={j.command or '(null)'}",
         f"   WorkDir={j.work_dir}",
         f"   StdErr={j.get('stderr') or j.stdout or '/dev/null'}",
@@ -251,13 +395,13 @@ def _update_node(ctx, kv):
     for n in names:
         sn = s.nodes[n]
         if st == "DRAIN":
-            _set_drain(state, sn, reason)
+            _set_drain(state, sn, reason, user=_USER[-1])
         elif st in ("DOWN", "FAIL"):
             sn.down = True
             sn.reason = reason
-            sn.reason_user = "root"
+            sn.reason_user = _USER[-1]
             sn.reason_time = _ts(state)
-            sn.drain_log.append({"time": _ts(state), "reason": reason, "user": "root", "state": st})
+            sn.drain_log.append({"time": _ts(state), "reason": reason, "user": _USER[-1], "state": st})
             if st == "DOWN":
                 for j in s.jobs:
                     if j.state == "RUNNING" and n in j.nodelist:
@@ -527,6 +671,22 @@ def scontrol(ctx, args):
     _need_ctl(ctx, "slurm_load_ctl_conf error: " if sub == "show" else "slurm_update error: ")
     _begin(ctx)
     s = state.slurm
+    if sub in ("update", "create", "delete", "reconfigure", "reconfig", "reboot", "reboot_nodes") and not is_admin():
+        # a user may change only their own pending jobs
+        own_job = sub == "update" and rest and rest[0].lower().startswith(("jobid=", "job="))
+        if not own_job:
+            raise _err("slurm_update error: Access/permission denied")
+        j = _find_job(state, rest[0].split("=", 1)[1])
+        if j is None or j.user != _USER[-1]:
+            raise _err("slurm_update error: Access/permission denied")
+    if sub == "show" and rest and rest[0].lower() in ("reservation", "reservations", "res"):
+        return _oneline(oneliner, _show_reservations(state, rest[1] if len(rest) > 1 else None))
+    if (
+        sub in ("create", "update", "delete")
+        and rest
+        and rest[0].lower().startswith(("reservation", "reservationname="))
+    ):
+        return _reservation(ctx, sub, rest)
     if sub == "show":
         if not rest:
             raise _err("scontrol: error: too few arguments for keyword:show")
@@ -588,11 +748,45 @@ def scontrol(ctx, args):
             return ""
         raise _err("slurm_delete_partition error: Invalid partition name specified")
     if sub in ("reconfigure", "reconfig"):
+        from .conf import conf_problems
+
+        bad = conf_problems(state.nodes[HEAD].files.get(CONF, ""), [])
+        if bad:
+            raise _err("\n".join(f"scontrol: error: {b}" for b in bad) + "\nslurm_reconfigure error: Invalid argument")
         apply_config(state)
         schedule(state)
         return ""
     if sub == "reboot" or sub == "reboot_nodes":
         return _scontrol_reboot(ctx, rest)
+    if sub in ("suspend", "resume"):
+        _require_admin("slurm_suspend error: ")
+        for jid in rest:
+            j = _find_job(state, jid)
+            if j is None:
+                raise _err("slurm_suspend error: Invalid job id specified")
+            if sub == "suspend":
+                if j.state != "RUNNING":
+                    raise _err("slurm_suspend error: Job is not running")
+                j.state = "SUSPENDED"
+            else:
+                if j.state != "SUSPENDED":
+                    raise _err("slurm_resume error: Job is not suspended")
+                j.state = "RUNNING"
+        _refresh(state)
+        return ""
+    if sub == "top":
+        for jid in rest:
+            j = _find_job(state, jid)
+            if j is None:
+                raise _err("scontrol: error: Invalid job id specified")
+            if j.state != "PENDING":
+                raise _err("scontrol: error: Job is no longer pending execution")
+            if j.user != _USER[-1] and not is_admin():
+                raise _err("slurm_update error: Access/permission denied")
+            mine = [o for o in s.jobs if o.state == "PENDING" and o.user == j.user and o.id != j.id]
+            j.priority = max([o.priority for o in mine] + [j.priority]) + 1
+            j.priority_fixed = True
+        return ""
     if sub in ("hold", "uhold", "release", "requeue", "requeuehold"):
         for jid in rest:
             for one in jid.split(","):

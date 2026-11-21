@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import fnmatch
 import re
+import shlex
 import time
 from datetime import timedelta
 
@@ -16,9 +17,37 @@ from .common import int_arg, opt
 # ---------------------------------------------------------------- files
 
 
+def virtual_files(ctx) -> dict[str, str]:
+    """Files the kernel presents from live state: driver version, uptime, the GPU device nodes."""
+    from ..core import clock
+
+    node = ctx.node
+    out: dict[str, str] = {}
+    age = clock.now(ctx.state) - clock.booted(ctx.state)
+    out["/proc/uptime"] = f"{age.total_seconds():.2f} {age.total_seconds() * 180:.2f}\n"
+    out["/proc/loadavg"] = "0.08 0.05 0.01 1/2210 48213\n"
+    if node.get("gpus") and node.get("driver_loaded", True):
+        out["/proc/driver/nvidia/version"] = (
+            f"NVRM version: NVIDIA UNIX x86_64 Kernel Module  {node.driver_version}  Thu Jun  6 15:21:04 UTC 2024\n"
+            "GCC version:  gcc version 11.4.0 (Ubuntu 11.4.0-1ubuntu1~22.04)\n"
+        )
+        for g in node.gpus:
+            out[f"/dev/nvidia{g.index}"] = ""
+        out["/dev/nvidiactl"] = ""
+        out["/dev/nvidia-uvm"] = ""
+        out["/dev/nvidia-uvm-tools"] = ""
+        out["/dev/nvidia-modeset"] = ""
+        for i in range(node.get("nvswitches", 0)):
+            out[f"/dev/nvidia-nvswitch{i}"] = ""
+    return out
+
+
 def _read(ctx, path, tool="cat"):
     files = ctx.node.files
     if path not in files:
+        virtual = virtual_files(ctx)
+        if path in virtual:
+            return virtual[path]
         raise CommandError(f"{tool}: {path}: No such file or directory", 2 if tool == "grep" else 1)
     return files[path]
 
@@ -42,6 +71,10 @@ def _ls_row(ctx, path, name):
     size = 4096 if is_dir else len(ctx.node.files.get(path, ""))
     mode = "drwxr-xr-x" if is_dir else ("-rwxr-xr-x" if name.endswith(".sh") else "-rw-r--r--")
     stamp = clock.stamp(ctx.state, "%b %e %H:%M")
+    if path.startswith("/dev/nvidia"):  # character devices: major 195 for the GPUs, 234 for the UVM driver
+        tail = path[len("/dev/nvidia") :]
+        major, minor = (195, int(tail)) if tail.isdigit() else (195, 255) if tail == "ctl" else (234, 0)
+        return f"crw-rw-rw- 1 root root {major:>3}, {minor:>3} {stamp} {name}"
     return f"{mode} 1 root root {size:>8} {stamp} {name}"
 
 
@@ -50,12 +83,15 @@ def ls(ctx, args):
     flags = "".join(a[1:] for a in args if a.startswith("-") and not a.startswith("--"))
     show_all, long = "a" in flags or "--all" in args, "l" in flags
     paths = [a for a in args if not a.startswith("-")] or [ctx.cwd]
-    files = sorted(ctx.node.files)
+    all_files = {**virtual_files(ctx), **ctx.node.files}
+    files = sorted(all_files)
     dirs = known_dirs(ctx)
     out = []
+    base = ctx.cwd.rstrip("/") + "/"
     for p in paths:
-        if p in ctx.node.files:
-            out.append(_ls_row(ctx, p, p) if long else p)
+        if p in all_files:
+            shown = p[len(base) :] if p.startswith(base) else p  # a file under the cwd is listed by name
+            out.append(_ls_row(ctx, p, shown) if long else shown)
             continue
         prefix = p.rstrip("/") + "/"
         children = {f[len(prefix) :].split("/")[0] for f in files if f.startswith(prefix)}
@@ -87,7 +123,7 @@ DEFAULT_DIRS = {"/", "/root", "/etc", "/tmp", "/home", "/var/log", "/etc/modules
 def known_dirs(ctx) -> set[str]:
     """Explicit directories (mkdir, scenario setup) plus every parent of an existing file."""
     dirs = set(DEFAULT_DIRS) | {d.rstrip("/") or "/" for d in ctx.node.get("dirs", [])}
-    for f in ctx.node.files:
+    for f in list(ctx.node.files) + list(virtual_files(ctx)):
         parts = f.split("/")[:-1]
         for i in range(2, len(parts) + 1):
             dirs.add("/".join(parts[:i]))
@@ -181,13 +217,16 @@ def mkdir(ctx, args):
 
 @command("cd", help="cd [DIR]: change the working directory (default: home)")
 def cd(ctx, args):
+    if args == ["-"]:  # back to the previous directory, which bash prints
+        ctx.cwd, ctx.oldcwd = ctx.oldcwd, ctx.cwd
+        return ctx.cwd + "\n"
     target = next((a for a in args if a != "--" and not a.startswith("-")), "~")
     path = ctx.abspath(target)
     if path in ctx.node.files:
         raise CommandError(f"bash: cd: {target}: Not a directory")
     if path not in known_dirs(ctx):
         raise CommandError(f"bash: cd: {target}: No such file or directory")
-    ctx.cwd = path
+    ctx.oldcwd, ctx.cwd = ctx.cwd, path
     return ""
 
 
@@ -638,7 +677,9 @@ def ssh(ctx, args):
 
         sub = Shell(ctx.state, target)
         sub.ctx.executed = ctx.executed
-        return sub.run(" ".join(shlex.quote(a) for a in remote))
+        # one quoted argument is a command line for the remote shell (redirects and pipes included)
+        line = remote[0] if len(remote) == 1 else " ".join(shlex.quote(a) for a in remote)
+        return sub.run(line)
     source = ctx.state.nodes[ctx.host]
     ctx.saved_cwd[len(ctx.host_stack)] = ctx.cwd
     ctx.host_stack.append(ctx.host)
@@ -661,6 +702,11 @@ def motd(state, node, source) -> str:
 
 @command("exit", "logout")
 def exit_(ctx, args):
+    from .slurm.jobs import leave_allocation
+
+    released = leave_allocation(ctx)
+    if released is not None:
+        return released
     if ctx.host_stack:
         ctx.host = ctx.host_stack.pop()
         ctx.cwd = ctx.saved_cwd.pop(len(ctx.host_stack), "/root")
@@ -694,12 +740,16 @@ def uname(ctx, args):
     return " ".join(fields[k] for k in "snrvmo" if k in (want or "s")) + "\n"
 
 
-@command("export", help="export VAR=value")
+@command("export", help="export VAR=value | export VAR | export -p")
 def export(ctx, args):
+    if not args or args == ["-p"]:
+        return "".join(f'declare -x {k}="{v}"\n' for k, v in sorted(ctx.node.env.items()))
     for a in args:
         if "=" in a:
             k, v = a.split("=", 1)
             ctx.node.env[k] = v
+        elif a not in ctx.node.env:
+            ctx.node.env[a] = ""  # exporting an unset name marks it; its value stays empty
     return ""
 
 
@@ -710,11 +760,49 @@ def unset(ctx, args):
     return ""
 
 
-@command("env", "printenv")
+def _shell_env(ctx) -> dict:
+    """What a process on the node sees: the node's variables plus the ones bash sets itself."""
+    base = {
+        "HOME": ctx.home,
+        "USER": ctx.user,
+        "LOGNAME": ctx.user,
+        "HOSTNAME": ctx.host,
+        "PWD": ctx.cwd,
+        "SHELL": "/bin/bash",
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/cuda/bin",
+        "TERM": "xterm-256color",
+        "LANG": "C.UTF-8",
+    }
+    base.update(ctx.node.env)
+    return base
+
+
+@command("env", "printenv", help="env | env VAR=value command | printenv [NAME]")
 def env(ctx, args):
-    if args:
-        return "".join(ctx.node.env.get(a, "") + "\n" for a in args)
-    return "".join(f"{k}={v}\n" for k, v in sorted(ctx.node.env.items()))
+    from . import dispatch
+
+    assignments: dict = {}
+    rest = list(args)
+    while rest and "=" in rest[0] and not rest[0].startswith("-"):
+        k, v = rest.pop(0).split("=", 1)
+        assignments[k] = v
+    if assignments and rest:  # env VAR=x command: the variable lives only for that command
+        saved = dict(ctx.node.env)
+        ctx.node.env.update(assignments)
+        try:
+            return dispatch(ctx, rest)
+        finally:
+            ctx.node.env.clear()
+            ctx.node.env.update(saved)
+    table = _shell_env(ctx)
+    table.update(assignments)
+    if rest:
+        missing = [a for a in rest if a not in table]
+        text = "".join(table[a] + "\n" for a in rest if a in table)
+        if missing:
+            raise CommandError(text.rstrip("\n"), 1)
+        return text
+    return "".join(f"{k}={v}\n" for k, v in sorted(table.items()))
 
 
 # ---------------------------------------------------------------- services
@@ -1010,9 +1098,87 @@ def reboot(ctx, args):
     return msg
 
 
-@command("ipmitool", help="ipmitool sel list | sdr | power status|on|off|cycle")
+@command("pdsh", help="pdsh -w <hostlist> [-R ssh] command: run a command on several nodes (BCM ships pdsh)")
+def pdsh(ctx, args):
+    """Run one command line on each node of a hostlist; output lines carry the node name, as pdsh prints them."""
+    from .cmsh.model import bcm_init
+    from .slurm.common import expand_hostlist
+
+    hosts: list[str] = []
+    excluded: list[str] = []
+    rest: list[str] = []
+    it = iter(args)
+    for a in it:
+        if a in ("-w", "--w"):
+            hosts += expand_hostlist(next(it, ""))
+        elif a.startswith("-w") and len(a) > 2:
+            hosts += expand_hostlist(a[2:])
+        elif a in ("-g",):  # a BCM category, through genders-style groups
+            cat = next(it, "")
+            bcm = bcm_init(ctx.state)
+            hosts += [d for d, v in bcm.devices.items() if v.get("category") == cat]
+        elif a in ("-R", "-t", "-f", "-l"):
+            next(it, None)
+        elif a == "-x":
+            excluded += expand_hostlist(next(it, ""))
+        elif a in ("-S", "-b", "-N"):
+            pass
+        elif a == "-a":
+            bcm = bcm_init(ctx.state)
+            hosts += [d for d, v in bcm.devices.items() if v.type != "HeadNode"]
+        else:
+            rest.append(a)
+    hosts = [h for h in dict.fromkeys(hosts) if h not in excluded]
+    if not hosts:
+        raise CommandError("pdsh@bcm-head: no remote hosts specified", 1)
+    if not rest:
+        raise CommandError("pdsh@bcm-head: interactive mode is not available in the lab; give a command", 1)
+    from ..core.shell import Shell
+
+    line = rest[0] if len(rest) == 1 else " ".join(shlex.quote(a) for a in rest)
+    out = []
+    for h in hosts:
+        node = ctx.state.nodes.get(h)
+        if node is None:
+            out.append(f"pdsh@{ctx.host}: {h}: ssh exited with exit code 255")
+            continue
+        if not node.get("up", True) or node.get("power", "on") != "on":
+            out.append(f"pdsh@{ctx.host}: {h}: ssh: connect to host {h} port 22: No route to host")
+            continue
+        sub = Shell(ctx.state, h)
+        sub.ctx.executed = ctx.executed
+        text = sub.run(line)
+        out.extend(f"{h}: {ln}" for ln in (text.splitlines() or [""]))
+    return "\n".join(out) + "\n"
+
+
+@command("last", help="last [-n N]: recent logins")
+def last(ctx, args):
+    from ..core import clock
+
+    n = _num_arg(args, 10, "last")
+    now = clock.now(ctx.state)
+    booted = clock.booted(ctx.state)
+    rows = [
+        f"root     pts/0        10.141.255.254   {now:%a %b %e %H:%M}   still logged in",
+        f"root     pts/0        10.141.255.254   {now.replace(hour=max(0, now.hour - 1)):%a %b %e %H:%M} - {now:%H:%M}  (01:00)",
+        f"reboot   system boot  {ctx.node.kernel:<16} {booted:%a %b %e %H:%M}   still running",
+    ]
+    return "\n".join(rows[:n]) + f"\n\nwtmp begins {booted:%a %b %e %H:%M:%S %Y}\n"
+
+
+@command("ipmitool", help="ipmitool sel list | sdr | power status|on|off|cycle | chassis status")
 def ipmitool(ctx, args):
     node = ctx.node
+    if "chassis" in args:
+        on = node.get("power", "on") == "on"
+        return (
+            f"System Power         : {'on' if on else 'off'}\nPower Overload       : false\n"
+            "Power Interlock      : inactive\nMain Power Fault     : false\nPower Control Fault  : false\n"
+            "Power Restore Policy : previous\nLast Power Event     : \nChassis Intrusion    : inactive\n"
+            "Front-Panel Lockout  : inactive\nDrive Fault          : false\nCooling/Fan Fault    : "
+            f"{'true' if any(f.get('status') != 'ok' for f in node.get('fans', [])) else 'false'}\n"
+        )
     if "sel" in args:
         sel = node.get("sel", [])
         return ("\n".join(sel) + "\n") if sel else "SEL has no entries\n"

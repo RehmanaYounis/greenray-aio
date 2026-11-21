@@ -745,6 +745,49 @@ def _jq_stage(stage: str, data):
     return items
 
 
+@command("lsblk", help="lsblk [-d] [-o NAME,SIZE,TYPE,MOUNTPOINT]: block devices (the DGX's NVMe drives and RAID)")
+def lsblk(ctx, args):
+    node = ctx.node
+    if not node.get("gpus"):  # the head node: two SATA SSDs in a mirror
+        rows = [
+            ("NAME", "MAJ:MIN", "RM", "SIZE", "RO", "TYPE", "MOUNTPOINTS"),
+            ("sda", "8:0", "0", "1.8T", "0", "disk", ""),
+            ("├─sda1", "8:1", "0", "512M", "0", "part", "/boot/efi"),
+            ("└─sda2", "8:2", "0", "1.8T", "0", "part", ""),
+            ("  └─md0", "9:0", "0", "1.8T", "0", "raid1", "/"),
+            ("sdb", "8:16", "0", "1.8T", "0", "disk", ""),
+            ("└─sdb2", "8:18", "0", "1.8T", "0", "part", ""),
+            ("  └─md0", "9:0", "0", "1.8T", "0", "raid1", "/"),
+        ]
+    else:
+        rows = [("NAME", "MAJ:MIN", "RM", "SIZE", "RO", "TYPE", "MOUNTPOINTS")]
+        rows += [
+            ("nvme0n1", "259:0", "0", "1.7T", "0", "disk", ""),
+            ("├─nvme0n1p1", "259:1", "0", "512M", "0", "part", "/boot/efi"),
+            ("└─nvme0n1p2", "259:2", "0", "1.7T", "0", "part", ""),
+            ("  └─md0", "9:0", "0", "1.7T", "0", "raid1", "/"),
+            ("nvme1n1", "259:3", "0", "1.7T", "0", "disk", ""),
+            ("└─nvme1n1p2", "259:4", "0", "1.7T", "0", "part", ""),
+            ("  └─md0", "9:0", "0", "1.7T", "0", "raid1", "/"),
+        ]
+        for i in range(8):
+            rows.append((f"nvme{i + 2}n1", f"259:{5 + i}", "0", "3.5T", "0", "disk", ""))
+            rows.append(("└─md1", "9:1", "0", "28T", "0", "raid0", "/raid"))
+    if "-d" in args or "--nodeps" in args:
+        rows = [rows[0]] + [r for r in rows[1:] if r[5] == "disk"]
+    cols = opt(args, "-o", "--output")
+    if cols:
+        want = [c.strip().upper() for c in cols.split(",")]
+        idx = {h.rstrip("S"): i for i, h in enumerate(rows[0])}
+        idx["MOUNTPOINT"] = idx["MOUNTPOINTS"] = 6
+        bad = [c for c in want if c not in idx]
+        if bad:
+            raise CommandError(f"lsblk: unknown column: {bad[0]}", 1)
+        rows = [tuple(r[idx[c]] for c in want) for r in rows]
+    widths = [max(len(r[i]) for r in rows) for i in range(len(rows[0]))]
+    return "\n".join(" ".join(c.ljust(widths[i]) for i, c in enumerate(r)).rstrip() for r in rows) + "\n"
+
+
 @command("nproc", help="nproc: number of CPUs")
 def nproc(ctx, args):
     return f"{int(ctx.node.get('cpus', 224) or 224)}\n"

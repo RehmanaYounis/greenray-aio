@@ -1,0 +1,33 @@
+Expose a resource as a new Kubernetes service.
+
+ Looks up a deployment or pod by name and uses the selector for that resource
+as the selector for a new service on the specified port.
+
+Examples:
+  # Create a service for a deployment, which serves on port 80
+  kubectl expose deployment web --port=80 -n demo
+
+  # Create a NodePort service named web-np for the same deployment
+  kubectl expose deploy/web --port=80 --target-port=8080 --type=NodePort --name=web-np -n demo
+
+Options:
+    -n, --namespace='':
+        Namespace of the resource (default "default").
+
+    --name='':
+        The name for the newly created object (default: the resource's name).
+
+    --port='':
+        The port that the service should serve on. Required.
+
+    --protocol='':
+        The network protocol for the service to be created. Default is 'TCP'.
+
+    --target-port='':
+        Name or number for the port on the container that the service should direct traffic to.
+
+    --type='':
+        Type for this service: ClusterIP, NodePort or LoadBalancer. Default is 'ClusterIP'.
+
+Usage:
+  kubectl expose (TYPE NAME | TYPE/NAME) --port=port [--protocol=TCP|UDP] [--target-port=number] [--name=name] [--type=type] [options]

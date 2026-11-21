@@ -33,7 +33,7 @@ OPTION = re.compile(
 BOOL_DEFAULT = re.compile(r"^(--[\w-]+)=(true|false)$")
 
 # Pages describe some options by shape rather than by name.
-SPELLINGS = {"-NUM": "-2", "-<sig>": "-9", "-sigspec": "-9", "-i[SUFFIX]": "-i", "-": "-"}
+SPELLINGS = {"-NUM": "-2", "-<sig>": "-9", "-sigspec": "-9", "-i[SUFFIX]": "-i", "-": "-", "-<number>": "-1"}
 
 # Values chosen from the help page's placeholder so the option is exercised rather than rejected.
 VALUES = {
@@ -457,7 +457,32 @@ BASELINES: dict[tuple[str, str | None], Baseline] = {
         args=("deploy", "coredns", "-n", "kube-system", "-p", '\'{"spec":{"replicas":3}}\''),
         values={"-p": '\'{"spec":{"replicas":4}}\'', "--patch": '\'{"spec":{"replicas":4}}\'', "--type": "json"},
     ),
-    ("kubectl", "rollout"): Baseline(args=("status", "deploy/coredns", "-n", "kube-system")),
+    ("kubectl", "rollout"): Baseline(
+        args=("status", "deploy/coredns", "-n", "kube-system"),
+        values={"--revision": "1", "--to-revision": "1"},
+        alternatives={
+            "--revision": ("history", "deploy/coredns", "-n", "kube-system"),
+            "--to-revision": ("undo", "deploy/coredns", "-n", "kube-system"),
+        },
+    ),
+    ("kubectl", "set"): Baseline(
+        args=("image", "deploy/coredns", "coredns=registry.k8s.io/coredns/coredns:v1.11.2", "-n", "kube-system")
+    ),
+    ("kubectl", "expose"): Baseline(
+        args=("deploy/coredns", "--port=53", "-n", "kube-system"),
+        values={"--name": "dns2", "--port": "54", "--protocol": "UDP", "--target-port": "5353", "--type": "NodePort"},
+        alternatives={"--port": ("deploy/coredns", "-n", "kube-system")},
+    ),
+    ("kubectl", "explain"): Baseline(args=("pods",)),
+    ("kubectl", "config"): Baseline(args=("get-contexts",), values={"-o": "name", "--output": "name"}),
+    ("pdsh", None): Baseline(
+        args=("-w", "dgx-01", "hostname"),
+        values={"-x": "dgx-01", "-w": "dgx-04", "-g": "dgx-h100", "-R": "ssh"},
+        alternatives={"-x": ("-w", "dgx-0[1-2]", "hostname")},
+    ),
+    ("lsblk", None): Baseline(host="dgx-01", values={"-o": "NAME,SIZE", "--output": "NAME,SIZE"}),
+    ("ibdev2netdev", None): Baseline(host="dgx-01"),
+    ("last", None): Baseline(values={"-n": "1", "--limit": "1"}),
     ("kubectl", "scale"): Baseline(
         args=("deploy", "coredns", "-n", "kube-system", "--replicas=3"), values={"--replicas": "4"}
     ),
@@ -517,6 +542,8 @@ NO_VISIBLE_EFFECT: dict[tuple[str, str], str] = {
     ("kubectl", "--tty"): "attaching a terminal is not simulated; the pod is created or executed the same way",
     ("kubectl", "--timeout"): "the condition is already met, so the wait returns at once",
     ("kubectl", "--force"): "the drain baseline already fails on the unmanaged pod before --force is consulted",
+    ("pdsh", "-R"): "ssh is the only rcmd module, so naming it changes nothing",
+    ("pdsh", "-S"): "the remote commands all exit 0 in the baseline, so the largest return value is the default one",
     ("ls", "-1"): "output to a pipe is one name per line already",
     ("mlxconfig", "-y"): "the query command asks no question",
     ("mlxconfig", "--yes"): "the query command asks no question",

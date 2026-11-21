@@ -406,10 +406,168 @@ def _docker_login(ctx, args):
     return "\n".join(out) + "\n"
 
 
+def _docker_system(ctx, rest):
+    node = ctx.node
+    what = rest[0] if rest else ""
+    images = list(node.docker_images)
+    sizes = [
+        next(
+            (v for k, v in IMAGE_SIZES.items() if ref.rsplit(":", 1)[0].endswith("/" + k) or ref.startswith(k)), "1.2GB"
+        )
+        for ref in images
+    ]
+    total = sum(float(s.rstrip("GB")) for s in sizes)
+    active = len({c.image for c in node.containers})
+    if what == "df":
+        rows = [
+            ("TYPE", "TOTAL", "ACTIVE", "SIZE", "RECLAIMABLE"),
+            (
+                "Images",
+                str(len(images)),
+                str(active),
+                f"{total:.2f}GB",
+                f"{total - total * active / max(1, len(images)):.2f}GB",
+            ),
+            (
+                "Containers",
+                str(len(node.containers)),
+                str(sum(1 for c in node.containers if c.status.startswith("Up"))),
+                "12.4MB",
+                "0B (0%)",
+            ),
+            ("Local Volumes", str(len(node.get("docker_volumes", []))), "0", "0B", "0B"),
+            ("Build Cache", "0", "0", "0B", "0B"),
+        ]
+        return columns(rows)
+    if what == "prune":
+        if "-f" not in rest and "--force" not in rest:
+            raise CommandError(
+                "WARNING! This will remove all stopped containers, networks not used by at least one container, dangling images and build cache.\nAre you sure you want to continue? [y/N] docker system prune needs -f in the lab (no terminal to answer the prompt)",
+                1,
+            )
+        gone = [c for c in node.containers if not c.status.startswith("Up")]
+        for c in gone:
+            node.containers.remove(c)
+        out = ["Deleted Containers:"] + [c.id for c in gone] + [""] if gone else []
+        freed = 0.0
+        if "-a" in rest or "--all" in rest:
+            unused = [i for i in images if not any(c.image == i for c in node.containers)]
+            for i in unused:
+                node.docker_images.remove(i)
+            freed = sum(float(s.rstrip("GB")) for i, s in zip(images, sizes, strict=True) if i in unused)
+            if unused:
+                out += ["Deleted Images:"] + [f"untagged: {i}" for i in unused] + [""]
+        return (
+            "\n".join(out + [f"Total reclaimed space: {freed:.2f}GB" if freed else "Total reclaimed space: 0B"]) + "\n"
+        )
+    if what == "info":
+        return docker(ctx, ["info"])
+    raise CommandError(
+        "Usage:  docker system COMMAND\n\nCommands:\n  df      Show docker disk usage\n  info    Display system-wide information\n  prune   Remove unused data",
+        1,
+    )
+
+
+def _docker_volume(ctx, rest):
+    node = ctx.node
+    vols = node.setdefault("docker_volumes", [])
+    what = rest[0] if rest else ""
+    if what in ("ls", "list"):
+        if "-q" in rest or "--quiet" in rest:
+            return "".join(v + "\n" for v in vols)
+        return columns([("DRIVER", "VOLUME NAME")] + [("local", v) for v in vols])
+    if what == "create":
+        names = [a for a in rest[1:] if not a.startswith("-")]
+        name = names[0] if names else _short_id(ctx.host, len(vols), n=64)
+        if name in vols:
+            return name + "\n"  # docker volume create is idempotent
+        vols.append(name)
+        return name + "\n"
+    if what in ("rm", "remove"):
+        names = [a for a in rest[1:] if not a.startswith("-")]
+        if not names:
+            raise CommandError('"docker volume rm" requires at least 1 argument.', 1)
+        out = []
+        for n in names:
+            if n not in vols:
+                raise CommandError(f"Error response from daemon: get {n}: no such volume", 1)
+            if any(n in (c.get("volumes") or []) for c in node.containers):
+                raise CommandError(f"Error response from daemon: remove {n}: volume is in use", 1)
+            vols.remove(n)
+            out.append(n)
+        return "".join(o + "\n" for o in out)
+    if what == "inspect":
+        names = [a for a in rest[1:] if not a.startswith("-")]
+        if not names or names[0] not in vols:
+            raise CommandError(f"Error response from daemon: get {names[0] if names else ''}: no such volume", 1)
+        return (
+            json.dumps(
+                [
+                    {
+                        "CreatedAt": clock_stamp(ctx),
+                        "Driver": "local",
+                        "Labels": None,
+                        "Mountpoint": f"/var/lib/docker/volumes/{names[0]}/_data",
+                        "Name": names[0],
+                        "Options": None,
+                        "Scope": "local",
+                    }
+                ],
+                indent=4,
+            )
+            + "\n"
+        )
+    if what == "prune":
+        used = {v for c in node.containers for v in (c.get("volumes") or [])}
+        gone = [v for v in vols if v not in used]
+        vols[:] = [v for v in vols if v in used]
+        return (
+            "Deleted Volumes:\n" + "".join(v + "\n" for v in gone) + "\n" if gone else ""
+        ) + "Total reclaimed space: 0B\n"
+    raise CommandError("Usage:  docker volume COMMAND\n\nCommands:\n  create  inspect  ls  prune  rm", 1)
+
+
+def _docker_network(ctx, rest):
+    what = rest[0] if rest else ""
+    nets = [
+        ("a1b2c3d4e5f6", "bridge", "bridge", "local"),
+        ("f6e5d4c3b2a1", "host", "host", "local"),
+        ("0f1e2d3c4b5a", "none", "null", "local"),
+    ]
+    if what in ("ls", "list"):
+        if "-q" in rest or "--quiet" in rest:
+            return "".join(n[0] + "\n" for n in nets)
+        return columns([("NETWORK ID", "NAME", "DRIVER", "SCOPE")] + nets)
+    if what == "inspect":
+        names = [a for a in rest[1:] if not a.startswith("-")]
+        hit = next((n for n in nets if names and names[0] in (n[0], n[1])), None)
+        if hit is None:
+            raise CommandError(f"Error response from daemon: network {names[0] if names else ''} not found", 1)
+        subnet = {"bridge": "172.17.0.0/16"}.get(hit[1])
+        doc = {
+            "Name": hit[1],
+            "Id": hit[0] * 5 + hit[0][:4],
+            "Scope": "local",
+            "Driver": hit[2],
+            "IPAM": {
+                "Driver": "default",
+                "Config": [{"Subnet": subnet, "Gateway": subnet.replace("0/16", "1")}] if subnet else [],
+            },
+        }
+        return json.dumps([doc], indent=4) + "\n"
+    raise CommandError(
+        "Usage:  docker network COMMAND\n\nCommands:\n  inspect  ls\n(creating networks is not part of this lab)", 1
+    )
+
+
+def clock_stamp(ctx) -> str:
+    return clock.stamp(ctx.state, "%Y-%m-%dT%H:%M:%SZ")
+
+
 @command(
     "docker",
     help="docker images|pull|run [--gpus all|'\"device=0,1\"'] [--rm]|ps|exec|inspect|logs|start|login nvcr.io|info|rmi"
-    " | docker compose -f FILE up -d|ps|down|config",
+    " | docker compose -f FILE up -d|ps|down|config | system df|prune | volume ls|create|rm | network ls",
 )
 def docker(ctx, args):
     container_init(ctx.state)
@@ -417,7 +575,7 @@ def docker(ctx, args):
     if not args or args[0] in ("-h", "--help", "help"):
         return (
             "Usage:  docker [OPTIONS] COMMAND\n\nCommon Commands:\n  run  exec  ps  pull  images  login  logout  info\n"
-            "  inspect  logs  start  restart  stop  rm  rmi  compose\n"
+            "  inspect  logs  start  restart  stop  rm  rmi  compose  system  volume  network\n"
         )
     sub, rest = args[0], args[1:]
     if sub == "version" or sub == "--version":
@@ -448,6 +606,12 @@ def docker(ctx, args):
             size = next((v for k, v in IMAGE_SIZES.items() if name.endswith("/" + k) or name == k), "1.2GB")
             rows.append((name, tag, _short_id(ref), "5 months ago", size))
         return columns(rows)
+    if sub == "system":
+        return _docker_system(ctx, rest)
+    if sub == "volume":
+        return _docker_volume(ctx, rest)
+    if sub == "network":
+        return _docker_network(ctx, rest)
     if sub == "run":
         return _docker_run(ctx, rest)
     if sub == "ps":

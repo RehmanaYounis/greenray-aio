@@ -466,6 +466,34 @@ def _mig(ctx, args):
                 6,
             )
         return "\n".join(out) + "\n"
+    if flag in ("-lcip", "--list-compute-instance-profiles"):
+        out = [
+            "+--------------------------------------------------------------------------------------+",
+            "| Compute instance profiles:                                                           |",
+            "| GPU     GPU       Name             Profile  Instances   Exclusive       Shared       |",
+            "|       Instance                     ID       Free/Total     SM       DEC   ENC   OFA  |",
+            "|         ID                                                          CE    JPEG       |",
+            "|======================================================================================|",
+        ]
+        for g in gpus:
+            for gi in g.gpu_instances:
+                slices = MIG_PROFILES[gi.profile][1]
+                used = sum(MIG_PROFILES[c.profile][1] for c in g.compute_instances if c.gi == gi.id)
+                seen: set[int] = set()
+                for name, (_pid, cs, _ms, _mx) in MIG_PROFILES.items():
+                    if cs > slices or "+me" in name or cs in seen:  # one row per compute-slice count
+                        continue
+                    seen.add(cs)
+                    cname = f"{cs}c.{gi.profile}" if cs != slices else gi.profile
+                    total = slices // cs
+                    free = max(0, (slices - used) // cs)
+                    out.append(
+                        f"|   {g.index}      {gi.id:>2}       MIG {cname:<12} {cs:>2}*     {free}/{total}           {cs * 16 + (2 if cs == 7 else 0):<3}     "
+                        f"{cs:<3}   {0 if cs < 7 else 1}     {0 if cs < 7 else 1}    |"
+                    )
+        if len(out) == 6:
+            raise CommandError("No compute instance profiles found: no GPU instances exist on the selected GPU(s).", 6)
+        return "\n".join(out) + "\n"
     if flag in ("-lgipp", "--list-gpu-instance-possible-placements"):
         out = []
         for g in gpus:
@@ -595,7 +623,8 @@ def _mig(ctx, args):
             g.gpu_instances = []
         return "\n".join(out) + "\n"
     raise CommandError(
-        "usage: nvidia-smi mig [-i ID] -lgip | -cgi <profiles> [-C] | -lgi | -cci | -lci | -dci | -dgi", 2
+        "usage: nvidia-smi mig [-i ID] -lgip | -lgipp | -cgi <profiles> [-C] | -lgi | -lcip | -cci | -lci | -dci | -dgi",
+        2,
     )
 
 

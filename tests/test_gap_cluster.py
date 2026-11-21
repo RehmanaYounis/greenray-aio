@@ -65,7 +65,7 @@ def test_lscpu_and_numactl_hardware():
 
 def test_gpu_jobs_get_gpu_local_cores():
     s = sh()
-    s.run("sbatch -w dgx-01 --gres=gpu:4 --ntasks-per-node=4 --wrap='sleep 1'")  # takes GPUs 0-3
+    s.run("sbatch -w dgx-01 --gres=gpu:4 --ntasks-per-node=4 --wrap='sleep 600'")  # takes GPUs 0-3
     s.run("sbatch -w dgx-01 --gres=gpu:4 --ntasks-per-node=4 --cpus-per-task=8 --wrap='srun numactl --show'")
     j = s.ctx.state.slurm.jobs[1]
     assert j.alloc_gpus["dgx-01"] == [4, 5, 6, 7]

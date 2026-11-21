@@ -577,9 +577,46 @@ KINDS = {
     "configmaps": ("cm", "configmap", "configmaps"),
     "serviceaccounts": ("sa", "serviceaccount", "serviceaccounts"),
     "services": ("svc", "service", "services"),
+    "replicasets": ("rs", "replicaset", "replicasets", "replicaset.apps", "replicasets.apps"),
+    "customresourcedefinitions": (
+        "crd",
+        "crds",
+        "customresourcedefinition",
+        "customresourcedefinitions",
+        "customresourcedefinitions.apiextensions.k8s.io",
+    ),
 }
 
-CLUSTER_SCOPED = {"nodes", "namespaces", "clusterpolicies", "nicclusterpolicies", "runtimeclasses"}
+CLUSTER_SCOPED = {
+    "nodes",
+    "namespaces",
+    "clusterpolicies",
+    "nicclusterpolicies",
+    "runtimeclasses",
+    "customresourcedefinitions",
+}
+
+
+def crd_list(state) -> list[dict]:
+    """The CRDs the installed operators bring; the GPU Operator's ClusterPolicy is always there."""
+    k = state.k8s
+    out = [{"name": "clusterpolicies.nvidia.com", "created": -41 * 86400}]
+    if any(r.get("chart", "").startswith("network-operator") for r in k.get("helm_releases", [])):
+        out += [
+            {"name": n, "created": -7 * 86400}
+            for n in (
+                "hostdevicenetworks.mellanox.com",
+                "macvlannetworks.mellanox.com",
+                "nicclusterpolicies.mellanox.com",
+            )
+        ]
+    if state.get("runai", {}).get("installed"):
+        out += [
+            {"name": n, "created": -3 * 86400}
+            for n in ("projects.run.ai", "runaijobs.run.ai", "trainingworkloads.run.ai")
+        ]
+    return sorted(out, key=lambda c: c["name"])
+
 
 KIND_PREFIX = {
     "pods": "pod",
