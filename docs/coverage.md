@@ -2,7 +2,7 @@
 
 This maps every topic in the NCP-AIO blueprint to the hands-on scenarios (`greenray lab <id>`) and the question-bank tags that practise it. `pytest` checks that every scenario listed here exists, so the map can't silently go stale.
 
-**Exam format.** The NVIDIA certification page, as reported by search results in October 2026, describes 30 multiple-choice questions plus 3 hands-on lab exercises in one 120-minute, remotely proctored session. The labs run on a Linux command line against live Slurm, Kubernetes and Base Command Manager clusters. `greenray mock` reproduces that shape. Re-check the official page before your exam.
+**Exam format.** Recent candidates report 35 multiple-choice questions followed by 3 hands-on lab exercises in one 120-minute, remotely proctored session; the question section is submitted before the labs begin and cannot be reopened. The labs run on a Linux command line against live Slurm, Kubernetes and Base Command Manager clusters. `greenray mock` reproduces that sequence. Re-check the official page before your exam.
 
 **Topic sources.** The domain names and weights come from the official page (Installation and Deployment 31%, Administration 23%, Workload Management 23%, Troubleshooting and Optimization 23%). The topic bullets are paraphrased from public summaries of the blueprint. Official materials win if they differ.
 
