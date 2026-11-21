@@ -677,6 +677,7 @@ def ssh(ctx, args):
 
         sub = Shell(ctx.state, target)
         sub.ctx.executed = ctx.executed
+        sub.ctx.outputs = ctx.outputs
         # one quoted argument is a command line for the remote shell (redirects and pipes included)
         line = remote[0] if len(remote) == 1 else " ".join(shlex.quote(a) for a in remote)
         return sub.run(line)
@@ -1159,6 +1160,7 @@ def pdsh(ctx, args):
             continue
         sub = Shell(ctx.state, h)
         sub.ctx.executed = ctx.executed
+        sub.ctx.outputs = ctx.outputs
         text = sub.run(line)
         out.extend(f"{h}: {ln}" for ln in (text.splitlines() or [""]))
     return "\n".join(out) + "\n"

@@ -753,6 +753,7 @@ def salloc(ctx, args):
 
         sh = Shell(state, ctx.host)
         sh.ctx.executed = ctx.executed
+        sh.ctx.outputs = ctx.outputs
         out = sh.run(" ".join(shlex.quote(a) for a in cmd))
         _release_allocation(ctx, j)
         return (

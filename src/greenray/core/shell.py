@@ -33,6 +33,8 @@ class Context:
     history: list = field(default_factory=list)  # raw command lines entered by the user
     executed: list = field(default_factory=list)  # (host, argv) for every simple command run
     outputs: list = field(default_factory=list)  # (host, argv, text) for every command that completed without error
+    # a shell started by another command (ssh host cmd, pdsh, bash -c, sudo, salloc cmd, cmsh pexec) shares both
+    # lists with its parent, so evidence is found on the host where the command really ran
     reader: Callable[[str], str | None] | None = (
         None  # prompt -> line; lets interactive commands (editors) read from the learner
     )
