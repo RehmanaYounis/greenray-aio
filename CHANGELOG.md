@@ -2,6 +2,16 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.7.4] - 2026-11-22
+
+### Fixed
+- Lab `adm-2` (`adm-slurm-partition-time-limit`): the scontrol criterion is met only when `scontrol show partition` actually showed the defq partition; a lookup of a partition that does not exist earns nothing.
+- Lab `wkl-2` (`wkl-k8s-pod-pending-nodeselector`): the two diagnostic criteria are met only when `kubectl` returned the pod's FailedScheduling event (`kubectl describe pod`, `kubectl get events`) and the GPU product label of a DGX node (`kubectl get nodes -L` or `--show-labels`, `kubectl describe node`); lookups that answer NotFound earn nothing.
+- Lab `wkl-3` (`wkl-k8s-taint-toleration`): the manifest criterion reads `/root/triton.yaml` as YAML, so `value: 'present'`, `value: "present"` and `value: present` are graded alike, as is any other toleration the scheduler accepts for the taint. The diagnostic criterion is met only when `kubectl` showed the pods' scheduling events or the taints of a DGX node.
+
+### Added
+- Scenario checks can use `manifest(host, path)` to grade a YAML file by its parsed content and `tolerates(tolerations, taint)` to ask the scheduler's question; `docs/scenario-format.md` describes both, and `printed()`.
+
 ## [1.7.3] - 2026-11-22
 
 ### Fixed

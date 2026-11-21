@@ -100,10 +100,12 @@ Every variant must have the same keys. `{node}`, `{gpu}` and the other names are
 
 ## Writing checks
 
-These names are available in `checks` expressions: `state`, `nodes`, `slurm`, `k8s`, `bcm`, `ngc`, `dcgm`, `flags`. Helpers: `ran(regex, host=None)`, `file(host, path)`, `pods(namespace=None, prefix='')`, `release(name)`, `jobs(**fields)` and `re`.
+These names are available in `checks` expressions: `state`, `nodes`, `slurm`, `k8s`, `bcm`, `ngc`, `dcgm`, `flags`. Helpers: `ran(regex, host=None)`, `printed(regex, host=None, cmd=None)`, `file(host, path)`, `manifest(host, path)`, `tolerates(tolerations, taint)`, `pods(namespace=None, prefix='')`, `release(name)`, `jobs(**fields)` and `re`.
 
 - Grade the **end state**, so that any valid solution passes, and accept every legitimate way to reach it.
 - Use `ran()` to require evidence gathering. It does not know the order of commands; `ran_before(earlier, later, host=None)` does: both regexes must have matched, the first match of `earlier` before the first of `later`.
+- `ran()` is true even when the command failed. Where the learner must have *seen* something, use `printed(regex, cmd=...)`: it looks only at what commands that completed printed, so a lookup of an object that does not exist earns nothing.
+- Grade a YAML manifest through `manifest(host, path)` (its parsed documents, empty when the file is not valid YAML), never through its text: `value: present`, `value: "present"` and `value: 'present'` are the same manifest. `tolerates(tolerations, taint)` answers as the scheduler does.
 - `audit(kind)` lists destructive operations the simulator recorded while they cost users work: `reboot_with_jobs`, `power_off_with_jobs`, `node_down_with_jobs` (a node set DOWN, not drained, with jobs on it), `cancel_user_job` (scancel of another user's job), `delete_running_pod` and `runtime_restart_with_containers`. A check such as `not audit('reboot_with_jobs')` rewards draining first.
 - A check may declare `kind: safety` or `kind: evidence`; a check whose expression uses `ran(` is evidence by default, everything else is an outcome. Results show the tag, so learners see what each criterion rewards. Every kind counts the same towards passing.
 - A check that raises an exception counts as failed. The error text is shown only by `greenray validate` or with `GREENRAY_DEBUG=1`.

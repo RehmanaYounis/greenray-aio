@@ -737,3 +737,284 @@ def test_no_yaml_text_is_cut_at_a_hash():
         if re.match(r"\s*(- )?(\w+: )?[^\s\"'|>#\[{-][^\"']* #", line) and re.match(r"\s*(- )?\w+: |\s*- ", line)
     ]
     assert cut == []
+
+
+# ---- shared helpers for the evidence fixes below
+
+
+def _lab(scenario_id: str):
+    s = concrete(scenario_id)
+    return s, Shell(s.build_state())
+
+
+def _check(s, shell, wording: str) -> bool:
+    """The result of the one criterion whose description contains ``wording``."""
+    found = [(ok, err) for desc, ok, err in s.grade(shell) if wording in desc]
+    assert len(found) == 1 and not found[0][1], found
+    return found[0][0]
+
+
+def _solve(s, shell, skip: str) -> None:
+    """Replay the reference solution without the read-only steps matching ``skip``."""
+    for step in s.solution:
+        if not re.search(skip, step):
+            lines = step.split("\n")
+            feed = iter(lines[1:])
+            shell.run(lines[0], heredoc_reader=lambda _p, feed=feed: next(feed, None))
+
+
+# ---- adm-slurm-partition-time-limit: scontrol must have shown the defq partition
+
+ADM2_FIX = ["sed -i 's/MaxTime=INFINITE/MaxTime=2-00:00:00/' /etc/slurm/slurm.conf", "scontrol reconfigure"]
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "scontrol show partition missing",
+        "scontrol show partition",  # with no partition left to show, see the test body
+        "scontrol show part defq,missing",
+        "scontrol show config",
+        "scontrol show node dgx-01",
+        "sinfo",
+    ],
+)
+def test_adm2_failed_or_unrelated_lookups_earn_no_evidence(bad):
+    s, shell = _lab("adm-slurm-partition-time-limit")
+    for line in ADM2_FIX:
+        shell.run(line)
+    if bad == "scontrol show partition":
+        shell.ctx.state.slurm.partitions.clear()
+    out = shell.run(bad)
+    assert "PartitionName=defq" not in out
+    results = s.grade(shell)
+    assert not _check(s, shell, "scontrol showed you")
+    if shell.ctx.state.slurm.partitions:
+        assert [ok for _desc, ok, _err in results] == [True, True, True, False]
+
+
+@pytest.mark.parametrize(
+    "good",
+    [
+        "scontrol show partition defq",
+        "scontrol show partition",
+        "scontrol show partitions",
+        "scontrol show part defq",
+        "scontrol show part defq -o",
+        "scontrol -o show partition defq",
+        "scontrol show partition defq | grep MaxTime",
+    ],
+)
+@pytest.mark.parametrize("before_the_change", [True, False])
+def test_adm2_a_successful_partition_lookup_earns_evidence(good, before_the_change):
+    s, shell = _lab("adm-slurm-partition-time-limit")
+    order = [good, *ADM2_FIX] if before_the_change else [*ADM2_FIX, good]
+    for line in order:
+        shell.run(line)
+    assert all(ok for _desc, ok, _err in s.grade(shell))
+
+
+def test_adm2_still_protects_the_running_job():
+    s, shell = _lab("adm-slurm-partition-time-limit")
+    for line in ["scontrol show partition defq", *ADM2_FIX, "scancel 2301"]:
+        shell.run(line)
+    assert not _check(s, shell, "job 2301 is still running")
+    assert _check(s, shell, "scontrol showed you")
+
+
+# ---- wkl-k8s-pod-pending-nodeselector: kubectl must have returned the events and the label
+
+WKL2 = "wkl-k8s-pod-pending-nodeselector"
+WKL2_EVENTS, WKL2_LABELS = "scheduling events", "GPU product label"
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "kubectl describe pod missing",
+        "kubectl describe pod cuda-test -n kube-system",
+        "kubectl get events -n kube-system",
+        "kubectl get events --field-selector involvedObject.name=nope",
+        "kubectl get pods",
+    ],
+)
+def test_wkl2_lookups_that_return_no_pod_events_earn_no_evidence(bad):
+    s, shell = _lab(WKL2)
+    assert "FailedScheduling" not in shell.run(bad)
+    assert not _check(s, shell, WKL2_EVENTS)
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "kubectl get node missing --show-labels",
+        "kubectl describe node missing",
+        "kubectl get nodes",
+        "kubectl get nodes -L nosuch",
+        "kubectl get node bcm-head --show-labels",
+        "kubectl describe node bcm-head",
+        "kubectl get nodes -l nvidia.com/gpu.product=NVIDIA-H100-80GB",
+        "kubectl describe pod cuda-test",
+    ],
+)
+def test_wkl2_lookups_that_return_no_gpu_label_earn_no_evidence(bad):
+    s, shell = _lab(WKL2)
+    shell.run(bad)
+    assert not _check(s, shell, WKL2_LABELS)
+
+
+def test_wkl2_the_reported_failed_lookups_earn_nothing():
+    s, shell = _lab(WKL2)
+    assert "NotFound" in shell.run("kubectl describe pod missing")
+    assert "NotFound" in shell.run("kubectl get node missing --show-labels")
+    assert not any(ok for _desc, ok, _err in s.grade(shell))
+
+
+@pytest.mark.parametrize(
+    "good",
+    [
+        "kubectl describe pod cuda-test",
+        "kubectl describe pods",
+        "kubectl describe po cuda-test",
+        "kubectl -n default describe pod cuda-test",
+        "kubectl get events",
+        "kubectl get ev -A",
+        "kubectl get events | grep cuda-test",
+    ],
+)
+def test_wkl2_pod_events_earn_evidence(good):
+    s, shell = _lab(WKL2)
+    shell.run(good)
+    assert _check(s, shell, WKL2_EVENTS) and not _check(s, shell, WKL2_LABELS)
+
+
+@pytest.mark.parametrize(
+    "good",
+    [
+        "kubectl get nodes -L nvidia.com/gpu.product",
+        "kubectl get nodes --show-labels",
+        "kubectl get node dgx-02 --show-labels",
+        "kubectl get no --show-labels",
+        "kubectl describe node dgx-01",
+        "kubectl describe nodes",
+        "kubectl describe node dgx-01 | grep -i product",
+        "kubectl get node dgx-01 -o yaml",
+        "kubectl get nodes -l nvidia.com/gpu.product=NVIDIA-H100-80GB-HBM3",
+    ],
+)
+def test_wkl2_node_labels_earn_evidence(good):
+    s, shell = _lab(WKL2)
+    shell.run(good)
+    assert _check(s, shell, WKL2_LABELS) and not _check(s, shell, WKL2_EVENTS)
+
+
+def test_wkl2_recreating_the_pod_without_diagnosis_leaves_only_the_evidence_open():
+    s, shell = _lab(WKL2)
+    _solve(s, shell, r"^kubectl (get|describe|logs)|^cat ")
+    assert [ok for _desc, ok, _err in s.grade(shell)] == [False, False, True, True, True]
+    shell.run("kubectl describe pod cuda-test")  # the recreated pod has no FailedScheduling event to show
+    assert not _check(s, shell, WKL2_EVENTS)
+
+
+# ---- wkl-k8s-taint-toleration: evidence needs output, and the manifest is graded as parsed YAML
+
+WKL3 = "wkl-k8s-taint-toleration"
+WKL3_SEEN, WKL3_FILE = "kubectl showed you", "/root/triton.yaml"
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "kubectl describe pod missing",
+        "kubectl describe node missing",
+        "kubectl describe node bcm-head",
+        "kubectl describe deployment triton-inference",
+        "kubectl get events -n kube-system",
+        "kubectl get pods",
+    ],
+)
+def test_wkl3_lookups_that_show_neither_events_nor_taints_earn_no_evidence(bad):
+    s, shell = _lab(WKL3)
+    shell.run(bad)
+    assert not _check(s, shell, WKL3_SEEN)
+
+
+@pytest.mark.parametrize(
+    "good",
+    [
+        "kubectl describe pod -l app=triton-inference",
+        "kubectl describe pods",
+        "kubectl get events",
+        "kubectl describe node dgx-01",
+        "kubectl describe node dgx-01 | grep Taints",
+        "kubectl describe nodes",
+    ],
+)
+def test_wkl3_pod_events_or_node_taints_earn_evidence(good):
+    s, shell = _lab(WKL3)
+    shell.run(good)
+    assert _check(s, shell, WKL3_SEEN)
+
+
+def _wkl3_with_toleration(toleration: str):
+    """wkl-3 after the manifest's toleration block was replaced by ``toleration`` and applied."""
+    s, shell = _lab(WKL3)
+    files = shell.ctx.state.nodes["bcm-head"].files
+    old = '      - key: nvidia.com/gpu\n        operator: Equal\n        value: "true"\n        effect: NoSchedule\n'
+    assert old in files["/root/triton.yaml"]
+    files["/root/triton.yaml"] = files["/root/triton.yaml"].replace(old, toleration)
+    shell.run("kubectl describe pod -l app=triton-inference")
+    shell.run("kubectl apply -f /root/triton.yaml")
+    shell.run("kubectl rollout status deployment/triton-inference")
+    return s, shell
+
+
+@pytest.mark.parametrize(
+    "toleration",
+    [
+        '      - key: nvidia.com/gpu\n        operator: Equal\n        value: "present"\n        effect: NoSchedule\n',
+        "      - key: nvidia.com/gpu\n        operator: Equal\n        value: 'present'\n        effect: NoSchedule\n",
+        "      - key: nvidia.com/gpu\n        operator: Equal\n        value: present\n        effect: NoSchedule\n",
+        "      - key: 'nvidia.com/gpu'\n        value:   present   # the taint's value\n        effect: \"NoSchedule\"\n",
+        "      - key: nvidia.com/gpu\n        operator: Exists\n        effect: NoSchedule\n",
+        "      - key: nvidia.com/gpu\n        operator: 'Exists'\n",
+        "      - {key: nvidia.com/gpu, operator: Equal, value: present, effect: NoSchedule}\n",
+        "      - operator: Exists\n",
+    ],
+    ids=["double", "single", "plain", "comment", "exists", "exists-any-effect", "flow", "exists-any-key"],
+)
+def test_wkl3_every_yaml_spelling_of_a_matching_toleration_passes(toleration):
+    s, shell = _wkl3_with_toleration(toleration)
+    assert all(ok for _desc, ok, _err in s.grade(shell)), s.grade(shell)
+
+
+@pytest.mark.parametrize(
+    "toleration",
+    [
+        '      - key: nvidia.com/gpu\n        operator: Equal\n        value: "true"\n        effect: NoSchedule\n',
+        "      - key: nvidia.com/gpu\n        operator: Equal\n        value: present\n        effect: NoExecute\n",
+        "      - key: nvidia.com/mig\n        operator: Exists\n",
+        "      # value: present\n      # operator: Exists\n      - key: nvidia.com/gpu\n        value: absent\n",
+    ],
+    ids=["unchanged", "wrong-effect", "wrong-key", "fix-only-in-a-comment"],
+)
+def test_wkl3_a_toleration_that_does_not_match_the_taint_fails(toleration):
+    s, shell = _wkl3_with_toleration(toleration)
+    assert not _check(s, shell, WKL3_FILE)
+    assert not _check(s, shell, "replicas Running")
+
+
+def test_wkl3_a_manifest_that_is_not_valid_yaml_fails_without_an_error():
+    s, shell = _lab(WKL3)
+    shell.ctx.state.nodes["bcm-head"].files["/root/triton.yaml"] = "kind: Deployment\n  value: present\n: ["
+    assert not _check(s, shell, WKL3_FILE)
+    del shell.ctx.state.nodes["bcm-head"].files["/root/triton.yaml"]
+    assert not _check(s, shell, WKL3_FILE)
+
+
+def test_wkl3_fixing_the_live_object_only_does_not_satisfy_the_manifest_criterion():
+    s, shell = _lab(WKL3)
+    patch = '{"spec":{"template":{"spec":{"tolerations":[{"key":"nvidia.com/gpu","operator":"Exists"}]}}}}'
+    assert "patched" in shell.run(f"kubectl patch deployment triton-inference -p '{patch}'")
+    assert _check(s, shell, "Deployment's pod template")
+    assert not _check(s, shell, WKL3_FILE)
