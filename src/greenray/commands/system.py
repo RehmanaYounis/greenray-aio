@@ -891,15 +891,27 @@ def service(ctx, args):
 def journalctl(ctx, args):
     unit, tail, prio, kernel, since = None, None, None, False, None
     it = iter(args)
+
+    def unit_arg(flag):
+        value = next(it, None)
+        if value is None:  # getopt's complaint when the value is missing
+            short = flag.lstrip("-")[-1]
+            raise CommandError(
+                f"journalctl: option '{flag}' requires an argument"
+                if flag.startswith("--")
+                else f"journalctl: option requires an argument -- '{short}'"
+            )
+        return value.removesuffix(".service")
+
     for a in it:
         if a in ("-u", "--unit"):
-            unit = next(it, "").removesuffix(".service")
+            unit = unit_arg(a)
         elif a.startswith("--unit="):
             unit = a.split("=", 1)[1].removesuffix(".service")
         elif a.startswith("-u") and len(a) > 2 and not a.startswith("--"):
             unit = a[2:].removesuffix(".service")
         elif a.startswith("-xeu") or a.startswith("-eu"):
-            unit = next(it, "").removesuffix(".service")
+            unit = unit_arg(a)
         elif a in ("-n", "--lines"):
             tail = int_arg(next(it, ""), "Failed to parse lines", 1, minimum=0)
         elif a.startswith("--lines="):

@@ -150,7 +150,10 @@ class Scenario:
     @property
     def kinds(self) -> list[str]:
         """One of ``outcome`` (default), ``evidence`` or ``safety`` per check, in check order."""
-        return [c.get("kind", "evidence" if "ran(" in c["expr"] else "outcome") for c in self.checks]
+        return [
+            c.get("kind", "evidence" if "ran(" in c["expr"] or "printed(" in c["expr"] else "outcome")
+            for c in self.checks
+        ]
 
     def grade(self, shell) -> list[tuple[str, bool, str]]:
         """Return [(description, passed, error)] for every check."""
@@ -207,6 +210,15 @@ def check_env(shell) -> dict:
                 return i
         return None
 
+    def printed(pattern: str, host: str | None = None, cmd: str | None = None) -> bool:
+        """A command that completed (optionally matching ``cmd``, on ``host``) printed something matching ``pattern``."""
+        rx, crx = re.compile(pattern, re.M), re.compile(cmd) if cmd else None
+        return any(
+            rx.search(text)
+            for h, argv, text in shell.ctx.outputs
+            if (host is None or h == host) and (crx is None or crx.search(" ".join(argv)))
+        )
+
     def ran_before(earlier: str, later: str, host: str | None = None) -> bool:
         """Both ran, and the first match of ``earlier`` came before the first match of ``later``."""
         a, b = first(earlier, host), first(later, host)
@@ -247,6 +259,7 @@ def check_env(shell) -> dict:
         "dcgm": state.dcgm,
         "flags": state.flags,
         "ran": ran,
+        "printed": printed,
         "ran_before": ran_before,
         "audit": audit,
         "file": file,
