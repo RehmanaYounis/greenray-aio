@@ -169,3 +169,14 @@ def test_sshare_shows_only_the_accounts_asked_for():
     assert len(shell.run("sshare -A nosuchaccount").strip().splitlines()) == 2  # the header and its rule
     assert "root" in shell.run("sshare -A root")
     assert "root" in shell.run("sshare")
+
+
+# ---- nvsm names the OS the node runs
+
+
+def test_nvsm_versions_names_the_installed_os():
+    s = concrete("ins-container-toolkit-docker")
+    shell = Shell(s.build_state())
+    stock = shell.run("ssh dgx-03 nvsm show versions")
+    assert "DGX H100 (Ubuntu 22.04.4 LTS)" in stock and "DGX OS" not in stock
+    assert "DGX H100 (DGX OS 6.2)" in shell.run("ssh dgx-01 nvsm show versions")

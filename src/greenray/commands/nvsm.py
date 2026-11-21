@@ -9,6 +9,8 @@ update and a reboot applies it.
 
 from __future__ import annotations
 
+import re
+
 from ..core import audit
 from ..core.errors import CommandError
 from . import HOOKS_REBOOT, command
@@ -132,11 +134,17 @@ def _show_health(ctx) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _os_name(node) -> str:
+    """ "DGX OS 6.2" on a DGX OS node, the distribution's own name on a node reinstalled without it."""
+    m = re.search(r"DGX OS [\d.]+", node.os)
+    return m.group(0) if m else node.os
+
+
 def _show_versions(ctx) -> str:
     node = ctx.node
     fw = firmware(node)
     rows = [
-        ("System", f"{node.model} (DGX OS 6.2)"),
+        ("System", f"{node.model} ({_os_name(node)})"),
         ("BMC firmware", fw["bmc"]),
         ("BIOS", fw["bios"]),
         ("GPU driver", node.driver_version),
