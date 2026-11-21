@@ -38,7 +38,7 @@ def test_ctrl_c_at_a_mock_confirmation_returns_to_the_menu():
 def test_mock_ends_cleanly_at_end_of_input():
     ui = ScriptedUI([])
     mock.run_mock(ui, labs_only=True)
-    assert ui.text.count("Exam menu") <= 2
+    assert ui.text.count("Lab section") <= 2
 
 
 def test_labs_only_mock_explains_q():
