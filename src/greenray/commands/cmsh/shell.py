@@ -1681,6 +1681,7 @@ class Cmsh:
             sub = Shell(self.state, n)
             sub.ctx.executed = self.ctx.executed
             sub.ctx.outputs = self.ctx.outputs
+            sub.ctx.results = self.ctx.results
             self.p(f"[{n}]")
             res = sub.run(line)
             if res:

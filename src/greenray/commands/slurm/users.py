@@ -23,6 +23,7 @@ def _run_as(ctx, user, line, prog):
     sub = Shell(ctx.state, ctx.host)
     sub.ctx.executed = ctx.executed
     sub.ctx.outputs = ctx.outputs
+    sub.ctx.results = ctx.results
     sub.ctx.host_stack = list(ctx.host_stack)
     sub.ctx.cwd = "/root" if user == "root" else f"/home/{user}"
     _USER.append(user)

@@ -26,6 +26,7 @@ SCENARIO_DIR = Path(__file__).resolve().parent.parent / "data" / "scenarios"
 DIFFICULTIES = ("easy", "medium", "hard")
 PRIVATE_KEYS = ("solution", "explanation", "edge_cases", "expect")
 PLACEHOLDER = re.compile(r"\{(\w+)\}")
+EVIDENCE_CALL = re.compile(r"\b(ran|printed|printed_before)\(")  # a check using one of these is evidence by default
 
 
 def fill(value, params: dict):
@@ -150,10 +151,7 @@ class Scenario:
     @property
     def kinds(self) -> list[str]:
         """One of ``outcome`` (default), ``evidence`` or ``safety`` per check, in check order."""
-        return [
-            c.get("kind", "evidence" if "ran(" in c["expr"] or "printed(" in c["expr"] else "outcome")
-            for c in self.checks
-        ]
+        return [c.get("kind", "evidence" if EVIDENCE_CALL.search(c["expr"]) else "outcome") for c in self.checks]
 
     def grade(self, shell) -> list[tuple[str, bool, str]]:
         """Return [(description, passed, error)] for every check."""
@@ -210,14 +208,33 @@ def check_env(shell) -> dict:
                 return i
         return None
 
-    def printed(pattern: str, host: str | None = None, cmd: str | None = None) -> bool:
-        """A command that completed (optionally matching ``cmd``, on ``host``) printed something matching ``pattern``."""
+    def _shown(pattern: str, host: str | None, cmd: str | None, errors: bool) -> list[int]:
+        """Positions of the commands whose output (or, with ``errors``, error message) matches ``pattern``."""
         rx, crx = re.compile(pattern, re.M), re.compile(cmd) if cmd else None
-        return any(
-            rx.search(text)
-            for h, argv, text in shell.ctx.outputs
-            if (host is None or h == host) and (crx is None or crx.search(" ".join(argv)))
-        )
+        return [
+            pos
+            for pos, h, argv, text, completed in shell.ctx.results
+            if (completed or errors)
+            and (host is None or h == host)
+            and (crx is None or crx.search(" ".join(argv)))
+            and rx.search(text)
+        ]
+
+    def printed(pattern: str, host: str | None = None, cmd: str | None = None, errors: bool = False) -> bool:
+        """A command that completed (optionally matching ``cmd``, on ``host``) printed something matching ``pattern``.
+
+        With ``errors`` the message of a command that failed counts as well, for the cases where the
+        tool's own error is the finding (nvidia-smi on a node without a driver).
+        """
+        return bool(_shown(pattern, host, cmd, errors))
+
+    def printed_before(
+        pattern: str, later: str, host: str | None = None, cmd: str | None = None, errors: bool = False
+    ) -> bool:
+        """``printed(...)`` held before the first command matching ``later`` completed, on any host."""
+        seen = _shown(pattern, host, cmd, errors)
+        done = _shown("", None, later, False)
+        return bool(seen and done) and min(seen) < min(done)
 
     def ran_before(earlier: str, later: str, host: str | None = None) -> bool:
         """Both ran, and the first match of ``earlier`` came before the first match of ``later``."""
@@ -276,6 +293,7 @@ def check_env(shell) -> dict:
         "flags": state.flags,
         "ran": ran,
         "printed": printed,
+        "printed_before": printed_before,
         "ran_before": ran_before,
         "audit": audit,
         "file": file,
