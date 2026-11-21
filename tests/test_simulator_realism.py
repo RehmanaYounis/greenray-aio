@@ -108,6 +108,12 @@ def test_only_long_options_are_judged():
         assert helppages.unknown_long_option(argv, "greenray.commands.coreutils") is None
 
 
+def test_nothing_is_refused_when_the_tool_code_cannot_be_read(monkeypatch):
+    monkeypatch.setattr(helppages, "_implemented_long_options", lambda module: frozenset())
+    assert helppages.unknown_long_option(["squeue", "--bogus"], "greenray.commands.slurm.jobs") is None
+    assert "unrecognized option" not in run("squeue --bogus")[0]
+
+
 @requires_solutions
 def test_no_reference_solution_uses_an_option_the_gate_refuses():
     """A lab may show a tool refusing an option (srun before Pyxis is installed); the generic gate must not add any."""

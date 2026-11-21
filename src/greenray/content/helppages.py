@@ -182,7 +182,7 @@ def unknown_long_option(argv: list[str], module: str) -> str | None:
     if not candidates:
         return None
     implemented = _implemented_long_options(module)
-    if not implemented and folder is None:
+    if not implemented:  # the code could not be read (a packed install): refuse nothing rather than guess
         return None
     known = implemented | (_documented_long_options(folder) if folder is not None else frozenset()) | {"--help"}
     return next((c for c in candidates if c not in known), None)
