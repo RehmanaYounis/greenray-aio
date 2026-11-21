@@ -1,0 +1,3 @@
+flags: ["-h", "--help"]
+wrapper: true
+value_options: ["-w", "-x", "-g", "-R", "-t", "-f", "-l"]

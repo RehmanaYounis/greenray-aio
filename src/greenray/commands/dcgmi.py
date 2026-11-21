@@ -1089,6 +1089,10 @@ def dcgmi(ctx, args):
             "  health -g ID -s a|pmitn | -c | -f\n  stats -e | -s JOB | -x JOB | -j JOB\n"
             "  dmon -e FIELDS [-c N] | -l\n  policy -g ID --set A,V -e -x -T C -P W | --get | --reg\n"
             "  test --inject --gpuid N -f FIELD -v VALUE   inject a value into the host engine cache\n"
+            "  nvlink -s | -e -g GPU   NVLink link status / error counters\n"
+            "  topo [-g GPU]           GPU interconnect topology as DCGM sees it\n"
+            "  fieldgroup -l | -c NAME -f IDS | -d -g ID | -i -g ID   field groups for dmon and stats\n"
+            "  profile -l [-g GROUP] | --pause | --resume   profiling metrics (field ids 1001-1012)\n"
         )
     if args[0] in ("-v", "--version"):
         return f"Version : {DCGM_VERSION}\nBuild ID : 34\nBuild Date : 2024-05-28\nBuild Type : Release\n"
@@ -1102,20 +1106,321 @@ def dcgmi(ctx, args):
         "dmon": _dmon,
         "policy": _policy,
         "test": _test,
+        "nvlink": _nvlink,
+        "topo": _topo,
+        "fieldgroup": _fieldgroup,
+        "profile": _profile,
     }
     if sub not in handlers:
         raise _err(
-            f"dcgmi: unknown subsystem '{sub}'. Try: discovery, group, diag, health, stats, dmon, policy, test", 2
+            f"dcgmi: unknown subsystem '{sub}'. Try: discovery, group, diag, health, stats, dmon, policy, test, nvlink, topo, fieldgroup, profile",
+            2,
         )
     if sub == "discovery" and not ({"-l", "--list", "-i", "--info", "-c", "--compute"} & set(rest)):
         raise _err("Usage: dcgmi discovery -l", 2)
     return handlers[sub](ctx, rest)
 
 
+def _nvlink(ctx, args):
+    host, node = _host(ctx, args)
+    gpus = _visible(node)
+    if "-s" in args or "--link-status" in args:
+        out = ["+----------------------+", "|  NvLink Link Status  |", "+----------------------+", "GPUs:"]
+        for g in gpus:
+            marks = "".join("D" if i in g.nvlink_down else "U" for i in range(g.nvlink_count))
+            out.append(f"    gpuId {g.index}:")
+            out.append(f"        {' '.join(marks[i : i + 6] for i in range(0, len(marks), 6))}")
+        out.append("NvSwitches:")
+        for i in range(node.get("nvswitches", 0)):
+            out.append(f"    physicalId {i}:")
+            out.append("        " + " ".join(["UUUUUU"] * 6) + " UUUU")
+        out += ["", "Key: Up=U, Down=D, Disabled=X, Not supported=_"]
+        return "\n".join(out) + "\n"
+    if "-e" in args or "--errors" in args:
+        gid = _opt(args, "-g", "--gpuid")
+        if gid is None:
+            raise _err("Error: -g/--gpuid is required with -e", 2)
+        g = next((g for g in gpus if str(g.index) == gid), None)
+        if g is None:
+            raise _err(f"Error: Unable to get NvLink error counts for GPU {gid}: Invalid GPU ID", 255)
+        out = [f"GPU {g.index}:"]
+        for i in range(g.nvlink_count):
+            bad = i in g.nvlink_down
+            out.append(
+                f"    Link {i}: CRC FLIT Error: {40000 + i * 97 if bad else 0}, CRC Data Error: {12 if bad else 0}, "
+                f"Replay Error: {3 if bad else 0}, Recovery Error: {1 if bad else 0}"
+            )
+        return "\n".join(out) + "\n"
+    raise _err("Usage: dcgmi nvlink -s | -e -g <gpuId>", 2)
+
+
+def _topo(ctx, args):
+    host, node = _host(ctx, args)
+    gpus = _visible(node)
+    gid = _opt(args, "-g", "--gpuid")
+    if gid is not None:
+        g = next((g for g in gpus if str(g.index) == gid), None)
+        if g is None:
+            raise _err(f"Error: Unable to get topology for GPU {gid}: Invalid GPU ID", 255)
+        rows = [
+            f"+-------------------+{'-' * 60}+",
+            f"| GPU ID: {g.index:<9} | Topology Information{' ' * 39}|",
+            f"+===================+{'=' * 60}+",
+        ]
+        numa = 0 if g.index < 4 else 1
+        aff = f"{numa * 56} - {numa * 56 + 55}, {112 + numa * 56} - {112 + numa * 56 + 55}"
+        rows.append(f"| CPU Core Affinity | {aff:<59}|")
+        for h in gpus:
+            if h is g:
+                continue
+            links = g.nvlink_count - len(g.nvlink_down) if (g.nvlink_down or h.nvlink_down) else g.nvlink_count
+            rows.append(f"| To GPU {h.index:<10} | {f'Connected via an NVSwitch with {links} NVLINKs':<59}|")
+        rows.append(f"+-------------------+{'-' * 60}+")
+        return "\n".join(rows) + "\n"
+    hdr = "      " + "".join(f"GPU{g.index:<6}" for g in gpus) + "CPU Affinity"
+    rows = [hdr]
+    for g in gpus:
+        cells = []
+        for h in gpus:
+            if h is g:
+                cells.append("X")
+            else:
+                n = g.nvlink_count - len(g.nvlink_down) if (g.nvlink_down or h.nvlink_down) else g.nvlink_count
+                cells.append(f"NV{n}")
+        numa = 0 if g.index < 4 else 1
+        rows.append(
+            f"GPU{g.index}  "
+            + "".join(f"{c:<9}" for c in cells)
+            + f"{numa * 56}-{numa * 56 + 55},{112 + numa * 56}-{112 + numa * 56 + 55}"
+        )
+    rows += [
+        "",
+        "Legend:",
+        "  X    = Self",
+        "  NV#  = Connection traversing a bonded set of # NVLinks",
+        "  SYS  = Connection traversing PCIe as well as the SMP interconnect between NUMA nodes",
+    ]
+    return "\n".join(rows) + "\n"
+
+
+BUILTIN_FIELDGROUPS = {
+    0: (
+        "DCGM_INTERNAL_1SEC",
+        [50, 51, 52, 53, 54, 100, 101, 140, 150, 155, 203, 204, 252, 1001, 1002, 1003, 1004, 1005],
+    ),
+    1: (
+        "DCGM_INTERNAL_30SEC",
+        [
+            200,
+            201,
+            202,
+            240,
+            241,
+            242,
+            243,
+            244,
+            245,
+            246,
+            247,
+            310,
+            311,
+            312,
+            313,
+            319,
+            320,
+            390,
+            391,
+            392,
+            393,
+            394,
+            395,
+            396,
+            397,
+            398,
+            399,
+            400,
+            401,
+            402,
+            403,
+            404,
+            405,
+            406,
+            407,
+            408,
+            409,
+            410,
+            411,
+            412,
+            413,
+            414,
+            415,
+            416,
+            417,
+            418,
+            419,
+            420,
+            421,
+            422,
+            423,
+            424,
+            425,
+            426,
+            427,
+            428,
+            429,
+            430,
+            431,
+        ],
+    ),
+    2: (
+        "DCGM_INTERNAL_HOURLY",
+        [
+            253,
+            254,
+            255,
+            256,
+            257,
+            258,
+            259,
+            260,
+            261,
+            262,
+            263,
+            264,
+            265,
+            266,
+            267,
+            268,
+            269,
+            270,
+            271,
+            272,
+            273,
+            274,
+            275,
+            276,
+            277,
+            278,
+            279,
+            280,
+            281,
+            282,
+            283,
+            284,
+            285,
+        ],
+    ),
+    3: (
+        "DCGM_INTERNAL_JOB",
+        [100, 101, 150, 155, 203, 204, 206, 207, 208, 209, 210, 211, 1001, 1002, 1003, 1004, 1005],
+    ),
+}
+
+
+def _fieldgroups(state, host):
+    d = _dcgm(state)
+    d.setdefault("fieldgroups", {})
+    return d.fieldgroups.setdefault(host, {})
+
+
+def _fieldgroup(ctx, args):
+    host, _node = _host(ctx, args)
+    mine = _fieldgroups(ctx.state, host)
+    if "-l" in args or "--list" in args:
+        groups = [(str(i), n, f) for i, (n, f) in BUILTIN_FIELDGROUPS.items()] + [
+            (i, g["name"], g["fields"]) for i, g in sorted(mine.items())
+        ]
+        out = [f"{len(groups)} field groups found."]
+        for i, name, fields in groups:
+            out += [
+                "+----------------------------------------------------------------------------+",
+                "| FIELD GROUPS                                                               |",
+                "+============+===============================================================+",
+                f"| Field Group ID | {i:<58}|",
+                f"| Field Group Name | {name:<56}|",
+                f"| Field IDs  | {', '.join(str(x) for x in fields)[:62]:<62}|",
+                "+------------+---------------------------------------------------------------+",
+            ]
+        return "\n".join(out) + "\n"
+    if "-c" in args or "--create" in args:
+        name = _opt(args, "-c", "--create")
+        spec = _opt(args, "-f", "--fieldids")
+        if not name or not spec:
+            raise _err("Error: both -c <name> and -f <field ids> are required to create a field group", 2)
+        try:
+            fields = [int(x) for x in spec.split(",") if x]
+        except ValueError:
+            raise _err(f"Error: Unable to create field group: invalid field id list '{spec}'", 2) from None
+        bad = [f for f in fields if f not in FIELDS and f not in FIELD_LONG]
+        if bad:
+            raise _err(f"Error: Unable to create field group: field id {bad[0]} is not a valid field", 2)
+        if any(g["name"] == name for g in mine.values()) or any(n == name for n, _ in BUILTIN_FIELDGROUPS.values()):
+            raise _err(f"Error: Unable to create field group: a field group named '{name}' already exists", 2)
+        gid = str(max([int(i) for i in mine] + [len(BUILTIN_FIELDGROUPS) - 1]) + 1)
+        mine[gid] = {"name": name, "fields": fields}
+        return f'Successfully created field group "{name}" with a field group ID of {gid}\n'
+    if "-d" in args or "--delete" in args:
+        gid = _opt(args, "-g", "--fieldgroup")
+        if gid is None:
+            raise _err("Error: -g <field group id> is required with -d", 2)
+        if gid not in mine:
+            if gid.isdigit() and int(gid) in BUILTIN_FIELDGROUPS:
+                raise _err(f"Error: Unable to remove field group {gid}: built-in field groups cannot be deleted", 255)
+            raise _err(f"Error: Unable to remove field group {gid}: Field group ID {gid} does not exist", 255)
+        del mine[gid]
+        return f"Successfully removed field group {gid}\n"
+    if "-i" in args or "--info" in args:
+        gid = _opt(args, "-g", "--fieldgroup")
+        groups = {str(i): {"name": n, "fields": f} for i, (n, f) in BUILTIN_FIELDGROUPS.items()} | mine
+        if gid not in groups:
+            raise _err(f"Error: Unable to get field group info: Field group ID {gid} does not exist", 255)
+        g = groups[gid]
+        return f"Field Group ID: {gid}\nField Group Name: {g['name']}\nField IDs: {', '.join(str(x) for x in g['fields'])}\n"
+    raise _err("Usage: dcgmi fieldgroup -l | -c <name> -f <ids> | -d -g <id> | -i -g <id>", 2)
+
+
+def _profile(ctx, args):
+    host, node = _host(ctx, args)
+    if "-l" in args or "--list" in args:
+        gid = _opt(args, "-g", "--group")
+        if gid is not None and gid not in _host_groups(ctx.state, host) and gid not in ("0", "1"):
+            raise _err(f"Error: Unable to list profiling metrics: Group ID {gid} does not exist", 255)
+        rows = [
+            ("1001", "GRACT", "gr_engine_active", "Ratio of time the graphics engine is active"),
+            ("1002", "SMACT", "sm_active", "The ratio of cycles an SM has at least 1 warp assigned"),
+            ("1003", "SMOCC", "sm_occupancy", "The ratio of number of warps resident on an SM"),
+            ("1004", "TENSO", "tensor_active", "Ratio of cycles the tensor (HMMA) pipe is active"),
+            ("1005", "DRAMA", "dram_active", "Ratio of cycles the device memory interface is active"),
+            ("1006", "FP64A", "fp64_active", "Ratio of cycles the fp64 pipe is active"),
+            ("1007", "FP32A", "fp32_active", "Ratio of cycles the fp32 pipe is active"),
+            ("1008", "FP16A", "fp16_active", "Ratio of cycles the fp16 pipe is active"),
+            ("1009", "PCITX", "pcie_tx_bytes", "The number of bytes of active PCIe tx data"),
+            ("1010", "PCIRX", "pcie_rx_bytes", "The number of bytes of active PCIe rx data"),
+            ("1011", "NVLTX", "nvlink_tx_bytes", "The number of bytes of active NvLink tx data"),
+            ("1012", "NVLRX", "nvlink_rx_bytes", "The number of bytes of active NvLink rx data"),
+        ]
+        out = [
+            "+----------------+----------+------------------------------------------------------------+",
+            "| Group.Subgroup | Field ID | Field Tag                                                  |",
+            "+================+==========+============================================================+",
+        ]
+        for i, (fid, _short, tag, _desc) in enumerate(rows):
+            grp = chr(ord("A") + i // 3) + (f".{i % 3 + 1}" if i // 3 in (0, 1) else "")
+            out.append(f"| {grp:<14} | {fid:<8} | {tag:<58} |")
+        out.append("+----------------+----------+------------------------------------------------------------+")
+        return "\n".join(out) + "\n"
+    if "--pause" in args or "--resume" in args:
+        d = _dcgm(ctx.state)
+        d.setdefault("profiling_paused", {})
+        d.profiling_paused[host] = "--pause" in args
+        return "Successfully paused profiling.\n" if "--pause" in args else "Successfully resumed profiling.\n"
+    raise _err("Usage: dcgmi profile -l [-g <group>] | --pause | --resume", 2)
+
+
 def _forget_host(state, host, diag=False):
     d = _dcgm(state)
-    for k in ("groups", "health_watches", "policies", "injected"):
-        d[k].pop(host, None)
+    for k in ("groups", "health_watches", "policies", "injected", "fieldgroups"):
+        d.get(k, {}).pop(host, None)
     if diag:
         d.diag_results.pop(host, None)
 

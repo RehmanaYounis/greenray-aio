@@ -1,0 +1,26 @@
+Modify kubeconfig files using subcommands like "kubectl config set current-context my-context".
+
+ The cluster in this lab has one context, kubernetes-admin@kubernetes, which the
+read-only subcommands describe.
+
+Available Commands:
+  current-context   Display the current-context
+  get-contexts      Describe one or many contexts
+  view              Display merged kubeconfig settings
+
+Examples:
+  # Show the context kubectl talks to
+  kubectl config current-context
+
+  # List the contexts and mark the current one
+  kubectl config get-contexts
+
+  # Print the kubeconfig without the credentials
+  kubectl config view
+
+Options:
+    -o, --output='':
+        Output format for get-contexts: name prints only the context names; for view: json.
+
+Usage:
+  kubectl config SUBCOMMAND [options]

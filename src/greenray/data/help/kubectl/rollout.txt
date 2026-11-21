@@ -5,8 +5,10 @@ Manage the rollout of one or many resources.
   * daemonsets
 
 Available Commands:
+  history       View the rollout history of a deployment
   restart       Restart a resource: its pods are replaced with new ones
   status        Show the status of the rollout
+  undo          Undo a previous rollout of a deployment
 
 Examples:
   # Restart the pods of a daemon set (for example after changing a config map
@@ -19,9 +21,23 @@ Examples:
   # Check whether a deployment has finished rolling out
   kubectl rollout status deployment/web -n demo
 
+  # List the revisions of a deployment, then show one of them
+  kubectl rollout history deployment/web -n demo
+  kubectl rollout history deployment/web --revision=2 -n demo
+
+  # Roll back to the previous revision, or to a specific one
+  kubectl rollout undo deployment/web -n demo
+  kubectl rollout undo deployment/web --to-revision=1 -n demo
+
 Options:
     -n, --namespace='':
         Namespace of the resource (default "default").
+
+    --revision=0:
+        history: see the details, including the pod template, of the revision specified.
+
+    --to-revision=0:
+        undo: the revision to roll back to. Default is 0, the previous revision.
 
 Usage:
   kubectl rollout SUBCOMMAND (TYPE NAME | TYPE/NAME) [options]

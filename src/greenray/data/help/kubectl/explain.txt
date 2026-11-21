@@ -1,0 +1,26 @@
+Describe fields and structure of various resources.
+
+ This command describes the fields associated with each supported API resource.
+Fields are identified via a simple JSONPath identifier:
+
+        <type>.<fieldName>[.<fieldName>]
+
+Examples:
+  # Get the documentation of the resource and its fields
+  kubectl explain pods
+
+  # Get the documentation of a specific field of a resource
+  kubectl explain pods.spec.containers.resources
+
+  # The GPU Operator's ClusterPolicy
+  kubectl explain clusterpolicy.spec.mig
+
+Options:
+    --recursive=false:
+        When true, print the name of all the fields recursively. Otherwise, print the available fields with their description.
+
+Usage:
+  kubectl explain TYPE [--recursive=FALSE|TRUE] [options]
+
+Pods, deployments, daemon sets, replica sets, nodes, namespaces, services and
+the ClusterPolicy are documented in this lab.

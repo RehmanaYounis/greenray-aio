@@ -1,0 +1,26 @@
+Configure application resources.
+
+ These commands help you make changes to existing application resources.
+
+Available Commands:
+  image         Update the image of a pod template
+
+Examples:
+  # Set a deployment's nginx container image to 'nginx:1.9.1'
+  kubectl set image deployment/nginx-deployment nginx=nginx:1.9.1 -n demo
+
+  # Update all containers of the deployment
+  kubectl set image deployment/web '*=nvcr.io/nvidia/pytorch:24.07-py3' -n demo
+
+  # Update the image of a daemon set
+  kubectl set image daemonset/nvidia-device-plugin-daemonset nvidia-device-plugin=nvcr.io/nvidia/k8s-device-plugin:v0.16.1 -n gpu-operator
+
+Options:
+    -n, --namespace='':
+        Namespace of the resource (default "default").
+
+Usage:
+  kubectl set image (TYPE NAME | TYPE/NAME) CONTAINER_NAME_1=CONTAINER_IMAGE_1 ... [options]
+
+A changed deployment image is a new revision: kubectl rollout history shows
+it and kubectl rollout undo returns to the previous one.

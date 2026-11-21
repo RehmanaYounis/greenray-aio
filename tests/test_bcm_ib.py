@@ -58,11 +58,10 @@ def test_cmsh_only_on_head():
 def test_cmsh_set_is_staged_until_commit():
     s = sh()
     bcm = s.ctx.state.bcm
-    out = s.run('cmsh -c "device; use dgx-03; set category default"')
-    assert "uncommitted" in out and "*" in out
-    assert bcm.devices["dgx-03"].category == "dgx-h100"
-    assert "default" in s.run('cmsh -c "device; use dgx-03; get category"')  # visible in session
-    s.run('cmsh -c "device; commit"')  # later invocation
+    out = s.run('cmsh -c "device; use dgx-03; set category default; get category"')
+    assert "default" in out and "discarded on exit" in out and "*" in out
+    assert bcm.devices["dgx-03"].category == "dgx-h100" and not bcm.uncommitted  # staging ends with the session
+    s.run('cmsh -c "device; use dgx-03; set category default; commit"')
     assert bcm.devices["dgx-03"].category == "default" and not bcm.uncommitted
 
 
@@ -101,10 +100,10 @@ def test_cmsh_bmc_override_breaks_power():
 def test_softwareimage_clone_chroot_and_imageupdate():
     s = sh()
     st = s.ctx.state
-    s.run('cmsh -c "softwareimage; clone dgx-os-6.2-h100-image img2"')
+    s.run('cmsh -c "softwareimage; clone dgx-os-6.2-h100-image img2"')  # staged only: discarded on exit
     # not committed yet: directory does not exist
     assert "No such file" in s.run("chroot /cm/images/img2 apt-get install -y nvidia-container-toolkit")
-    s.run('cmsh -c "softwareimage; commit"')
+    s.run('cmsh -c "softwareimage; clone dgx-os-6.2-h100-image img2; commit"')
     s.run("chroot /cm/images/img2 apt-get install -y nvidia-container-toolkit=1.16.2-1")
     assert st.bcm.softwareimages["img2"].packages["nvidia-container-toolkit"] == "1.16.2-1"
     assert st.bcm.softwareimages["dgx-os-6.2-h100-image"].packages["nvidia-container-toolkit"] == "1.14.6-1"
@@ -227,8 +226,11 @@ def test_overlay_validation_and_commit_scope():
     )
     bcm = s.ctx.state.bcm
     assert bcm.overlays["slurm-client-gpu"].priority == 460 and bcm.overlays["slurm-client"].priority == 500
-    s.run('cmsh -c "configurationoverlay; commit -a"')
-    assert bcm.overlays["slurm-client"].priority == 510 and not bcm.uncommitted
+    assert not bcm.uncommitted  # the other change was discarded when the session ended
+    s.run(
+        'cmsh -c "configurationoverlay; use slurm-client; set priority 510; use slurm-client-gpu; set priority 470; commit -a"'
+    )
+    assert bcm.overlays["slurm-client"].priority == 510 and bcm.overlays["slurm-client-gpu"].priority == 470
 
 
 def test_foreach_and_range_apply_to_every_selected_node():
@@ -290,7 +292,7 @@ def test_monitoring_lists_measurables_actions_and_latest_data():
 
 def test_trigger_properties_are_validated():
     s = sh()
-    s.run('cmsh -c "monitoring; trigger; add t"')  # staged, so the checks below run on an existing object
+    s.run('cmsh -c "monitoring; trigger; add t; commit"')  # the checks below run on an existing object
     for cmd, msg in (
         ("set expression 'gpu_temp >> 85'", "must look like"),
         ("set expression 'nosuch > 85'", "unknown measurable"),

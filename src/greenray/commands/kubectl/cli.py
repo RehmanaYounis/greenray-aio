@@ -2,13 +2,27 @@
 
 from __future__ import annotations
 
+import json
 import re
+
+import yaml
 
 from ...core.errors import CommandError
 from ...core.state import HEAD
 from .. import command
 from .apply import apply_doc, cmd_create, delete_obj, load_docs
-from .edit import cmd_cordon, cmd_drain, cmd_label, cmd_patch, cmd_rollout, cmd_scale, cmd_taint, cmd_wait
+from .edit import (
+    cmd_cordon,
+    cmd_drain,
+    cmd_expose,
+    cmd_label,
+    cmd_patch,
+    cmd_rollout,
+    cmd_scale,
+    cmd_set,
+    cmd_taint,
+    cmd_wait,
+)
 from .exec_logs import cmd_exec, cmd_logs, cmd_run
 from .model import (
     CLUSTER_SCOPED,
@@ -65,6 +79,14 @@ VALUE_FLAGS = {
     "--context",
     "--env",
     "--port",
+    "--target-port",
+    "--protocol",
+    "--name",
+    "--to-revision",
+    "--revision",
+    "--api-version",
+    "--cluster",
+    "--user",
 }
 
 MULTI = {"-f", "--filename", "--from-literal", "--from-file", "-L", "--label-columns", "--env"}
@@ -159,8 +181,199 @@ HELP_TEXT = """kubectl controls the Kubernetes cluster manager.
  exec       Execute a command in a container (kubectl exec -it POD -- nvidia-smi)
  run        Run a particular image on the cluster
  rollout    restart|status for daemonsets and deployments
+ set        set image deploy/NAME CONTAINER=IMAGE: a new revision of a deployment
+ expose     Create a Service for a deployment or pod (--port, --type)
+ explain    Documentation of a resource and its fields
+ config     get-contexts | current-context | view: the kubeconfig in use
  scale / wait / version / cluster-info / api-resources
 """
+
+
+# kind -> (Kind, apiVersion, description, {field path: description}); the fields a candidate reads in the lab
+EXPLAIN = {
+    "pods": (
+        "Pod",
+        "v1",
+        "Pod is a collection of containers that can run on a host. This resource is created by clients and scheduled onto hosts.",
+        {
+            "spec": "Specification of the desired behavior of the pod.",
+            "spec.containers": "List of containers belonging to the pod. Cannot be updated.",
+            "spec.containers.resources": "Compute resources required by the container, limits and requests. GPUs are requested as the extended resource nvidia.com/gpu under limits.",
+            "spec.containers.resources.limits": "Maximum compute resources allowed; an extended resource such as nvidia.com/gpu goes here and the request is set to the same value.",
+            "spec.nodeSelector": "Selector which must be true for the pod to fit on a node: key/value pairs the node's labels must carry.",
+            "spec.tolerations": "The pod's tolerations; a pod needs one for every taint on the node it should land on.",
+            "spec.runtimeClassName": "RuntimeClass to run this pod with (nvidia for the NVIDIA container runtime).",
+            "status": "Most recently observed status of the pod, populated by the system.",
+            "status.phase": "Pending, Running, Succeeded, Failed or Unknown.",
+        },
+    ),
+    "deployments": (
+        "Deployment",
+        "apps/v1",
+        "Deployment enables declarative updates for Pods and ReplicaSets.",
+        {
+            "spec": "Specification of the desired behavior of the Deployment.",
+            "spec.replicas": "Number of desired pods. Defaults to 1.",
+            "spec.selector": "Label selector for pods; it must match the pod template's labels.",
+            "spec.template": "Template describing the pods that will be created.",
+            "spec.strategy": "The deployment strategy used to replace existing pods with new ones (RollingUpdate or Recreate).",
+            "status": "Most recently observed status of the Deployment.",
+        },
+    ),
+    "daemonsets": (
+        "DaemonSet",
+        "apps/v1",
+        "DaemonSet represents the configuration of a daemon set: one copy of the pod on every node that matches its selector and tolerates the node's taints.",
+        {
+            "spec": "The desired behavior of this daemon set.",
+            "spec.template": "An object that describes the pod that will be created.",
+            "spec.updateStrategy": "An update strategy to replace existing DaemonSet pods with new pods.",
+        },
+    ),
+    "nodes": (
+        "Node",
+        "v1",
+        "Node is a worker node in Kubernetes. Each node will have a unique identifier in the cache (i.e. in etcd).",
+        {
+            "spec": "Spec defines the behavior of a node.",
+            "spec.taints": "If specified, the node's taints.",
+            "spec.unschedulable": "Unschedulable controls node schedulability of new pods. By default, node is schedulable.",
+            "status": "Most recently observed status of the node.",
+            "status.allocatable": "Allocatable represents the resources of a node that are available for scheduling; nvidia.com/gpu appears here once the device plugin has registered.",
+            "status.capacity": "Capacity represents the total resources of a node.",
+            "status.conditions": "Conditions is an array of current observed node conditions (Ready, MemoryPressure, DiskPressure, PIDPressure, NetworkUnavailable).",
+        },
+    ),
+    "namespaces": (
+        "Namespace",
+        "v1",
+        "Namespace provides a scope for Names. Use of multiple namespaces is optional.",
+        {},
+    ),
+    "services": (
+        "Service",
+        "v1",
+        "Service is a named abstraction of software service consisting of local port that the proxy listens on, and the selector that determines which pods will answer requests sent through the proxy.",
+        {
+            "spec": "Spec defines the behavior of a service.",
+            "spec.type": "ClusterIP, NodePort, LoadBalancer or ExternalName.",
+            "spec.ports": "The list of ports that are exposed by this service.",
+            "spec.selector": "Route service traffic to pods with label keys and values matching this selector.",
+        },
+    ),
+    "clusterpolicies": (
+        "ClusterPolicy",
+        "nvidia.com/v1",
+        "ClusterPolicy is the Schema for the clusterpolicies API of the NVIDIA GPU Operator: one object that configures every operand (driver, toolkit, device plugin, DCGM exporter, MIG manager, GFD).",
+        {
+            "spec": "ClusterPolicySpec defines the desired state of ClusterPolicy.",
+            "spec.driver": "Driver component spec: enabled, version, repository; enabled false when the driver is preinstalled on the hosts.",
+            "spec.toolkit": "Toolkit component spec (nvidia-container-toolkit).",
+            "spec.devicePlugin": "DevicePlugin component spec.",
+            "spec.mig": "MIG strategy: none, single or mixed.",
+            "spec.migManager": "MIGManager component spec.",
+            "spec.dcgmExporter": "DCGMExporter component spec.",
+            "spec.gfd": "GPU Feature Discovery component spec.",
+            "status": "ClusterPolicyStatus defines the observed state of ClusterPolicy.",
+            "status.state": "ready, notReady or ignored.",
+        },
+    ),
+    "replicasets": (
+        "ReplicaSet",
+        "apps/v1",
+        "ReplicaSet ensures that a specified number of pod replicas are running at any given time. Deployments manage ReplicaSets; one is kept per revision.",
+        {
+            "spec": "Spec defines the specification of the desired behavior of the ReplicaSet.",
+            "spec.replicas": "Replicas is the number of desired replicas.",
+        },
+    ),
+}
+
+
+def cmd_explain(pos: list[str], opts: dict) -> str:
+    if not pos:
+        raise CommandError(
+            'error: You must specify the type of resource to explain. Use "kubectl api-resources" for a complete list of supported resources.',
+            1,
+        )
+    word, _, path = pos[0].partition(".")
+    kind = resolve_kind(word)
+    if kind not in EXPLAIN:
+        raise CommandError(
+            f'error: no documentation is available for {kind} in this lab; see "kubectl api-resources"', 1
+        )
+    name, api, desc, fields = EXPLAIN[kind]
+    group, _, version = api.rpartition("/")
+    head = [f"GROUP:      {group}" if group else "GROUP:      ", f"KIND:       {name}", f"VERSION:    {version}", ""]
+    if path:
+        if path not in fields:
+            raise CommandError(f'error: field "{path}" does not exist', 1)
+        out = head + [f"FIELD: {path.rsplit('.', 1)[-1]} <Object>", "", "DESCRIPTION:", f"    {fields[path]}"]
+        children = sorted(f for f in fields if f.startswith(path + ".") and f.count(".") == path.count(".") + 1)
+        if children:
+            out += ["", "FIELDS:"] + [f"  {c.rsplit('.', 1)[-1]}\t<Object>" for c in children]
+        return "\n".join(out) + "\n"
+    out = head + [
+        "DESCRIPTION:",
+        f"    {desc}",
+        "",
+        "FIELDS:",
+        "  apiVersion\t<string>",
+        "  kind\t<string>",
+        "  metadata\t<ObjectMeta>",
+    ]
+    out += [f"  {f}\t<Object>" for f in sorted(fields) if "." not in f]
+    if opts.get("recursive"):
+        out += [f"    {f.split('.', 1)[1]}\t<Object>" for f in sorted(fields) if "." in f]
+    return "\n".join(out) + "\n"
+
+
+def cmd_config(state, pos: list[str], opts: dict) -> str:
+    sub = pos[0] if pos else ""
+    ctx_name = "kubernetes-admin@kubernetes"
+    if sub == "current-context":
+        return ctx_name + "\n"
+    if sub == "get-contexts":
+        if opts.get("output") == "name":
+            return ctx_name + "\n"
+        return table(
+            [
+                ("CURRENT", "NAME", "CLUSTER", "AUTHINFO", "NAMESPACE"),
+                ("*", ctx_name, "kubernetes", "kubernetes-admin", ""),
+            ]
+        )
+    if sub == "view":
+        doc = {
+            "apiVersion": "v1",
+            "clusters": [
+                {
+                    "cluster": {"certificate-authority-data": "DATA+OMITTED", "server": "https://10.141.255.254:6443"},
+                    "name": "kubernetes",
+                }
+            ],
+            "contexts": [{"context": {"cluster": "kubernetes", "user": "kubernetes-admin"}, "name": ctx_name}],
+            "current-context": ctx_name,
+            "kind": "Config",
+            "preferences": {},
+            "users": [
+                {
+                    "name": "kubernetes-admin",
+                    "user": {"client-certificate-data": "DATA+OMITTED", "client-key-data": "DATA+OMITTED"},
+                }
+            ],
+        }
+        if opts.get("raw"):
+            raise CommandError(
+                "error: --raw is not available in this lab: the admin credentials are not part of the simulation", 1
+            )
+        if opts.get("output") == "json":
+            return json.dumps(doc, indent=2) + "\n"
+        return yaml.safe_dump(doc, sort_keys=False)
+    if sub in ("use-context", "set-context", "set-cluster", "set-credentials", "delete-context", "rename-context"):
+        raise CommandError(
+            f"error: kubectl config {sub} is not supported in this lab: the cluster has one context, {ctx_name}", 1
+        )
+    raise CommandError("error: kubectl config needs a subcommand: current-context, get-contexts or view", 1)
 
 
 @command(
@@ -319,6 +532,16 @@ def kubectl(ctx, args: list[str]) -> str:
         res = cmd_scale(state, pos, opts)
         reconcile(state)
         return res
+    if verb == "set":
+        res = cmd_set(state, pos, opts)
+        reconcile(state)
+        return res
+    if verb == "expose":
+        return cmd_expose(state, pos, opts)
+    if verb == "explain":
+        return cmd_explain(pos, opts)
+    if verb == "config":
+        return cmd_config(state, pos, opts)
     if verb == "wait":
         return cmd_wait(state, pos, opts)
     if verb == "edit":

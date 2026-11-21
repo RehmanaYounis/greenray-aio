@@ -286,7 +286,20 @@ def apply_doc(ctx, src: str, doc: dict, mode: str = "apply") -> str:
         return f"serviceaccount/{name} configured"
     if kind == "Service":
         need_ns()
-        return f"service/{name} {verb_new}"
+        spec = doc.get("spec") or {}
+        ports = [f"{p.get('port')}/{p.get('protocol', 'TCP')}" for p in spec.get("ports") or []] or ["80/TCP"]
+        if spec.get("type") == "NodePort":
+            ports = [f"{p}:{30000 + i}/{pr}" for i, (p, pr) in enumerate(x.split("/") for x in ports)]
+        return _upsert(
+            k.services,
+            ns,
+            name,
+            {"type": spec.get("type", "ClusterIP"), "ports": ports, "selector": dict(spec.get("selector") or {})},
+            state,
+            "service",
+            mode,
+            src,
+        )
     if kind == "RuntimeClass":
         cur = next((r for r in k.runtimeclasses if r.name == name), None)
         if cur:
@@ -453,6 +466,12 @@ def delete_obj(state, kind: str, ns: str, name: str, opts: dict) -> str:
     if kind == "runtimeclasses":
         k.runtimeclasses = [r for r in k.runtimeclasses if r.name != name]
         return f'runtimeclass.node.k8s.io "{name}" deleted'
+    if kind == "services":
+        s = next((s for s in k.services if s.namespace == ns and s.name == name), None)
+        if s is None:
+            raise CommandError(f'Error from server (NotFound): services "{name}" not found', 1)
+        k.services.remove(s)
+        return f'service "{name}" deleted'
     if kind in EXTRA_KINDS:
         return EXTRA_KINDS[kind].delete(state, name)
     if kind == "nodes":

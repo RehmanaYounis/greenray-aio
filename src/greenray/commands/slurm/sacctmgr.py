@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from .. import command
 from ..common import int_arg
-from .common import HEAD, SLURM_VERSION, _err, fmt_limit_upper, parse_time, time_arg
+from .common import HEAD, SLURM_VERSION, _err, fmt_limit_upper, is_admin, parse_time, time_arg
 from .fairshare import _acct_children, _acct_parent, _acct_users, _assoc_shares
 from .scheduler import _ensure, schedule
 
@@ -198,6 +198,9 @@ def sacctmgr(ctx, args):
             "sacctmgr: error: Problem talking to the database: Connection refused"
         )
     verb = args[0].lower()
+    if verb in ("add", "create", "modify", "update", "delete", "remove") and not is_admin():
+        entity = args[1] if len(args) > 1 else "entity"
+        raise _err(f" Problem with {verb} {entity}: Access/permission denied")
     s = state.slurm
     if verb in ("add", "create"):
         entity, names, where, sets = _sacctmgr_split(args[1:])

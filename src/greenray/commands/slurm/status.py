@@ -19,6 +19,7 @@ from .common import (
     fmt_elapsed,
     fmt_limit,
     fmt_limit_upper,
+    job_id_text,
     parse_gres_spec,
     parse_time,
 )
@@ -261,8 +262,9 @@ def _job_vals(state, j):
         else parse_time(state.slurm.partitions.get(j.partition, {}).get("max_time"))
     )
     return {
-        "i": str(j.id),
-        "A": str(j.id),
+        "i": job_id_text(j),
+        "A": str(j.get("array_job_id") or j.id),
+        "K": str(j.get("array_task_id", "N/A")),
         "P": j.partition,
         "j": j.name,
         "u": j.user,
@@ -342,7 +344,10 @@ def squeue(ctx, args):
     if start:
         jobs = [j for j in jobs if j.state == "PENDING"]
     jobs.sort(key=lambda j: (0 if j.state == "PENDING" else 1, -j.priority if j.state == "PENDING" else 0, j.id))
+    expand = _has(args, "-r", "--array")
     for j in jobs:
+        if j.get("array_tasks") is not None and j.state == "COMPLETED":
+            continue  # an array whose tasks all ran is gone from the queue
         if want is not None and j.state not in want and not ids:
             continue
         if ids and str(j.id) not in [x.strip() for x in ids.split(",")]:
@@ -352,6 +357,12 @@ def squeue(ctx, args):
         if part and j.partition not in part.split(","):
             continue
         if nodes and not set(expand_hostlist(nodes)) & set(j.nodelist):
+            continue
+        if expand and j.get("array_tasks"):
+            for task in j.array_tasks:
+                vals = _job_vals(state, j)
+                vals["i"] = f"{j.id}_{task}"
+                rows.append(vals)
             continue
         rows.append(_job_vals(state, j))
     out = _render(fmt, rows, SQUEUE_HDR, noheader)

@@ -385,6 +385,145 @@ def cmd_drain(state, pos: list[str], opts: dict) -> str:
     return "\n".join(out) + "\n"
 
 
+def _ref(pos: list[str], start: int = 0) -> tuple[str, str]:
+    """TYPE/NAME or TYPE NAME -> (kind, name)."""
+    if len(pos) <= start:
+        raise CommandError("error: required resource not specified", 1)
+    ref = pos[start] if "/" in pos[start] else f"{pos[start]}/{pos[start + 1] if len(pos) > start + 1 else ''}"
+    kw, name = ref.split("/", 1)
+    if not name:
+        raise CommandError("error: required resource not specified", 1)
+    return resolve_kind(kw), name
+
+
+def _deployment(state, ns: str, name: str):
+    d = next((d for d in state.k8s.deployments if d.namespace == ns and d.name == name), None)
+    if d is None:
+        raise CommandError(f'Error from server (NotFound): deployments.apps "{name}" not found', 1)
+    return d
+
+
+def revisions(d) -> list:
+    """The deployment's rollout history; revision 1 is recorded the first time anything asks."""
+    from .controllers import template_hash
+
+    if not d.get("revisions"):
+        d["revisions"] = [
+            {"revision": 1, "hash": template_hash(d.template), "template": copy.deepcopy(d.template), "cause": "<none>"}
+        ]
+    return d.revisions
+
+
+def new_revision(state, d, template: dict, cause: str) -> None:
+    """Record a template change as a new revision, the way the deployment controller keeps old ReplicaSets."""
+    from .controllers import template_hash
+
+    hist = revisions(d)
+    d.template = wrap(copy.deepcopy(template))
+    d.generation = int(d.get("generation", 1)) + 1
+    h = template_hash(d.template)
+    hist[:] = [r for r in hist if r["hash"] != h]  # rolling back re-uses the old ReplicaSet under a new number
+    hist.append(
+        {
+            "revision": max([r["revision"] for r in hist], default=0) + 1,
+            "hash": h,
+            "template": copy.deepcopy(template),
+            "cause": cause,
+        }
+    )
+    del hist[:-10]  # revisionHistoryLimit
+
+
+def cmd_set(state, pos: list[str], opts: dict) -> str:
+    if not pos or pos[0] != "image":
+        raise CommandError("error: kubectl set supports `set image` in this lab", 1)
+    kind, name = _ref(pos, 1)
+    start = 2 if "/" in pos[1] else 3
+    pairs = pos[start:]
+    if not pairs:
+        raise CommandError("error: at least one image update is required", 1)
+    ns = ns_of(opts)
+    if kind == "deployments":
+        d = _deployment(state, ns, name)
+        template = json.loads(json.dumps(d.template, default=str))
+        label = f"deployment.apps/{name}"
+    elif kind == "daemonsets":
+        d = next((x for x in state.k8s.daemonsets if x.namespace == ns and x.name == name), None)
+        if d is None:
+            raise CommandError(f'Error from server (NotFound): daemonsets.apps "{name}" not found', 1)
+        template = None
+        label = f"daemonset.apps/{name}"
+    else:
+        raise CommandError(f"error: set image is not supported for {kind} in this lab", 1)
+    containers = template["spec"]["containers"] if template else [{"name": d.container, "image": d.image}]
+    for pair in pairs:
+        cname, _, image = pair.partition("=")
+        if not image:
+            raise CommandError(f'error: invalid image specification "{pair}", expected CONTAINER=IMAGE', 1)
+        hit = [c for c in containers if cname == "*" or c.get("name") == cname]
+        if not hit:
+            raise CommandError(f'error: unable to find container named "{cname}"', 1)
+        for c in hit:
+            c["image"] = image
+    if template:
+        if json.dumps(template, sort_keys=True) == json.dumps(
+            json.loads(json.dumps(d.template, default=str)), sort_keys=True
+        ):
+            return f"{label} image updated (no change)\n"
+        new_revision(state, d, template, f"kubectl set image {' '.join(pos[1:])}")
+    else:
+        d.image = containers[0]["image"]
+        for p in pods_of(state, "DaemonSet", name, ns):
+            remove_pod(state, p)
+    return f"{label} image updated\n"
+
+
+def cmd_expose(state, pos: list[str], opts: dict) -> str:
+    kind, name = _ref(pos)
+    ns = ns_of(opts)
+    if kind not in ("deployments", "pods"):
+        raise CommandError(f"error: cannot expose a {SINGULAR[kind]}: it has no pod template", 1)
+    if kind == "deployments":
+        d = _deployment(state, ns, name)
+        selector = dict(d.selector.get("matchLabels", {}))
+    else:
+        p = next((p for p in state.k8s.pods if p.namespace == ns and p.name == name), None)
+        if p is None:
+            raise CommandError(f'Error from server (NotFound): pods "{name}" not found', 1)
+        selector = dict(p.labels)
+    if "port" not in opts:
+        raise CommandError("error: couldn't find port via --port flag or introspection", 1)
+    port = str(opts["port"])
+    if not port.isdigit():
+        raise CommandError(
+            f'error: invalid argument "{port}" for "--port" flag: strconv.ParseInt: parsing "{port}": invalid syntax', 1
+        )
+    stype = opts.get("type", "ClusterIP")
+    if stype not in ("ClusterIP", "NodePort", "LoadBalancer"):
+        raise CommandError(f"error: '{stype}' is not a valid service type: ClusterIP, NodePort or LoadBalancer", 1)
+    svc_name = opts.get("name", name)
+    k = state.k8s
+    if any(s.namespace == ns and s.name == svc_name for s in k.services) or (
+        ns == "default" and svc_name == "kubernetes"
+    ):
+        raise CommandError(f'Error from server (AlreadyExists): services "{svc_name}" already exists', 1)
+    proto = opts.get("protocol", "TCP")
+    ports = [f"{port}/{proto}" if stype == "ClusterIP" else f"{port}:{30000 + len(k.services)}/{proto}"]
+    k.services.append(
+        {
+            "namespace": ns,
+            "name": svc_name,
+            "type": stype,
+            "ports": ports,
+            "target_port": str(opts.get("target-port", port)),
+            "selector": selector,
+            "cluster_ip": f"10.96.{len(k.services) // 250}.{10 + len(k.services) % 250}",
+            "created": now(state),
+        }
+    )
+    return f"service/{svc_name} exposed\n"
+
+
 def cmd_rollout(state, pos: list[str], opts: dict) -> str:
     if len(pos) < 2:
         raise CommandError("error: required resource not specified", 1)
@@ -402,6 +541,8 @@ def cmd_rollout(state, pos: list[str], opts: dict) -> str:
             for p in list(pods):
                 remove_pod(state, p)
             return f"daemonset.apps/{name} restarted\n"
+        if action in ("history", "undo"):
+            raise CommandError(f"error: rollout {action} is only supported for deployments in this lab", 1)
         if action == "status":
             reconcile(state)
             pods = pods_of(state, "DaemonSet", name, ns)
@@ -419,10 +560,53 @@ def cmd_rollout(state, pos: list[str], opts: dict) -> str:
         if d is None:
             raise CommandError(f'Error from server (NotFound): deployments.apps "{name}" not found', 1)
         if action == "restart":
-            tm = d.template.setdefault("metadata", {})
-            ann = tm.setdefault("annotations", {})
-            ann["kubectl.kubernetes.io/restartedAt"] = ts(now(state))
+            template = json.loads(json.dumps(d.template, default=str))
+            template.setdefault("metadata", {}).setdefault("annotations", {})["kubectl.kubernetes.io/restartedAt"] = ts(
+                now(state)
+            )
+            new_revision(state, d, template, "<none>")
             return f"deployment.apps/{name} restarted\n"
+        if action == "history":
+            hist = revisions(d)
+            if "revision" in opts:
+                rev = next((r for r in hist if str(r["revision"]) == str(opts["revision"])), None)
+                if rev is None:
+                    raise CommandError("error: unable to find the specified revision", 1)
+                tpl = rev["template"]
+                lines = [f"deployment.apps/{name} with revision #{rev['revision']}", "Pod Template:"]
+                lines.append(
+                    "  Labels:\t"
+                    + ",".join(f"{a}={b}" for a, b in sorted(tpl.get("metadata", {}).get("labels", {}).items()))
+                    + f",pod-template-hash={rev['hash']}"
+                )
+                lines.append("  Containers:")
+                for c in tpl.get("spec", {}).get("containers", []):
+                    lines += [
+                        f"   {c.get('name')}:",
+                        f"    Image:\t{c.get('image')}",
+                        "    Environment:\t<none>",
+                        "    Mounts:\t<none>",
+                    ]
+                lines += ["  Volumes:\t<none>", "  Node-Selectors:\t<none>", "  Tolerations:\t<none>"]
+                return "\n".join(lines) + "\n"
+            lines = [f"deployment.apps/{name} ", "REVISION  CHANGE-CAUSE"]
+            lines += [f"{r['revision']:<9} {r['cause']}" for r in hist]
+            return "\n".join(lines) + "\n"
+        if action == "undo":
+            hist = revisions(d)
+            if len(hist) < 2 and "to-revision" not in opts:
+                raise CommandError("error: no rollout history found", 1)
+            if "to-revision" in opts:
+                want_rev = str(opts["to-revision"])
+                target = next((r for r in hist if str(r["revision"]) == want_rev), None)
+                if target is None:
+                    raise CommandError(f"error: unable to find specified revision {want_rev} in history", 1)
+                if target is hist[-1]:
+                    return f"deployment.apps/{name} skipped rollback (current template already matches revision {want_rev})\n"
+            else:
+                target = hist[-2]
+            new_revision(state, d, target["template"], target["cause"])
+            return f"deployment.apps/{name} rolled back\n"
         if action == "status":
             reconcile(state)
             st = deploy_obj(state, d)["status"]

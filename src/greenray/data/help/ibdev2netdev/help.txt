@@ -1,0 +1,9 @@
+Usage: ibdev2netdev [-v]
+
+Print which network device belongs to which RDMA device port, with the
+port's state: mlx5_0 port 1 ==> ibp24s0 (Up).
+
+  -v    verbose: PCI address, board id, firmware version and port state
+  -h    this help
+
+(GreenRay AIO simulates the options listed above.)
