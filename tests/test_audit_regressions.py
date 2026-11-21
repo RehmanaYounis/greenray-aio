@@ -470,3 +470,68 @@ def test_journalctl_without_a_unit_prints_nothing_but_the_error():
     assert "oom_kill" in shell.run("journalctl -xeu slurmd")
     assert shell.run("journalctl").count("\n") >= 3  # unfiltered on purpose still works
     assert shell.run("journalctl -k").startswith("[")
+
+
+# ---- tsh-which-gpu-is-which: nvidia-smi evidence needs output that shows the target GPU
+
+
+def _tsh2(variant: int):
+    s = concrete("tsh-which-gpu-is-which", variant)
+    shell = Shell(s.build_state())
+    shell.run(f"ssh {s.params['node']}")
+    return s, shell
+
+
+def _evidence(s, shell) -> bool:
+    desc, ok, err = s.grade(shell)[0]
+    assert "nvidia-smi" in desc and not err, (desc, err)
+    return ok
+
+
+@pytest.mark.parametrize("variant", [0, 1, 2])
+@pytest.mark.parametrize(
+    "bad", ["nvidia-smi --query-gpu", "nvidia-smi -i 9 -q", "nvidia-smi --query-gpu=index,pci.bus_id --format=csv -i 9"]
+)
+def test_failed_nvidia_smi_queries_earn_no_evidence(variant, bad):
+    s, shell = _tsh2(variant)
+    assert not _evidence(s, shell)
+    out = shell.run(bad)
+    assert "Invalid combination" in out or "No devices were found" in out
+    assert not _evidence(s, shell)
+
+
+@pytest.mark.parametrize("variant", [0, 1, 2])
+@pytest.mark.parametrize(
+    "good",
+    [
+        "nvidia-smi",
+        "nvidia-smi --query-gpu=index,pci.bus_id,uuid,serial --format=csv",
+        "nvidia-smi -q -i {gpu}",
+        "nvidia-smi -q -d PCI",
+        "nvidia-smi --query-gpu=uuid --format=csv,noheader -i 00000000:{bus}:00.0",
+        "nvidia-smi -L",
+    ],
+)
+def test_nvidia_smi_output_that_shows_the_target_gpu_earns_evidence(variant, good):
+    s, shell = _tsh2(variant)
+    shell.run(good.format(**s.params))
+    assert _evidence(s, shell)
+
+
+def test_nvidia_smi_on_another_node_or_for_another_gpu_only_earns_nothing():
+    s, shell = _tsh2(0)
+    shell.run("nvidia-smi -q -i 0")  # a real GPU, not the one at 5D:00.0
+    assert not _evidence(s, shell)
+    shell.run("exit")
+    shell.run("ssh dgx-01")
+    shell.run("nvidia-smi")
+    assert not _evidence(s, shell)
+
+
+def test_tsh2_feedback_does_not_name_the_index():
+    s = concrete("tsh-which-gpu-is-which", 0)
+    shell = Shell(s.build_state())
+    for desc, _ok, _ in s.grade(shell):
+        assert not re.search(r"\(3\)|\b3\b", desc), desc
+    shell.run("echo 'GPU index: 3' > /root/gpu-report-dgx-03.txt")
+    assert next(ok for desc, ok, _ in s.grade(shell) if "index" in desc)

@@ -2,6 +2,11 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.7.1] - 2026-11-22
+
+### Fixed
+- Lab `tsh-2` (`tsh-which-gpu-is-which`): the evidence criterion is met only when a successful `nvidia-smi` on the incident node shows the target GPU (its bus id in the table, a `--query-gpu` or `-q` output, or a query filtered by that bus id); a rejected query or a query for a GPU that does not exist earns nothing. The index criterion no longer prints the expected index in its wording.
+
 ## [1.7.0] - 2026-11-22
 
 ### Changed
