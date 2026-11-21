@@ -1337,3 +1337,72 @@ def test_tsh3_clock_events_of_the_healthy_peer_earn_nothing():
     s, shell = _tsh3(0, host=concrete(TSH3, 0).params["peer"])
     assert "Clocks Event Reasons" in shell.run("nvidia-smi -q -d PERFORMANCE")
     assert not _check(s, shell, "showed you the clock event reasons")
+
+
+# ---- ins-container-toolkit-docker: the proof is a container that sees all eight GPUs, whatever its image
+
+INS1 = "ins-container-toolkit-docker"
+INS1_CUDA = "nvcr.io/nvidia/cuda:12.4.1-base-ubuntu22.04"
+INS1_PROOF = "saw all 8 GPUs"
+
+
+def _ins1_ready():
+    """ins-1 on dgx-03 with the toolkit installed, the nvidia runtime configured and Docker restarted."""
+    s, shell = _lab(INS1)
+    for line in (
+        "ssh dgx-03",
+        "apt-get update",
+        "apt-get install -y nvidia-container-toolkit",
+        "nvidia-ctk runtime configure --runtime=docker",
+        "systemctl restart docker",
+    ):
+        shell.run(line)
+    assert [ok for _desc, ok, _err in s.grade(shell)] == [True, True, True, False]
+    return s, shell
+
+
+@pytest.mark.parametrize(
+    "run",
+    [
+        f"docker run --rm --gpus 1 {INS1_CUDA} nvidia-smi -L",
+        f"docker run --rm --gpus device=0 {INS1_CUDA} nvidia-smi -L",
+        f"docker run --rm --gpus '\"device=1,2\"' {INS1_CUDA} nvidia-smi -L",
+        f"docker run --rm --runtime=nvidia -e NVIDIA_VISIBLE_DEVICES=0 {INS1_CUDA} nvidia-smi -L",
+        f"docker run --rm {INS1_CUDA} nvidia-smi -L",
+        f"docker run --rm --gpus all {INS1_CUDA} hostname",
+    ],
+)
+def test_ins1_a_container_that_does_not_show_all_eight_gpus_fails(run):
+    s, shell = _ins1_ready()
+    assert shell.run(run).count("GPU ") < 8
+    assert not _check(s, shell, INS1_PROOF)
+
+
+@pytest.mark.parametrize(
+    "run",
+    [
+        f"docker run --rm --gpus all {INS1_CUDA} nvidia-smi",
+        f"docker run --rm --gpus all {INS1_CUDA} nvidia-smi -L",
+        f"docker run --rm --runtime=nvidia -e NVIDIA_VISIBLE_DEVICES=all {INS1_CUDA} nvidia-smi -L",
+        "docker run --rm --gpus all ubuntu:22.04 nvidia-smi -L",
+    ],
+)
+def test_ins1_a_gpu_container_that_shows_all_eight_gpus_passes(run):
+    s, shell = _ins1_ready()
+    shell.run(run)
+    assert all(ok for _desc, ok, _err in s.grade(shell))
+
+
+def test_ins1_wording_does_not_ask_for_an_image_the_grader_does_not_require():
+    s, _shell = _lab(INS1)
+    proof = next(c["desc"] for c in s.checks if INS1_PROOF in c["desc"])
+    assert "CUDA" not in proof and "CUDA" not in s.objectives[-1]
+    assert "any other image" in s.briefing
+
+
+def test_login_banner_names_the_os_the_node_runs():
+    s, shell = _lab(INS1)
+    stock = shell.run("ssh dgx-03")
+    assert "Welcome to Ubuntu 22.04.4 LTS (GNU/Linux" in stock and "DGX OS" not in stock
+    shell.run("exit")
+    assert "Welcome to Ubuntu 22.04.4 LTS (DGX OS 6.2) (GNU/Linux" in shell.run("ssh dgx-01")
