@@ -1228,3 +1228,59 @@ def test_ins3_a_driver_pod_named_in_full_earns_evidence():
     pod = next(p.name for p in shell.ctx.state.k8s.pods if p.name.startswith("nvidia-driver-daemonset-"))
     shell.run(f"kubectl logs -n gpu-operator {pod}")
     assert _check(s, shell, "kubectl showed you")
+
+
+# ---- adm-bcm-wlm-new-queue: sinfo or scontrol must have shown the short partition
+
+ADM14 = "adm-bcm-wlm-new-queue"
+ADM14_CREATE = 'cmsh -c "wlm; use slurm; jobqueue; add short; set nodes dgx-03,dgx-04; set maxtime 4:00:00; commit"'
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "scontrol show partition missing",
+        "scontrol show partition short",
+        "scontrol show partition",
+        "sinfo",
+        "sinfo -p short",
+        "sinfo -s",
+    ],
+)
+def test_adm14_queries_before_the_partition_exists_earn_no_evidence(query):
+    s, shell = _lab(ADM14)
+    shell.run(query)
+    assert not _check(s, shell, "showed you the new partition")
+    shell.run(ADM14_CREATE)
+    assert [ok for _desc, ok, _err in s.grade(shell)] == [True, True, True, False, True]
+
+
+@pytest.mark.parametrize(
+    "query", ["scontrol show partition missing", "scontrol show partition defq", "sinfo -p defq", "sinfo -h -p defq"]
+)
+def test_adm14_queries_that_do_not_show_the_partition_earn_no_evidence(query):
+    s, shell = _lab(ADM14)
+    shell.run(ADM14_CREATE)
+    shell.run(query)
+    assert not _check(s, shell, "showed you the new partition")
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "sinfo",
+        "sinfo -p short",
+        "sinfo -s",
+        "sinfo -N",
+        "sinfo -o '%P %l'",
+        "sinfo | grep short",
+        "scontrol show partition short",
+        "scontrol show partition",
+        "scontrol show part short -o",
+    ],
+)
+def test_adm14_queries_that_show_the_partition_earn_evidence(query):
+    s, shell = _lab(ADM14)
+    shell.run(ADM14_CREATE)
+    shell.run(query)
+    assert all(ok for _desc, ok, _err in s.grade(shell))

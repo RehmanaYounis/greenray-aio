@@ -33,9 +33,9 @@ checks:
     expr: "re.search(r'^PartitionName=short Nodes=dgx-\\[03-04\\]', file('bcm-head', '/etc/slurm/slurm.conf'), re.M) is not None and 'short' in slurm.partitions and slurm.partitions['short'].max_time in ('4:00:00', '04:00:00', '0-04:00:00')"
   - desc: defq is unchanged and still the default
     expr: "bcm.wlm.slurm.jobqueues['defq'].default is True and bcm.wlm.slurm.jobqueues['defq'].nodes == 'dgx-[01-04]' and slurm.partitions['defq'].get('default') is True"
-  - desc: you confirmed the result with sinfo or scontrol
+  - desc: sinfo or scontrol showed you the new partition
     kind: evidence
-    expr: ran(r'^(sinfo|scontrol show (partition|part))')
+    expr: "printed(r'(^|\\s)short\\*?(\\s|$)', cmd=r'^sinfo\\b') or printed(r'PartitionName=short\\b', cmd=r'^scontrol\\b.*\\bshow part')"
   - desc: slurm.conf was not edited by hand
     kind: safety
     expr: generated('bcm-head', '/etc/slurm/slurm.conf')
