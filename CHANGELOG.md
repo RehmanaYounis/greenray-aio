@@ -2,6 +2,19 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.7.5] - 2026-11-22
+
+### Fixed
+- Lab `wkl-4` (`wkl-k8s-pod-pending-gpu`): the manifest criterion reads `/root/bert-pretrain.yaml` as YAML and checks the GPU limit of the `trainer` container of the `bert-pretrain` pod, so a quoted key such as `"nvidia.com/gpu": 8` is graded like the unquoted one. The diagnostic criterion is met only when `kubectl describe pod` or `kubectl get events` showed the pod's FailedScheduling event.
+- Lab `ins-2` (`ins-bcm-add-node-category`): the cmsh criterion is met only when `cmsh` returned inventory of dgx-04 (device list, status or settings) or of the `dgx-h100` category; a lookup of a device that does not exist earns nothing.
+- Lab `ins-3` (`ins-gpu-operator-preinstalled-driver`): the diagnostic criterion is met only when `kubectl` returned the driver pods' logs, described a driver pod or listed its events.
+- Lab `adm-14` (`adm-bcm-wlm-new-queue`): the verification criterion is met only when `sinfo` or `scontrol show partition` showed the `short` partition, so it cannot be earned before the queue exists.
+- Lab `tsh-3` (`tsh-power-cap-persistence`): the clock-event criterion is met only when `nvidia-smi` on the affected node printed the clock event reasons; a query for a GPU that does not exist earns nothing.
+- Evidence criteria that look at command output now see commands run through `ssh <host> <command>`, `pdsh`, cmsh `pexec`, `bash -c`, `sudo` and `salloc <command>`. Before, lab `tsh-2` did not accept `ssh dgx-03 nvidia-smi` typed on the head node, although the same command typed on the node was accepted.
+
+### Changed
+- Lab `ins-1` (`ins-container-toolkit-docker`): the briefing, the objective and the criterion ask for a GPU-enabled container that sees all 8 GPUs instead of a CUDA container. Any image started with GPU access gets `nvidia-smi` from the toolkit, and that is what the lab has always graded; the CUDA image remains the suggested choice.
+
 ## [1.7.4] - 2026-11-22
 
 ### Fixed
