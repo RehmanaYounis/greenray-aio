@@ -85,6 +85,16 @@ def report_card(ui: UI, qs: list[dict], res: dict, labs: list[LabSession], lab_s
             ui.out(f"  {item}")
 
 
+def _confirm(ui: UI, question: str, quit_means_yes: bool = False) -> bool:
+    """y confirms; Ctrl-C and end of input decline, except where leaving is the safe answer."""
+    try:
+        answer = ui.ask(question).strip().lower()
+    except (KeyboardInterrupt, EOFError):
+        ui.out("")
+        return quit_means_yes
+    return answer in ("y", "yes") or (quit_means_yes and answer in ("q", "quit"))
+
+
 def run_mock(ui: UI, seed: int | None = None, labs_only: bool = False) -> None:
     qs: list[dict] = []
     if not labs_only:
@@ -141,14 +151,17 @@ def run_mock(ui: UI, seed: int | None = None, labs_only: bool = False) -> None:
 
                 run_exam_lab(ui, labs[lab_no - 1], deadline, status=status)
             elif choice in ("f", "finish"):
-                if ui.ask("Finish the exam now? [y/N] ").strip().lower() == "y":
+                if _confirm(ui, "Finish the exam now? [y/N] "):
                     break
             elif choice in ("x", "exit", "quit", "abandon"):
-                if ui.ask("Leave the exam? Nothing is graded or recorded. [y/N] ").strip().lower() == "y":
+                if _confirm(ui, "Leave the exam? Nothing is graded or recorded. [y/N] ", quit_means_yes=True):
                     ui.out(ui.dim("Exam abandoned."))
                     return
+            elif choice == "q":
+                ui.out(ui.red("This mock has no questions. Enter a lab number, f to finish, or x to leave."))
             elif choice:
-                ui.out(ui.red(f"Unknown choice '{choice}'. Enter q, a lab number, f to finish, or x to leave."))
+                ways = ("q, " if qs else "") + "a lab number, f to finish, or x to leave"
+                ui.out(ui.red(f"Unknown choice '{choice}'. Enter {ways}."))
         else:
             ui.out(ui.red("\nTime is up. Grading."))
 

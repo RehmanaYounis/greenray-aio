@@ -7,6 +7,7 @@ import hashlib
 import json
 import re
 
+from ...core import clock
 from ...core.errors import CommandError
 from .. import command
 from ..common import columns
@@ -209,6 +210,19 @@ DOCKER_VALUE_FLAGS = {
 }
 
 
+def _ago(ctx, created) -> str:
+    """docker's relative time column, from the simulated clock."""
+    if created is None:
+        return "2 minutes ago"
+    secs = max(0, int(clock.now(ctx.state).timestamp() - created))
+    if secs < 60:
+        return f"{secs} second{'s' if secs != 1 else ''} ago"
+    mins = secs // 60
+    if mins < 60:
+        return f"{mins} minute{'s' if mins != 1 else ''} ago"
+    return f"{secs // 3600} hour{'s' if secs // 3600 != 1 else ''} ago"
+
+
 def _docker_run(ctx, args):
     node = ctx.node
     opts, i = {"env": {}}, 0
@@ -268,6 +282,7 @@ def _docker_run(ctx, args):
     cid = _short_id(ctx.host, name, len(node.containers), n=64)
     record = {
         "id": cid[:12],
+        "full_id": cid,
         "image": full,
         "name": name,
         "command": " ".join(cmd) or "/bin/bash",
@@ -276,6 +291,7 @@ def _docker_run(ctx, args):
         "runtime": runtime,
         "gpu_request": opts.get("gpus"),
         "restart": opts.get("restart") or "no",
+        "created": clock.now(ctx.state).timestamp(),
     }
     if opts.get("d"):
         node.containers.append({**record, "status": "Up 2 seconds"})
@@ -436,16 +452,31 @@ def docker(ctx, args):
         return _docker_run(ctx, rest)
     if sub == "ps":
         show_all = "-a" in rest or "--all" in rest
+        quiet = "-q" in rest or "--quiet" in rest
+        fmt = next((rest[i + 1] for i, a in enumerate(rest) if a == "--format" and i + 1 < len(rest)), None)
+        fmt = fmt or next((a.split("=", 1)[1] for a in rest if a.startswith("--format=")), None)
+        listed = [c for c in node.containers if show_all or c.status.startswith("Up")]
+        if quiet:
+            return "".join(c.id + "\n" for c in listed)
+        if fmt:
+            keys = {"ID": "id", "Image": "image", "Names": "name", "Status": "status", "Command": "command"}
+            lines = []
+            for c in listed:
+                line = fmt
+                for k, attr in keys.items():
+                    line = line.replace("{{." + k + "}}", str(c.get(attr, "")))
+                lines.append(line.replace("\\t", "\t"))
+            return "\n".join(lines) + "\n" if lines else ""
         rows = [("CONTAINER ID", "IMAGE", "COMMAND", "CREATED", "STATUS", "PORTS", "NAMES")]
-        for c in node.containers:
-            if not show_all and not c.status.startswith("Up"):
+        for c in listed:
+            if False:
                 continue
             cmd = (
                 '"' + (c.get("command") or "/bin/bash")[:17] + '…"'
                 if len(c.get("command") or "") > 17
                 else f'"{c.get("command") or "/bin/bash"}"'
             )
-            rows.append((c.id, c.image, cmd, "2 minutes ago", c.status, "", c.name))
+            rows.append((c.id, c.image, cmd, _ago(ctx, c.get("created")), c.status, "", c.name))
         return columns(rows)
     if sub == "exec":
         return _docker_exec(ctx, rest)
@@ -560,7 +591,7 @@ def _inspect_obj(ctx, c):
             "com.docker.compose.project.config_files": c.compose_file,
         }
     return {
-        "Id": _short_id(ctx.host, c.name, n=64),
+        "Id": c.get("full_id") or (c.id + _short_id(ctx.host, c.name, n=52)),
         "Name": "/" + c.name,
         "State": {"Status": "running" if up else "exited", "Running": up, "ExitCode": 0 if up else 1},
         "Image": c.image,

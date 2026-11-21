@@ -43,8 +43,9 @@ checks:
   - desc: the report holds that GPU's serial number
     expr: "'{serial}' in file('bcm-head', '/root/gpu-report-{node}.txt')"
   - desc: the report gives its nvidia-smi index ({gpu})
-    expr: "re.search(r'(gpu|index)\\D{0,4}{gpu}\\b', file('bcm-head', '/root/gpu-report-{node}.txt'), re.I) is not None"
+    expr: "re.search(r'(gpu|index)\\D{0,4}{gpu}\\b|^{gpu},', file('bcm-head', '/root/gpu-report-{node}.txt'), re.I | re.M) is not None"
   - desc: "{node} is still IDLE and no GPU was reset"
+    kind: safety
     expr: "slurm.nodes['{node}'].state == 'IDLE' and not ran(r'^nvidia-smi .*(-r\\b|--gpu-reset)', '{node}') and not ran(r'^(reboot|scontrol update .*drain)')"
 hints:
   - "The index nvidia-smi prints (GPU 0..7) is not in the BMC alert; the PCI bus id is. nvidia-smi can print both side by side: --query-gpu=index,pci.bus_id,uuid,serial --format=csv. Note that nvidia-smi writes the bus id as 00000000:{bus}:00.0."

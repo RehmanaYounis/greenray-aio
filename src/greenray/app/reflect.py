@@ -56,10 +56,13 @@ def run(ui: UI, scenario: Scenario) -> None:
     answers = []
     for q in QUESTIONS:
         try:
-            answers.append(ui.ask(f"  {q}\n  > "))
-        except KeyboardInterrupt:
+            a = ui.ask(f"  {q}\n  > ")
+        except (KeyboardInterrupt, EOFError):
             ui.out("")
             return
+        if a.strip().lower() in ("q", "quit"):
+            return
+        answers.append(a)
     path = save(scenario, answers)
     if path:
         ui.out(ui.dim(f"Saved to {path}"))

@@ -208,7 +208,6 @@
 - id: adm-018
   domain: Administration
   difficulty: medium
-  lab: adm-slurm-partition-qos
   question: |
     A new partition "h100-priority" should only be usable by members of the Slurm
     accounts "llm" and "vision". Which slurm.conf partition setting is
@@ -529,7 +528,7 @@
 - id: adm-044
   domain: Administration
   difficulty: medium
-  lab: adm-bcm-cmsh-inventory
+  lab: adm-bcm-wlm-new-queue
   question: |
     An administrator wants to set the same BMC power-control property on every
     node of the dgx-h100 category in one cmsh command and commit it. Which
@@ -542,7 +541,6 @@
 - id: adm-045
   domain: Administration
   difficulty: hard
-  lab: ins-bcm-softwareimage-update
   question: |
     An administrator adds nvidia_peermem to the kernelmodules list of a
     software image in cmsh and commits. lsmod on the nodes that use the image
@@ -552,18 +550,6 @@
     - kernelmodules only affects the head node
     - The module must also be added to /etc/modules on every node by hand
     - lsmod only lists modules loaded by systemd
-- id: adm-046
-  domain: Administration
-  difficulty: medium
-  lab: adm-bcm-wlm-new-queue
-  question: |
-    Which statement about changing a partition's MaxTime on a BCM-managed
-    Slurm cluster is correct?
-  choices:
-    - scontrol update partitionname=... maxtime=... changes the running controller immediately but the value is lost at the next regeneration of slurm.conf; the durable change is set maxtime on the job queue in cmsh wlm mode
-    - scontrol update is durable because slurmctld writes the change back to slurm.conf
-    - Only a restart of slurmctld can change MaxTime
-    - MaxTime is a property of the node category in BCM
 - id: adm-047
   domain: Administration
   difficulty: medium

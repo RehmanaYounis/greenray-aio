@@ -32,6 +32,11 @@ OPTIONS
 
 MODES
        device         nodes, switches and other managed devices
+       wlm            the workload manager instance (Slurm) and its job
+                      queues, which CMDaemon writes into slurm.conf
+       configurationoverlay
+                      which categories and nodes carry which roles
+       monitoring     measurables, actions and triggers
        category       groups of nodes that share configuration
        softwareimage  node images kept under /cm/images
        partition      cluster-wide settings (base partition)

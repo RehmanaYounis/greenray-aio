@@ -92,7 +92,7 @@
 - id: ins-008
   domain: Installation and Deployment
   difficulty: medium
-  lab: ins-bcm-add-node-category
+  lab: ins-bcm-softwareimage-update
   question: |
     Thirty-two DGX nodes are in the BCM category "dgx-h100". The administrator
     built a new software image, "dgx-h100-v2", and wants all 32 nodes to use it.
@@ -105,7 +105,6 @@
 - id: ins-009
   domain: Installation and Deployment
   difficulty: medium
-  lab: ins-bcm-add-node-category
   question: |
     A new DGX node arrives and is cabled to the provisioning network. Its MAC
     address is known. In cmsh, what is the quickest correct way to define it so
@@ -295,19 +294,6 @@
     - PriorityType
     - SchedulerType
     - JobAcctGatherType
-- id: ins-025
-  domain: Installation and Deployment
-  difficulty: easy
-  lab: ins-gpu-operator-preinstalled-driver
-  question: |
-    An administrator is installing the NVIDIA GPU Operator with Helm on a
-    Kubernetes cluster built from DGX nodes running DGX OS, which already ships
-    the NVIDIA GPU driver. Which Helm value is the key one to set?
-  choices:
-    - mig.strategy=mixed
-    - dcgmExporter.enabled=false
-    - devicePlugin.enabled=false
-    - driver.enabled=false
 - id: ins-026
   domain: Installation and Deployment
   difficulty: hard
@@ -421,7 +407,6 @@
 - id: ins-035
   domain: Installation and Deployment
   difficulty: hard
-  lab: ins-network-operator-rdma
   question: |
     A Kubernetes cluster uses the Network Operator to deploy the NVIDIA
     networking driver (DOCA-OFED/MOFED) as a container, and the GPU Operator
@@ -553,17 +538,6 @@
     - Starting a pyxis systemd service
     - Enabling the pyxis SPANK plugin in plugstack.conf (for example, a line "required /path/to/spank_pyxis.so"), then restarting Slurm daemons
     - Running enroot import on the controller
-- id: ins-046
-  domain: Installation and Deployment
-  difficulty: medium
-  question: |
-    A DGX H100 was upgraded to a new data center driver branch. Which statement
-    about NVIDIA Fabric Manager is correct?
-  choices:
-    - Fabric Manager is only needed for MIG
-    - Fabric Manager is optional on NVSwitch systems and only improves performance
-    - Fabric Manager must be the same version as the installed driver, so it has to be upgraded together with the driver
-    - Fabric Manager runs inside each CUDA container
 - id: ins-047
   domain: Installation and Deployment
   difficulty: medium
@@ -673,18 +647,6 @@
     - One is for the head node and one for the compute nodes
     - slurm-client is Slurm 23 and slurm-client-gpu is the legacy Slurm 20 role
     - The second overlay is a backup that is only used when the first is deleted
-- id: ins-056
-  domain: Installation and Deployment
-  difficulty: easy
-  lab: ins-bcm-overlay-new-category
-  question: |
-    Which cmsh command sequence adds the category dgx-h100-b to the existing
-    slurm-client configuration overlay and makes the change effective?
-  choices:
-    - 'configurationoverlay; use slurm-client; append categories dgx-h100-b; commit'
-    - 'category; use dgx-h100-b; set overlay slurm-client; commit'
-    - 'device; foreach -c dgx-h100-b (roles; assign slurmclient)'
-    - 'wlm; use slurm; set clients dgx-h100-b; commit'
 - id: ins-057
   domain: Installation and Deployment
   difficulty: medium

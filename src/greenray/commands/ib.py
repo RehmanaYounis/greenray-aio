@@ -729,6 +729,19 @@ def ip(ctx, args):
         if action == "up" and name in down:
             down.remove(name)
         return ""
+    if obj in ("r", "route"):
+        n = node_no(ctx.host)
+        mg = HEAD_IF if ctx.host == HEAD else MGMT_IF
+        lines = [
+            f"default via 10.141.255.254 dev {mg} proto static",
+            f"10.141.0.0/16 dev {mg} proto kernel scope link src {ctx.node.ip}",
+        ]
+        for i, p in enumerate(ctx.node.ib):
+            if _active(p) and p.netdev not in ctx.node.get("netdev_admin_down", []):
+                lines.append(
+                    f"10.149.0.0/16 dev {p.netdev} proto kernel scope link src 10.149.{i}.{n if ctx.host != HEAD else 254}"
+                )
+        return "\n".join(lines) + "\n"
     want = None
     if "dev" in rest:
         want = rest[rest.index("dev") + 1] if rest.index("dev") + 1 < len(rest) else None

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from .. import command
-from .common import HEAD, SLURM_VERSION, _err, fmt_limit_upper, parse_time
+from ..common import int_arg
+from .common import HEAD, SLURM_VERSION, _err, fmt_limit_upper, parse_time, time_arg
 from .fairshare import _acct_children, _acct_parent, _acct_users, _assoc_shares
 from .scheduler import _ensure, schedule
 
@@ -64,13 +65,17 @@ QOS_DEFAULT_COLS = [
 ]
 
 
+_BAR = [True]  # -p ends every field with '|', -P does not
+
+
 def _fmt_table(cols, rows, parsable=False, noheader=False, left=()):
     out = []
     if parsable:
+        bar = "|" if _BAR[0] else ""
         if not noheader:
-            out.append("|".join(h for h, _ in cols) + "|")
+            out.append("|".join(h for h, _ in cols) + bar)
         for r in rows:
-            out.append("|".join(str(v) for v in r) + "|")
+            out.append("|".join(str(v) for v in r) + bar)
         return "\n".join(out) + "\n"
     if not noheader:
         out.append(" ".join(h[:w].rjust(w) for h, w in cols))
@@ -98,7 +103,7 @@ def _merge_tres(old, new):
             if v in ("-1", ""):
                 cur.pop(k, None)
             else:
-                cur[k] = v
+                cur[k] = str(int_arg(v, f" Bad TRES value: {k}={v}", minimum=0))
     order = ["cpu", "mem", "node", "billing"]
     keys = sorted(cur, key=lambda k: (order.index(k) if k in order else 10, k))
     return ",".join(f"{k}={cur[k]}" for k in keys)
@@ -112,11 +117,11 @@ def _set_qos_field(q, key, val):
     if field in ("max_tres_per_user", "max_tres_per_job", "grp_tres"):
         q[field] = _merge_tres(q.get(field), val)
     elif field in ("priority",):
-        q[field] = int(val)
+        q[field] = int_arg(val, f" Bad {key} value: {val}", minimum=0)
     elif field in ("max_jobs_per_user", "max_submit_pu"):
-        q[field] = None if val in ("-1", "") else int(val)
+        q[field] = None if val in ("-1", "") else int_arg(val, f" Bad {key} value: {val}", minimum=0)
     elif field == "max_wall":
-        q[field] = None if val in ("-1", "") else val
+        q[field] = None if val in ("-1", "") else time_arg(val, f" Bad MaxWall time format: {val}")
     elif field == "flags":
         q[field] = "" if val in ("-1", "") else val
     else:
@@ -164,19 +169,26 @@ def _confirm(immediate):
 def sacctmgr(ctx, args):
     state = ctx.state
     _ensure(state)
-    immediate = False
-    parsable = False
-    noheader = False
-    while args and args[0].startswith("-"):
-        if args[0] in ("-i", "--immediate"):
+    immediate = parsable = noheader = False
+    trailing_bar = True
+    rest = []
+    for a in args:  # sacctmgr takes its options anywhere on the line
+        if a in ("-i", "--immediate"):
             immediate = True
-        elif args[0] in ("-p", "-P", "--parsable", "--parsable2"):
+        elif a in ("-p", "--parsable"):
             parsable = True
-        elif args[0] in ("-n", "--noheader"):
+        elif a in ("-P", "--parsable2"):
+            parsable, trailing_bar = True, False
+        elif a in ("-n", "--noheader"):
             noheader = True
-        elif args[0] in ("-V", "--version"):
+        elif a in ("-V", "--version"):
             return f"slurm {SLURM_VERSION}\n"
-        args = args[1:]
+        elif a.startswith("-") and len(a) > 1:
+            raise _err(f"sacctmgr: unrecognized option '{a}'\nTry \"sacctmgr --help\" for more information")
+        else:
+            rest.append(a)
+    args = rest
+    _BAR[0] = trailing_bar
     if not args:
         raise _err("sacctmgr: no command given")
     head = state.nodes.get(HEAD)
@@ -384,8 +396,12 @@ def sacctmgr(ctx, args):
         if table is None:
             raise _err(f" Unknown entity: {entity}")
         gone = [n for n in names if n in table]
-        if entity == "qos" and any(j.qos in gone and j.state in ("PENDING", "RUNNING") for j in s.jobs):
-            raise _err(" Error with request: Job(s) active, cancel job(s) before remove\n  JobId = ...")
+        active = [j for j in s.jobs if entity == "qos" and j.qos in gone and j.state in ("PENDING", "RUNNING")]
+        if active:
+            raise _err(
+                " Error with request: Job(s) active, cancel job(s) before remove\n"
+                + "".join(f"  JobID = {j.id} C = superpod A = {j.account} U = {j.user}\n" for j in active).rstrip("\n")
+            )
         if entity == "user" and "account" in where:
             accts = where["account"][0].split(",")
             done = []
@@ -543,6 +559,16 @@ def sacctmgr(ctx, args):
                 parsable,
                 noheader,
             )
+        if entity == "tres":
+            rows = [
+                ("cpu", "", "1"),
+                ("mem", "", "2"),
+                ("energy", "", "3"),
+                ("node", "", "4"),
+                ("billing", "", "5"),
+                ("gres", "gpu", "1001"),
+            ]
+            return _fmt_table([("Type", 6), ("Name", 6), ("ID", 6)], rows, parsable, noheader, left=(0, 1))
         raise _err(f" Unknown entity: {entity}")
     raise _err(f"sacctmgr: error: Invalid command: {args[0]}")
 

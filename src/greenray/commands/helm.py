@@ -668,7 +668,7 @@ def _parse(args):
 def _release_banner(rel, state, notes=""):
     out = [
         f"NAME: {rel.name}",
-        f"LAST DEPLOYED: {(kc.EPOCH + datetime.timedelta(seconds=kc.now(state))):%a %b %d %H:%M:%S %Y}",
+        f"LAST DEPLOYED: {(kc.EPOCH + datetime.timedelta(seconds=rel.updated)):%a %b %d %H:%M:%S %Y}",
         f"NAMESPACE: {rel.namespace}",
         f"STATUS: {rel.status}",
         f"REVISION: {rel.revision}",
@@ -870,6 +870,24 @@ def helm(ctx, args):
         rels = [r for r in releases(state) if opts.get("all-namespaces") or r.namespace == ns]
         if opts.get("short"):
             return "".join(r.name + "\n" for r in rels)
+        if opts.get("output") in ("json", "yaml"):
+            docs = [
+                {
+                    "name": r.name,
+                    "namespace": r.namespace,
+                    "revision": str(r.revision),
+                    "updated": (kc.EPOCH + datetime.timedelta(seconds=r.updated)).strftime(
+                        "%Y-%m-%d %H:%M:%S.000000 +0000 UTC"
+                    ),
+                    "status": r.status,
+                    "chart": r.chart,
+                    "app_version": r.chart.rsplit("-", 1)[-1],
+                }
+                for r in sorted(rels, key=lambda r: r.name)
+            ]
+            return (
+                json.dumps(docs, indent=4) if opts["output"] == "json" else yaml.safe_dump(docs, sort_keys=False)
+            ) + "\n"
         rows = [("NAME", "NAMESPACE", "REVISION", "UPDATED", "STATUS", "CHART", "APP VERSION")]
         for r in sorted(rels, key=lambda r: r.name):
             upd = kc.EPOCH + datetime.timedelta(seconds=r.updated)
@@ -934,6 +952,8 @@ def helm(ctx, args):
         rel = find_release(state, pos[0], ns) if pos else None
         if rel is None:
             raise CommandError("Error: release: not found", 1)
+        if len(pos) > 1 and not pos[1].isdigit():
+            raise CommandError(f'Error: strconv.Atoi: parsing "{pos[1]}": invalid syntax', 1)
         target = int(pos[1]) if len(pos) > 1 else rel.revision - 1
         h = next((h for h in rel.history if h.revision == target), None)
         if h is None:

@@ -72,7 +72,7 @@ checks:
   - desc: all 24 embedder pods are Running on dgx-04
     expr: "len([p for p in pods('inference', 'embedder-') if p.status == 'Running' and p.node == 'dgx-04']) == 24"
   - desc: you looked at why the embedder pods were Pending
-    expr: "ran(r'kubectl (describe (pod|pods|po|deploy|deployment)|get (events|ev)).*') and ran(r'-n inference|--namespace[ =]inference|-A|--all-namespaces')"
+    expr: "ran(r'kubectl .*(describe (pod|pods|po|deploy|deployment)|get (events|ev)).*(-n inference|--namespace[ =]inference|-A\\b|--all-namespaces)') or ran(r'kubectl (-n inference|--namespace[ =]inference) (describe|get)')"
 hints:
   - "`kubectl describe pod -n inference <embedder pod>`: which node label does the pod select on, and which node(s) carry it today (`kubectl get nodes -L nvidia.com/gpu.product`)?"
   - "GPU Feature Discovery appends -SHARED to nvidia.com/gpu.product on nodes where the device plugin shares GPUs. Sharing is configured with a device-plugin config file (version: v1, sharing.timeSlicing.resources: [{name: nvidia.com/gpu, replicas: 4}]) stored as one key of a ConfigMap in the gpu-operator namespace."

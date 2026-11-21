@@ -122,6 +122,9 @@ def run_exam(ui: UI, n: int = 60, minutes: int = 120, domain: str | None = None)
     flagged: set = set()
     ask_questions(ui, qs, start + minutes * 60, answers, flagged)
     elapsed = (time.time() - start) / 60
+    if not answers:
+        ui.out(ui.yellow("\nNo question was answered; nothing is recorded."))
+        return
     res = qb.score(qs, answers)
     verdict = ui.green("PASS") if res["pct"] >= PRACTICE_PASS_PCT else ui.red("NOT YET")
     ui.out(

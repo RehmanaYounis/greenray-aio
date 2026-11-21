@@ -226,15 +226,6 @@ ins-024:
     picks backfill or builtin scheduling. JobAcctGatherType controls how resource
     usage is sampled. None of these turn on limit enforcement.
 
-ins-025:
-  answer: [3]
-  explanation: |
-    DGX OS includes the driver on the host. The GPU Operator should then not
-    deploy its containerized driver, so set driver.enabled=false. The operator
-    still deploys the device plugin, GFD, DCGM exporter and the other components.
-    The MIG strategy is a separate choice. Disabling the DCGM exporter removes
-    monitoring. Disabling the device plugin means pods can't request GPUs at all.
-
 ins-026:
   answer: [0, 3]
   explanation: |
@@ -410,16 +401,6 @@ ins-045:
     --container-* options. It is not a GRES and has no daemon of its own.
     enroot import only creates an image file; it doesn't register options.
 
-ins-046:
-  answer: [2]
-  explanation: |
-    Fabric Manager talks to the driver through a versioned interface. A version
-    mismatch prevents the service from starting. On NVSwitch systems that means
-    the GPUs can't be used for CUDA work. FM is required on NVSwitch-based
-    systems, not optional, and has nothing to do with MIG. It runs as a host
-    service (or in the GPU Operator driver container), not inside each workload
-    container.
-
 ins-047:
   answer: [0]
   explanation: |
@@ -503,15 +484,6 @@ ins-055:
     win for a node covered by several overlays that assign the same role. The
     overlays have nothing to do with head versus compute nodes or Slurm
     versions, and neither is a backup.
-
-ins-056:
-  answer: [0]
-  explanation: |
-    Overlays are edited in configurationoverlay mode: select the overlay, append
-    the category to its categories list, commit. There is no overlay property on
-    a category, no clients property on the wlm instance, and assigning the role
-    directly on every node bypasses the overlay, so the next node added to the
-    category would miss it.
 
 ins-057:
   answer: [0]

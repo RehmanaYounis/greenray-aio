@@ -6,7 +6,7 @@ difficulty: medium
 time_limit_min: 15
 tags: [slurm, xid, dcgm, nhc, drain]
 briefing: |
-  "{user}'s 8-GPU training job ({job}) failed at 02:13. When the team checked"
+  {user}'s 8-GPU training job ({job}) failed at 02:13. When the team checked
   this morning, {node} had been drained by the node health check. Users are asking
   for the node back.
   Find out what happened to {node} and decide whether the drain was justified.
@@ -46,15 +46,18 @@ setup:
       state.slurm.jobs.append({
           'id': {job}, 'name': '{jobname}', 'user': '{user}', 'partition': 'defq', 'state': 'FAILED',
           'exit_code': '1:0', 'num_nodes': 1, 'gpus_per_node': 8, 'nodelist': ['{node}'],
-          'submit_time': 0, 'start_time': 0, 'end_time': 0, 'batch': True,
+          'submit_time': -27000, 'start_time': -26900, 'end_time': -24420, 'batch': True,
           'command': '/home/{user}/{jobname}.sbatch', 'reason': 'NonZeroExitCode'})
       state.slurm.next_job_id = {job} + 1
 checks:
   - desc: you read the kernel log on {node} (the Xid tells you what failed)
     expr: ran(r'^(dmesg|journalctl -k|journalctl --dmesg)', '{node}')
+  - desc: a bug report was collected before the reboot (the crash dump is gone afterwards)
+    kind: evidence
+    expr: ran_before(r'^nvidia-bug-report', r'^(reboot|scontrol reboot|cmsh .*(power|reboot)|ipmitool .*power)') or ran_before(r'^ssh {node} nvidia-bug-report', r'^(reboot|scontrol reboot|cmsh .*(power|reboot))')
   - desc: you read the logs before rebooting or power-cycling the node
     kind: evidence
-    expr: ran_before(r'^(dmesg|journalctl)', r'^(reboot|scontrol reboot|cmsh .*power|ipmitool .*power)')
+    expr: ran_before(r'^(dmesg|journalctl)', r'^(reboot|scontrol reboot|cmsh .*(power|reboot)|ipmitool .*power)', '{node}') or ran_before(r'^ssh {node} (dmesg|journalctl)', r'^(reboot|scontrol reboot|cmsh .*(power|reboot)|ipmitool .*power)')
   - desc: all 8 GPUs on {node} are visible again
     expr: not any(g.fallen_off_bus for g in nodes['{node}'].gpus)
   - desc: a DCGM diagnostic of level 2+ passed on {node}
@@ -68,7 +71,7 @@ checks:
 hints:
   - "sinfo -R shows why a node is drained and who drained it. sacct -j {job} shows how the job ended."
   - "Log in to {node} and check the kernel ring buffer for NVRM Xid messages: dmesg | grep -i xid. Then compare with what nvidia-smi can still see."
-  - "Xid 79 means the GPU fell off the bus. The driver can't talk to it, so nvidia-smi -r won't work. Only a reboot or power cycle brings it back. The drain was correct."
+  - "Xid 79 means the GPU fell off the bus. The driver can't talk to it, so nvidia-smi -r won't work. Only a reboot or power cycle brings it back, and the reboot clears the crash dump: collect nvidia-bug-report.sh first. The drain was correct."
   - "After the reboot, run a DCGM diagnostic on {node} (dcgmi diag at level 2 or 3). The node stays DRAIN until you resume it with scontrol update, and you should only do that after the diag passes."
 references:
   - NVIDIA GPU Xid Errors documentation (Xid 79)

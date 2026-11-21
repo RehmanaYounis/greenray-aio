@@ -10,7 +10,7 @@ briefing: |
   The technician reinstalled the OS packages that were missing.
   Since then Slurm shows the node as DOWN* "Not responding", even though you
   can ssh to it and `systemctl status slurmd` says active (running).
-  "{user}'s job that was running there when the node went away was killed."
+  {user}'s job that was running there when the node went away was killed.
 
   Get {node} back into service. Fix this node only: the other three DGX nodes
   are running fine, and nobody wants their authentication touched.

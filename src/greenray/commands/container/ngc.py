@@ -138,7 +138,20 @@ def ngc_cli(ctx, args):
     if args[:1] == ["registry"] and len(args) >= 3 and args[1] == "image":
         _ngc_require(ctx)
         action = args[2]
-        pattern = next((a for a in args[3:] if not a.startswith("-")), None)
+        pattern = next(
+            (a for a in args[3:] if not a.startswith("-") and args[args.index(a) - 1] != "--format_type"), None
+        )
+        fmt = next((args[i + 1] for i, a in enumerate(args) if a == "--format_type" and i + 1 < len(args)), None)
+        fmt = (
+            fmt
+            or next((a.split("=", 1)[1] for a in args if a.startswith("--format_type=")), None)
+            or ngc.get("format_type")
+            or "ascii"
+        )
+        if fmt not in ("ascii", "json", "csv"):
+            raise CommandError(
+                f"ngc: error: argument --format_type: invalid choice: '{fmt}' (choose from 'ascii', 'csv', 'json')", 2
+            )
         repos = dict(ngc.catalog)
         repos.update(ngc.private_repos)
         if action == "list":
@@ -158,7 +171,19 @@ def ngc_cli(ctx, args):
                         "False",
                     )
                 )
-            return _ngc_table(rows)
+            return _ngc_table(rows, fmt)
+        if action == "pull":
+            if not pattern:
+                raise CommandError(
+                    "ngc registry image pull: error: the following arguments are required: <image>[:<tag>]", 2
+                )
+            from .docker import _pull
+
+            ref = pattern if "/" in pattern.split(":")[0] and pattern.startswith("nvcr.io") else f"nvcr.io/{pattern}"
+            repo = pattern.split(":")[0].removeprefix("nvcr.io/")
+            if repo not in repos:
+                raise CommandError(f"Error: Image '{repo}' could not be found.", 1)
+            return _pull(ctx, ref)
         if action == "info":
             if not pattern:
                 raise CommandError(
@@ -181,6 +206,11 @@ def ngc_cli(ctx, args):
         raise CommandError(
             f"ngc registry image: invalid choice: '{action}' (choose from 'info', 'list', 'pull', 'push', 'remove')", 2
         )
+    if args[:1] == ["registry"] and len(args) >= 2 and args[1] not in ("image",):
+        raise CommandError(
+            f"ngc registry: error: argument: invalid choice: '{args[1]}' (choose from 'image', 'model', 'resource', 'chart'; the lab supports 'image')",
+            2,
+        )
     if args[:2] == ["org", "list"] or args[:2] == ["user", "who"]:
         _ngc_require(ctx)
         return _ngc_table([("Name", "Org"), ("aiops-admin", ngc.org or "no-org")])
@@ -192,7 +222,14 @@ def _glob_match(pattern, text):
     return fnmatch.fnmatch(text, pattern) or fnmatch.fnmatch(text, pattern + "*")
 
 
-def _ngc_table(rows):
+def _ngc_table(rows, fmt="ascii"):
+    if fmt == "json":
+        import json
+
+        hdr = [str(h) for h in rows[0]]
+        return json.dumps([dict(zip(hdr, map(str, r))) for r in rows[1:]], indent=2) + "\n"
+    if fmt == "csv":
+        return "\n".join(",".join(str(c) for c in r) for r in rows) + "\n"
     widths = [max(len(str(r[i])) for r in rows) for i in range(len(rows[0]))]
     sep = "+" + "+".join("-" * (w + 2) for w in widths) + "+"
     out = [sep]

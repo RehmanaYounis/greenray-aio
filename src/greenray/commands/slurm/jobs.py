@@ -23,6 +23,7 @@ from .common import (
     expand_hostlist,
     parse_gres_spec,
     parse_time,
+    time_arg,
 )
 from .conf import _enforce, _gpu_types_enabled, _param, _pyxis_client_ok
 from .nodes import _conf_gpus, _finish
@@ -200,6 +201,15 @@ def _build_job(ctx, prog, opts, extra_check=True):
         raise fail("Required partition not available (inactive or drain)")
     pnodes = _part_nodes(state, part)
     max_gpn = max([_conf_gpus(s.nodes[n]) for n in pnodes] + [0])
+    for key, flag in (("ntasks", "-n"), ("ntasks_per_node", "--ntasks-per-node"), ("cpus_per_task", "-c")):
+        if key in opts and not str(opts[key]).isdigit():
+            raise _err(f'{prog}: error: Invalid numeric value "{opts[key]}" for {flag}.')
+    if "nodes" in opts:
+        m = re.fullmatch(r"(\d+)(?:-(\d+))?", str(opts["nodes"]))
+        if not m or int(m.group(1)) == 0 or (m.group(2) and int(m.group(2)) < int(m.group(1))):
+            raise _err(f'{prog}: error: Invalid numeric value "{opts["nodes"]}" for -N.')
+    if "nice" in opts and not re.fullmatch(r"-?\d+", str(opts["nice"])):
+        raise _err(f"{prog}: error: Invalid --nice value: {opts['nice']}")
     num_nodes = int(str(opts["nodes"]).split("-")[0]) if "nodes" in opts else None
     ntasks = int(opts["ntasks"]) if "ntasks" in opts else None
     tpn = int(opts["ntasks_per_node"]) if "ntasks_per_node" in opts else None
@@ -256,7 +266,7 @@ def _build_job(ctx, prog, opts, extra_check=True):
             raise fail("Requested node configuration is not available")
     if len(req) > num_nodes:
         num_nodes = len(req)
-    tl = parse_time(opts["time"]) if "time" in opts else None
+    tl = time_arg(opts["time"], f"{prog}: error: Invalid --time specification") if "time" in opts else None
     if tl is None and p.get("default_time") not in (None, "NONE", ""):
         tl = parse_time(p.default_time)
     epl = str(_param(state, "EnforcePartLimits", "NO")).upper()
@@ -365,7 +375,7 @@ def _specification(prog, opts, state, pnodes, time_limit, fail):
             raise _err(f'{prog}: error: Invalid numeric value "{opts["ntasks_per_gpu"]}" for --ntasks-per-gpu.')
         spec["ntasks_per_gpu"] = int(opts["ntasks_per_gpu"])
     if "time_min" in opts:
-        tmin = parse_time(opts["time_min"])
+        tmin = time_arg(opts["time_min"], f"{prog}: error: Invalid --time-min specification")
         if tmin is None or (time_limit is not None and tmin > time_limit):
             raise fail("Requested time limit is invalid (missing or exceeds some limit)")
         spec["time_min"] = tmin
@@ -456,6 +466,7 @@ def sbatch(ctx, args):
     j = _new_job(state, job)
     out_pat = opts.get("output") or "slurm-%j.out"
     j.stdout = _expand_pattern(out_pat, j)
+    j.stdout_pattern = out_pat
     if not j.stdout.startswith("/"):
         j.stdout = j.work_dir.rstrip("/") + "/" + j.stdout
     schedule(state)
@@ -494,6 +505,8 @@ def srun(ctx, args):
     pyxis = _pyxis_client_ok(ctx.node)
     opts, cmd = parse_job_opts("srun", args, pyxis=pyxis)
     if not cmd:
+        if str(opts.get("mpi", "")).lower() == "list":
+            return "MPI plugin types are...\n\tnone\n\tpmi2\n\tpmix\n\tcray_shasta\nspecific pmix plugin versions available: pmix_v4\n"
         raise _err("srun: fatal: No command given to execute.")
     _need_ctl(ctx, "srun: error: Unable to allocate resources: ")
     # inside an allocation (batch script, salloc, srun --pty) -> job step
@@ -579,12 +592,21 @@ def scancel(ctx, args):
     _need_ctl(ctx, "scancel: error: Kill job error: ")
     _begin(ctx)
     user = _opt(args, "-u", "--user")
+    if _has(args, "--me"):
+        user = _USER[-1]
     part = _opt(args, "-p", "--partition")
     st = _opt(args, "-t", "--state")
     name = _opt(args, "-n", "--name", "--jobname")
+    signal = _opt(args, "-s", "--signal")
+    if (
+        signal is not None
+        and signal.upper().removeprefix("SIG") not in ("KILL", "TERM", "INT", "HUP", "USR1", "USR2", "STOP", "CONT")
+        and not signal.isdigit()
+    ):
+        raise _err(f"scancel: error: Invalid job signal: {signal}")
     skip = set()
     for i, a in enumerate(args):
-        if a in ("-u", "--user", "-p", "--partition", "-t", "--state", "-n", "--name", "--jobname"):
+        if a in ("-u", "--user", "-p", "--partition", "-t", "--state", "-n", "--name", "--jobname", "-s", "--signal"):
             skip.add(i + 1)
     ids = [a for i, a in enumerate(args) if not a.startswith("-") and i not in skip]
     out = []
@@ -615,9 +637,13 @@ def scancel(ctx, args):
             if name and j.name != name:
                 continue
             targets.append(j)
+    gentle = signal is not None and signal.upper().removeprefix("SIG") not in ("KILL", "9")
     for j in targets:
-        if j.user != "root":
+        if j.user != "root" and _USER[-1] == "root":
             audit.record(state, audit.CANCEL_USER_JOB, ctx.host, "scancel", f"{j.id} ({j.user})")
+        if gentle and j.state == "RUNNING":  # a signal other than KILL is delivered to the steps, the job goes on
+            j.setdefault("signals", []).append(signal.upper())
+            continue
         _finish(state, j, "CANCELLED", "0:0")
     schedule(state)
     if out:

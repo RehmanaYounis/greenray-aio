@@ -24,8 +24,8 @@ setup: []
 checks:
   - desc: /root/hello-gpu.sbatch starts with a shebang line
     expr: "file('bcm-head', '/root/hello-gpu.sbatch').startswith('#!')"
-  - desc: the script requests a GPU (--gres=gpu:1, --gpus or --gpus-per-node)
-    expr: "re.search(r'--(gres=gpu|gpus|gpus-per-node)', file('bcm-head', '/root/hello-gpu.sbatch')) is not None"
+  - desc: the script requests a GPU in an #SBATCH line (--gres=gpu:1, --gpus, -G or --gpus-per-node)
+    expr: "re.search(r'(?m)^#SBATCH\\s.*(--gres[= ]gpu|--gpus|-G\\s*\\d|--gpus-per-(node|task))', file('bcm-head', '/root/hello-gpu.sbatch')) is not None"
   - desc: a batch job named hello-gpu with one GPU completed
     expr: "any(j.get('batch') and j.name == 'hello-gpu' and j.get('gpus_per_node', 0) >= 1 and j.state == 'COMPLETED' for j in slurm.jobs)"
   - desc: the job's output file lists the GPU it ran on

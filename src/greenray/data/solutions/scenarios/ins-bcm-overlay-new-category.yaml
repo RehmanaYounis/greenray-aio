@@ -36,3 +36,8 @@ edge_cases:
   - "Moving dgx-04 back to dgx-h100 would also fix sinfo, and undo the pilot. Fix the overlay, which is where the configuration was incomplete."
   - "Overlay priority decides which settings win when two overlays hand the same role to a node: the higher number wins. slurm-client-gpu at 450 and slurm-client at 500 is the layout cm-wlm-setup produces; do not change the numbers to make a node appear."
   - "A node can be added to an overlay by name (append nodes dgx-04) instead of by category. That works for one machine and silently stops working for the next node that joins the category; cover the category."
+expect:
+  'cmsh -c "configurationoverlay; list"':
+    - 'dgx-h100-b'
+  'scontrol show node dgx-04':
+    - 'Gres=gpu:h100:8'

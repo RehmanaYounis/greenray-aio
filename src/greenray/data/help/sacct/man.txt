@@ -1,0 +1,53 @@
+SACCT(1)                       Slurm Commands                       SACCT(1)
+
+NAME
+       sacct - display accounting data for jobs and job steps
+
+SYNOPSIS
+       sacct [OPTIONS]
+
+DESCRIPTION
+       sacct reads the accounting database (slurmdbd), so it still knows
+       about jobs that squeue no longer lists. By default it shows the
+       current day's jobs of the calling user; root sees every user.
+       Each job prints as its allocation plus a line per step (.batch,
+       .extern, .0 ...); -X keeps the allocation lines only.
+
+OPTIONS
+       -j, --jobs JOBID[,JOBID]
+              Only these jobs. A step suffix (JOBID.STEP) selects a step.
+
+       -u, --user USER     Jobs of this user.    -a, --allusers  Everyone.
+
+       -X, --allocations   One line per job, no steps.
+
+       -o, --format FIELD[%WIDTH],...
+              Fields to print, for example
+              JobID,JobName,State,ExitCode,NodeList,Elapsed,Timelimit.
+              NCPUS, AllocCPUS, ReqMem, ReqTRES, AllocTRES, Start, End,
+              Submit, Reason, QOS, Account, User are available too.
+
+       -b, --brief         JobID, State and ExitCode only.
+       -l, --long          Many fields.
+       -s, --state STATES  Only jobs in these states (COMPLETED, FAILED,
+                           OUT_OF_MEMORY, TIMEOUT, CANCELLED, or codes).
+       -S, --starttime WHEN  Jobs that were active after WHEN
+                           (YYYY-MM-DD[THH:MM], now-1day, today).
+       -E, --endtime WHEN  Jobs that started before WHEN.
+       -n, --noheader      No header line.
+       -p, -P              '|' separated output, with or without a
+                           trailing bar.
+
+READING THE STATE COLUMN
+       COMPLETED       exit code 0:0.
+       FAILED          the script ended with a non-zero exit code.
+       OUT_OF_MEMORY   the kernel's OOM killer ended a step; the slurmd
+                       journal on the node has the oom_kill line.
+       TIMEOUT         the job ran past its time limit.
+       NODE_FAIL       the node went away while the job ran.
+       CANCELLED by UID   someone ran scancel.
+
+SEE ALSO
+       squeue(1), scontrol(1), sacctmgr(1)
+
+GreenRay AIO                     lab manual                        SACCT(1)

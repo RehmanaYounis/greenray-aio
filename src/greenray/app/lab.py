@@ -93,6 +93,7 @@ class LabSession:
         """Rebuild the broken cluster. Same attempt: hints, objectives and timer carry over."""
         state = self.scenario.build_state() if self.scenario else make_cluster()
         self.shell = Shell(state, color=self.color)
+        self.initially_true = {desc for desc, ok, _ in self.grade() if ok}
         if self.ui is not None and self.ui.interactive:  # stream watch/dmon samples on a real terminal
             self.shell.ctx.emit = self.ui.out
             self.shell.ctx.live_delay = 1.0
@@ -184,15 +185,21 @@ KIND_TAG = {"safety": "safe practice", "evidence": "evidence"}
 
 
 def show_results(
-    ui: UI, results: list[tuple[str, bool, str]], hide_unmet: bool = False, kinds: list[str] | None = None
+    ui: UI,
+    results: list[tuple[str, bool, str]],
+    hide_unmet: bool = False,
+    kinds: list[str] | None = None,
+    untouched: set[str] | None = None,
 ) -> None:
     """Print check results. ``hide_unmet`` keeps unmet criteria secret (incident mode).
 
     ``kinds`` (one per result) tags evidence and safe-practice rows so the learner sees what kind
-    of judgment each one rewards.
+    of judgment each one rewards. ``untouched`` names the checks that were already true when the
+    lab opened and still are: shown dim, because keeping an invariant is not yet work done.
     """
     debug = config.debug()
     kinds = kinds or ["outcome"] * len(results)
+    untouched = untouched or set()
     rows, styles, unmet = [], [], 0
     for (desc, ok, err), kind in zip(results, kinds):
         if hide_unmet and not ok:
@@ -200,9 +207,12 @@ def show_results(
             continue
         tag = KIND_TAG.get(kind)
         label = desc + (f"  ({err})" if err and debug else "")
+        held = ok and desc in untouched and kind == "outcome"
+        if held:
+            label += "  (true from the start)"
         if ui.color:
             rows.append(["✓" if ok else "✗", f"[{tag}] {label}" if tag else label])
-            styles.append("green" if ok else "red")
+            styles.append("dim" if held else ("green" if ok else "red"))
         else:
             ui.out(f"  {'PASS' if ok else 'FAIL'}  {f'[{tag}] ' if tag else ''}{label}")
     if unmet:
@@ -246,7 +256,12 @@ def show_debrief(ui: UI, session: LabSession, passed: bool, identity_hidden: boo
     if identity_hidden:
         ui.out(ui.bold(f"\nThis incident was: {s.title}") + ui.dim(f"  ({s.id}, ticket {ticket_number(s)})"))
     if s.variant_label:
-        ui.out(ui.dim(f"You had {s.variant_label}; `retry` or a new run gives you another."))
+        ui.out(
+            ui.dim(
+                f"You had {s.variant_label}; a new run gives you another"
+                + (", and `retry` does too." if identity_hidden else ".")
+            )
+        )
     show_solution(ui, s, title="Debrief: reference solution and edge cases" if passed else "Reference solution")
     mine = your_commands(session)
     if mine:
@@ -259,8 +274,8 @@ def show_debrief(ui: UI, session: LabSession, passed: bool, identity_hidden: boo
         )
     ui.out(
         ui.dim(
-            "Note: the grader checks that your diagnostic commands were run, "
-            "not the order you ran them in. Diagnose before you change things."
+            "Note: the grader checks that your diagnostic commands were run, and where an objective "
+            "says so, that they ran before the change. Diagnose before you change things."
         )
     )
     done = {sid for sid, rec in progress.load()["scenarios"].items() if rec.get("passed")}
@@ -302,8 +317,10 @@ def explain(ui: UI, args: str) -> None:
         ui.out(f"`{name}` is not a simulated command. `commands` lists what is available.")
 
 
-def _completion_words() -> list[str]:
-    meta = ["task", "check", "hint", "solution", "commands", "reset", "retry", "objectives", "explain", "quit", "back"]
+def _completion_words(incident: bool = False) -> list[str]:
+    meta = ["task", "check", "hint", "solution", "commands", "reset", "explain", "quit", "back"]
+    if incident:
+        meta += ["retry", "objectives"]
     return command_names() + meta + [HEAD, *COMPUTE_NODES]
 
 
@@ -324,7 +341,7 @@ def run_lab(ui: UI, s: Scenario | None, incident: bool = False, hide_identity: b
     """Practice a scenario (guided by default, or as an incident); the result is saved to progress."""
     session = LabSession(s, color=ui.color, ui=ui)
     s = session.scenario  # the session may have picked a variant; everything shown must be that one
-    ui.set_completer(_completion_words(), lambda: session.shell.ctx)
+    ui.set_completer(_completion_words(incident), lambda: session.shell.ctx)
     incident = incident and s is not None
     gave_up = passed = False
     show_briefing(ui, s, incident=incident)
@@ -352,14 +369,8 @@ def run_lab(ui: UI, s: Scenario | None, incident: bool = False, hide_identity: b
             ui.out(ui.yellow(f"Fresh attempt #{session.attempt}: cluster, timer, hints and objectives reset."))
             show_briefing(ui, s, incident=True)
         elif s and incident and cmd == "objectives":
-            if (
-                not session.objectives_revealed
-                and ui.ask(
-                    "Reveal the success criteria? They point at the cause, so this attempt counts as guided. [y/N] "
-                )
-                .strip()
-                .lower()
-                != "y"
+            if not session.objectives_revealed and not _confirm(
+                ui, "Reveal the success criteria? They point at the cause, so this attempt counts as guided. [y/N] "
             ):
                 continue
             session.objectives_revealed = True
@@ -373,19 +384,25 @@ def run_lab(ui: UI, s: Scenario | None, incident: bool = False, hide_identity: b
             if (
                 n == len(s.hints) - 1
                 and len(s.hints) > 1
-                and ui.ask("The last hint is close to the answer. Show it? [y/N] ").strip().lower() != "y"
+                and not _confirm(ui, "The last hint is close to the answer. Show it? [y/N] ")
             ):
                 continue
             ui.out(ui.yellow(f"Hint {n + 1}/{len(s.hints)}: {s.hints[n]}"))
             session.hints_used += 1
         elif s and cmd in ("solution", "giveup"):
-            if ui.ask("Reveal the solution? This ends the attempt as not passed. [y/N] ").strip().lower() == "y":
+            if _confirm(ui, "Reveal the solution? This ends the attempt as not passed. [y/N] "):
                 gave_up = True
                 show_debrief(ui, session, passed=False, identity_hidden=hide_identity)
                 break
         elif s and cmd == "check":
             results = session.grade()
-            show_results(ui, results, hide_unmet=incident and not session.objectives_revealed, kinds=s.kinds)
+            show_results(
+                ui,
+                results,
+                hide_unmet=incident and not session.objectives_revealed,
+                kinds=s.kinds,
+                untouched=session.initially_true,
+            )
             mins = (time.time() - session.started) / 60
             if all(ok for _, ok, _ in results):
                 passed = True
@@ -411,10 +428,19 @@ def run_lab(ui: UI, s: Scenario | None, incident: bool = False, hide_identity: b
 
 
 def _yes(ui: UI, question: str) -> bool:
-    """Enter means yes; only an explicit n/no declines. Ctrl-C counts as no."""
+    """Enter means yes; only an explicit n/no declines. Ctrl-C and end of input count as no."""
     try:
         return ui.ask(question).strip().lower() not in ("n", "no")
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, EOFError):
+        ui.out("")
+        return False
+
+
+def _confirm(ui: UI, question: str) -> bool:
+    """Only an explicit y/yes confirms; Ctrl-C and end of input decline instead of leaving the lab."""
+    try:
+        return ui.ask(question).strip().lower() in ("y", "yes")
+    except (KeyboardInterrupt, EOFError):
         ui.out("")
         return False
 

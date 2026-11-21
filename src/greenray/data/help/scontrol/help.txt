@@ -1,0 +1,21 @@
+scontrol [<OPTION>] [<COMMAND>]
+    Valid <OPTION> values are:
+     -d, --details  show more details where available (show job, show node)
+     -o, --oneliner print each record on one line
+     -a, --all      include hidden partitions
+     -Q, --quiet    print no warnings
+     -v, --verbose  print extra information
+     --help         print this description of use
+
+    Valid <COMMAND> values are:
+     show <ENTITY> [ID]     show job, node, partition, config, hostnames, hostlist
+     update <SPECIFICATION> update a job, node or partition (KEY=VALUE pairs)
+     create partition ...   create a partition
+     delete partition NAME  delete a partition
+     reconfigure            re-read slurm.conf on every daemon
+     reboot [ASAP] [nextstate=resume] NODELIST   reboot nodes through Slurm
+     hold|release|requeue <job_list>
+     ping                   report the controller's state
+     version                print the Slurm version
+
+(GreenRay AIO simulates the options listed above.)

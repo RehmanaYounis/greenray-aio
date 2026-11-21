@@ -165,7 +165,7 @@ PROPS = {
     },
 }
 READONLY = {
-    "device": {"type", "status", "hostname"},
+    "device": {"type", "status"},
     "softwareimage": {"name", "revision"},
     "category": {"name"},
     "partition": {"name", "headnode"},

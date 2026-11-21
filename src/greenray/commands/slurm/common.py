@@ -6,6 +6,7 @@ import contextlib
 import datetime as _dt
 import re
 
+from ...core.errors import CommandError
 from ..common import err, has, opt
 
 SLURM_VERSION = "23.11.6"
@@ -120,7 +121,7 @@ def compress_hostlist(names) -> str:
 
 
 def parse_time(spec) -> int | None:
-    """Slurm time spec -> minutes (None = unlimited)."""
+    """Slurm time spec -> minutes (None = unlimited); ValueError for anything Slurm would reject."""
     if spec is None:
         return None
     if isinstance(spec, (int, float)):
@@ -128,6 +129,8 @@ def parse_time(spec) -> int | None:
     s = str(spec).strip()
     if s.upper() in ("UNLIMITED", "INFINITE", "", "NONE"):
         return None
+    if not re.fullmatch(r"(\d+-)?\d+(:\d+){0,3}", s):
+        raise ValueError(f"invalid time specification: {spec}")
     days = 0
     if "-" in s:
         d, s = s.split("-", 1)
@@ -141,6 +144,14 @@ def parse_time(spec) -> int | None:
     if len(parts) == 2:
         return parts[0] + (1 if parts[1] else 0)
     return parts[0] * 60 + parts[1] + (1 if parts[2] else 0)
+
+
+def time_arg(spec, message: str) -> int | None:
+    """parse_time for user input: the tool's error instead of a traceback."""
+    try:
+        return parse_time(spec)
+    except ValueError:
+        raise CommandError(message) from None
 
 
 def fmt_limit(minutes) -> str:

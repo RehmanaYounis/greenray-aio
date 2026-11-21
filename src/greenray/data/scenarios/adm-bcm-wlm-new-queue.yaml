@@ -38,7 +38,7 @@ checks:
     expr: ran(r'^(sinfo|scontrol show (partition|part))')
   - desc: slurm.conf was not edited by hand
     kind: safety
-    expr: not ran(r'^(nano|vim?|sed -i|tee)\b.*slurm\.conf$')
+    expr: generated('bcm-head', '/etc/slurm/slurm.conf')
 hints:
   - "Read the first lines of /etc/slurm/slurm.conf on bcm-head: they say who owns the file. On a BCM cluster partitions are objects in cmsh, under the workload manager: cmsh -c \"wlm; list\" and then use the instance it shows."
   - "Inside the instance, jobqueue is a submode: list shows the queues, use defq; show shows the properties a queue has. add <name> creates a new one; set works on nodes, maxtime and default."

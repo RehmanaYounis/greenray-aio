@@ -6,6 +6,7 @@ import re
 
 from ...core import audit
 from .. import command
+from ..common import int_arg
 from .affinity import _gpu_core_map
 from .common import (
     GRES_CONF,
@@ -23,6 +24,7 @@ from .common import (
     fmt_limit_upper,
     parse_gres_spec,
     parse_time,
+    time_arg,
 )
 from .conf import _parse_gres_conf, _partition_from_conf
 from .nodes import (
@@ -38,6 +40,23 @@ from .nodes import (
 )
 from .scheduler import _alloc_cpu_count, _begin, _controller_ok, _ensure, _job_gpus, _need_ctl, _part_nodes, schedule
 from .status import _job_tres_per_node
+
+
+def _oneline(on, text):
+    """``scontrol -o``: one record per line, the indented fields joined with single spaces."""
+    if not on or not isinstance(text, str):
+        return text
+    out, cur = [], []
+    for line in text.splitlines():
+        if line.startswith(" ") or line.startswith("\t"):
+            cur.append(line.strip())
+        else:
+            if cur:
+                out.append(" ".join(cur))
+            cur = [line.strip()] if line.strip() else []
+    if cur:
+        out.append(" ".join(cur))
+    return "\n".join(out) + "\n"
 
 
 def _show_node(state, sn, details=False):
@@ -91,12 +110,12 @@ def _show_partition(state, p):
         "\n".join(
             [
                 f"PartitionName={p.name}",
-                f"   AllowGroups=ALL AllowAccounts={p.allow_accounts} AllowQos={p.allow_qos}",
+                f"   AllowGroups={p.get('allow_groups', 'ALL')} AllowAccounts={p.allow_accounts} AllowQos={p.allow_qos}",
                 f"   AllocNodes=ALL Default={'YES' if p.default else 'NO'} QoS={p.qos or 'N/A'}",
                 f"   DefaultTime={p.default_time} DisableRootJobs=NO ExclusiveUser=NO GraceTime=0 Hidden=NO",
                 f"   MaxNodes={p.max_nodes} MaxTime={fmt_limit_upper(mt)} MinNodes=0 LLN=NO MaxCPUsPerNode=UNLIMITED MaxCPUsPerSocket=UNLIMITED",
                 f"   Nodes={p.nodes}",
-                f"   PriorityJobFactor=1 PriorityTier={p.priority_tier} RootOnly=NO ReqResv=NO OverSubscribe=NO",
+                f"   PriorityJobFactor={p.get('priority_job_factor', 1)} PriorityTier={p.priority_tier} RootOnly=NO ReqResv=NO OverSubscribe={p.get('oversubscribe', 'NO')}",
                 "   OverTimeLimit=NONE PreemptMode=OFF",
                 f"   State={p.state} TotalCPUs={cpus} TotalNodes={len(nodes)} SelectTypeParameters=NONE",
                 "   JobDefaults=(null)",
@@ -278,7 +297,7 @@ def _update_node(ctx, kv):
             sn.reason = reason
         for k, v in kv:
             if k == "weight":
-                sn.weight = int(v)
+                sn.weight = int_arg(v, "slurm_update error: Invalid argument")
             elif k in ("features", "availablefeatures", "activefeatures"):
                 sn.features = v
         _derive_state(state, sn)
@@ -334,9 +353,23 @@ def _update_partition(ctx, kv, create=False):
         elif k == "maxnodes":
             p.max_nodes = v
         elif k == "prioritytier":
-            p.priority_tier = int(v)
+            p.priority_tier = int_arg(v, "slurm_update error: Invalid argument")
         elif k == "defaulttime":
             p.default_time = v
+        elif k in ("oversubscribe", "shared"):
+            if v.split(":")[0].upper() not in ("NO", "YES", "FORCE", "EXCLUSIVE"):
+                raise _err("Invalid input: OverSubscribe=" + v)
+            p.oversubscribe = v.upper()
+        elif k == "allowgroups":
+            p.allow_groups = v
+        elif k == "allowaccounts":
+            p.allow_accounts = v
+        elif k in ("priorityjobfactor",):
+            p.priority_job_factor = int_arg(v, "slurm_update error: Invalid argument")
+        elif k in ("partitionname", "partition"):
+            continue
+        else:
+            raise _err(f"slurm_update error: Invalid partition parameter: {k}")
     schedule(state)
     return ""
 
@@ -358,13 +391,13 @@ def _update_job(ctx, kv):
         if pending_only and j.state != "PENDING":
             raise _err("slurm_update error: Job is no longer pending execution")
         if k in ("timelimit", "time"):
-            j.time_limit = parse_time(v)
+            j.time_limit = time_arg(v, "scontrol: error: Invalid time limit specified")
         elif k == "partition":
             if v not in s.partitions:
                 raise _err("slurm_update error: Invalid partition name specified")
             j.partition = v
         elif k in ("numnodes", "nodes", "minnodes"):
-            j.num_nodes = int(v.split("-")[0])
+            j.num_nodes = int_arg(v.split("-")[0], "slurm_update error: Invalid node count specified", minimum=1)
         elif k in ("gres", "tresperNode".lower(), "trespernode"):
             gt, gc = parse_gres_spec(v)
             j.gpus_per_node = gc
@@ -378,10 +411,10 @@ def _update_job(ctx, kv):
                 raise _err("slurm_update error: Invalid qos specification")
             j.qos = v
         elif k == "priority":
-            j.priority = int(v)
+            j.priority = int_arg(v, "slurm_update error: Invalid argument", minimum=0)
             j.priority_fixed = True
         elif k == "nice":
-            j.nice = int(v)
+            j.nice = int_arg(v, "slurm_update error: Invalid argument")
         elif k in ("name", "jobname"):
             j.name = v
         elif k == "account":
@@ -389,9 +422,10 @@ def _update_job(ctx, kv):
         elif k == "dependency":
             j.dependency = v
         elif k == "numtasks":
-            j.ntasks_per_node = max(1, int(v) // max(1, j.num_nodes))
+            n = int_arg(v, "slurm_update error: Invalid task count specified", minimum=1)
+            j.ntasks_per_node = max(1, n // max(1, j.num_nodes))
         elif k == "ntaskspernode":
-            j.ntasks_per_node = int(v)
+            j.ntasks_per_node = int_arg(v, "slurm_update error: Invalid task count specified", minimum=1)
         else:
             raise _err(f"Update of this parameter is not supported: {k}={v}")
     if j.state == "PENDING" and j.gpus_per_node:
@@ -464,13 +498,20 @@ def scontrol(ctx, args):
         return f"slurm {SLURM_VERSION}\n"
     if args[0] in ("-h", "--help", "help", "--usage"):
         return SCONTROL_USAGE
-    detail = False
-    while args and args[0].startswith("-"):
-        if args[0] in ("-d", "--details"):
+    detail = oneliner = False
+    rest = []
+    for a in args:
+        if a in ("-d", "--details"):
             detail = True
-        elif args[0] not in ("-o", "--oneliner", "-a", "--all", "-Q", "--quiet", "-v", "--verbose"):
-            raise _err(f"scontrol: unrecognized option '{args[0]}'\nTry \"scontrol --help\" for more information")
-        args = args[1:]
+        elif a in ("-o", "--oneliner"):
+            oneliner = True
+        elif a in ("-a", "--all", "-Q", "--quiet", "-v", "--verbose"):
+            continue
+        elif a.startswith("-") and len(a) > 1 and "=" not in a and not rest:
+            raise _err(f"scontrol: unrecognized option '{a}'\nTry \"scontrol --help\" for more information")
+        else:
+            rest.append(a)
+    args = rest
     if not args:
         raise _err("scontrol: error: no command given")
     sub = args[0].lower()
@@ -500,7 +541,7 @@ def scontrol(ctx, args):
                 if n not in s.nodes:
                     raise _err(f"Node {n} not found")
                 out.append(_show_node(state, s.nodes[n], details=detail))
-            return "\n".join(out)
+            return _oneline(oneliner, "\n".join(out))
         if what in ("partition", "partitions", "part"):
             names = [ent] if ent else list(s.partitions)
             out = []
@@ -508,19 +549,19 @@ def scontrol(ctx, args):
                 if p not in s.partitions:
                     raise _err(f"Partition {p} not found")
                 out.append(_show_partition(state, s.partitions[p]))
-            return "\n".join(out)
+            return _oneline(oneliner, "\n".join(out))
         if what in ("job", "jobs", "jobid"):
             if ent:
                 j = _find_job(state, ent)
                 if j is None:
                     raise _err("slurm_load_jobs error: Invalid job id specified")
-                return _show_job(state, j, details=detail)
+                return _oneline(oneliner, _show_job(state, j, details=detail))
             js = [j for j in s.jobs if j.state not in TERMINAL or s.clock - (j.end_time or 0) < 300]
             if not js:
-                return "No jobs in the system\n"
-            return "\n".join(_show_job(state, j, details=detail) for j in js)
+                return _oneline(oneliner, "No jobs in the system\n")
+            return _oneline(oneliner, "\n".join(_show_job(state, j, details=detail) for j in js))
         if what in ("config", "conf"):
-            return _show_config(state)
+            return _oneline(oneliner, _show_config(state))
         if what in ("qos",):
             raise _err("scontrol: error: use 'sacctmgr show qos'")
         raise _err(f"scontrol: error: Invalid entity: {rest[0]} for keyword: show")
@@ -529,15 +570,15 @@ def scontrol(ctx, args):
         keys = [k for k, _ in kv]
         if sub == "create" and rest and rest[0].lower() in ("partition", "partitionname"):
             kv = _parse_kv_args(rest[1:]) if "=" not in rest[0] else kv
-            return _update_partition(ctx, kv, create=True)
+            return _oneline(oneliner, _update_partition(ctx, kv, create=True))
         if "nodename" in keys or "node" in keys:
             if sub == "create":
                 raise _err("scontrol: error: create node is not supported in this simulator; edit slurm.conf")
-            return _update_node(ctx, kv)
+            return _oneline(oneliner, _update_node(ctx, kv))
         if "jobid" in keys or "job" in keys:
-            return _update_job(ctx, kv)
+            return _oneline(oneliner, _update_job(ctx, kv))
         if "partitionname" in keys:
-            return _update_partition(ctx, kv, create=(sub == "create"))
+            return _oneline(oneliner, _update_partition(ctx, kv, create=(sub == "create")))
         raise _err("scontrol: error: Invalid update request. Specify NodeName=, PartitionName= or JobId=")
     if sub == "delete":
         kv = dict(_parse_kv_args(rest))

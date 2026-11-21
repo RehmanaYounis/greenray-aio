@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import re
 import shlex
 
 from ...core import audit
@@ -744,6 +745,22 @@ class Cmsh:
             self.err(f"Error: property '{prop}' is not a list")
 
     def _validate(self, prop, value, name):
+        if prop == "ip":
+            parts = value.split(".")
+            if len(parts) != 4 or not all(p.isdigit() and 0 <= int(p) <= 255 for p in parts):
+                self.err(f"Error: '{value}' is not a valid IP address")
+            holder = next((d for d, v in self.bcm.devices.items() if v.get("ip") == value and d != name), None)
+            if holder:
+                self.err(f"Error: IP address {value} is already used by {holder}")
+        if prop == "mac":
+            if not re.fullmatch(r"([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}", value):
+                self.err(f"Error: '{value}' is not a valid MAC address (aa:bb:cc:dd:ee:ff)")
+            value = value.upper()
+        if prop == "hostname":
+            if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", value):
+                self.err(f"Error: '{value}' is not a valid hostname")
+            if value != name and (value in self.bcm.devices or value in self.state.nodes):
+                self.err(f"Error: a device named {value} already exists")
         if prop == "category" and not self.exists("category", value):
             self.err(f"Error: category '{value}' does not exist")
         if prop == "softwareimage" and not self.exists("softwareimage", value):
@@ -930,8 +947,15 @@ class Cmsh:
             self.err(f"Error: {name} is a built-in action and cannot be removed")
         if self.mode == "measurable":
             self.err("Error: measurables cannot be removed in the lab")
-        if self.mode == "softwareimage" and any(c.get("softwareimage") == name for c in self.bcm.categories.values()):
-            self.err(f"Error: software image {name} is in use by a category")
+        if self.mode == "softwareimage":
+            users = [c for c, v in self.bcm.categories.items() if v.get("softwareimage") == name]
+            users += [d for d, v in self.bcm.devices.items() if v.get("softwareimage") == name]
+            if users:
+                self.err(f"Error: software image {name} is in use by {', '.join(users)}; change them first")
+        if self.mode == "category":
+            users = [d for d, v in self.bcm.devices.items() if v.get("category") == name]
+            if users:
+                self.err(f"Error: category {name} is in use by {', '.join(users)}; change their category first")
         self.bcm.uncommitted[self._key(self.mode, name)] = {
             "kind": self.mode,
             "name": name,
@@ -1017,6 +1041,9 @@ class Cmsh:
         old = coll[name]
         before = dict(old)
         old.update(fields)
+        if kind == "device" and fields.get("hostname") and fields["hostname"] != name:
+            self._rename_device(name, fields["hostname"])
+            name = fields["hostname"]
         if "fsmounts" in fields and kind in ("category", "device"):
             self._push_fsmounts(kind, name)
         if kind == "softwareimage" and "kernel" in fields and fields["kernel"] != before.get("kernel"):
@@ -1038,6 +1065,25 @@ class Cmsh:
                     f"Running nodes keep their current files until imageupdate or reboot "
                     f"({', '.join(sorted(nodes))})"
                 )
+
+    def _rename_device(self, old: str, new: str) -> None:
+        """A committed hostname change: the device, the simulated node and its Slurm record follow."""
+        self.bcm.devices[new] = self.bcm.devices.pop(old)
+        self.bcm.devices[new]["hostname"] = new
+        node = self.state.nodes.pop(old, None)
+        if node is not None:
+            node["hostname"] = new
+            node.files["/etc/hostname"] = new + "\n"
+            self.state.nodes[new] = node
+        slurm = self.state.get("slurm")
+        if slurm and old in slurm.get("nodes", {}):
+            slurm.nodes[new] = slurm.nodes.pop(old)
+            slurm.nodes[new]["name"] = new
+        for ov in (self.bcm.get("overlays") or {}).values():
+            ov["nodes"] = [new if n == old else n for n in ov.get("nodes", [])]
+        self.p(f"{NOW} [notice] {HEAD}: {old} renamed to {new}")
+        if self.obj == old:
+            self.obj = new
 
     def _copy_image(self, src, new):
         if not src or src not in self.bcm.softwareimages:
@@ -1070,6 +1116,8 @@ class Cmsh:
             if args[0] not in (
                 "slurmclient",
                 "slurmserver",
+                "slurmsubmit",
+                "slurmaccounting",
                 "boot",
                 "provisioning",
                 "monitoring",
@@ -1119,6 +1167,8 @@ class Cmsh:
         elif cmd == "set":
             if len(args) < 2 or args[0] not in ("username", "password", "userid"):
                 self.err("Usage: set <username|password|userid> <value>")
+            if args[0] == "userid" and not args[1].isdigit():
+                self.err(f"Error: userid must be a number, got '{args[1]}'")
             cur[args[0]] = int(args[1]) if args[0] == "userid" else args[1]
             self.stage(self.mode, self.obj, "bmcsettings", cur)
         elif cmd == "clear":
@@ -1581,6 +1631,8 @@ class Cmsh:
         for a in it:
             if a in ("-r", "--reason"):
                 reason = next(it, "")
+            elif a.startswith("--reason=") or a.startswith("-r="):
+                reason = a.split("=", 1)[1]
             else:
                 clean.append(a)
         nodes, _ = self._nodes_from(clean)
@@ -1593,10 +1645,12 @@ class Cmsh:
                 rows.append(("slurm", n, "Not in WLM", ""))
                 continue
             if drain:
+                from ..slurm.nodes import _set_drain
+                from ..slurm.scheduler import _ensure
+
+                _ensure(self.state)
+                _set_drain(self.state, sl, reason or "drained by cmsh", user="root")
                 sl.state = "DRAINING" if sl.state in ("ALLOCATED", "MIXED", "DRAINING") else "DRAIN"
-                sl.reason = reason or "drained by cmsh"
-                sl["drain"] = True
-                sl["reason_user"] = "root"
                 rows.append(("slurm", n, "Draining" if sl.state == "DRAINING" else "Drained", sl.reason))
             else:
                 sl.state, sl.reason = "IDLE", ""
@@ -1616,7 +1670,7 @@ class Cmsh:
         nodes, rest = self._nodes_from(args, allow_positional=False)
         if not nodes or not rest:
             self.err('Usage: pexec -n <nodes> "<command>"')
-        from ..core.shell import Shell
+        from ...core.shell import Shell
 
         line = " ".join(rest)
         for n in nodes:
@@ -1687,19 +1741,26 @@ def cmsh(ctx, args):
                 raise CommandError(f"cmsh: cannot open {path}: No such file or directory")
             script = ctx.node.files[path]
         elif a in ("-h", "--help"):
-            return (
-                'Usage: cmsh [-c "cmd; cmd; ..."] [-f file]\n'
-                "Modes: device, category, softwareimage, partition, user, main\n"
-            )
+            return f'Usage: cmsh [-c "cmd; cmd; ..."] [-f file]\nModes: {", ".join(MODES)}\n'
     if script is None:
         raise CommandError(
             "cmsh: the interactive cmsh shell is not available in this lab.\n"
             'Use one-shot mode, e.g.  cmsh -c "device; list"   or   cmsh -f /root/script.cmsh'
         )
     sh = Cmsh(ctx)
+    steps = []
     for line in _split_cmds(script):
+        if not line.strip():
+            continue
+        # graders see one entry per step, each with the mode and object it ran in, so a `show`
+        # before a `set` inside one script counts as reading first
+        where = [m for m in (sh.mode, f"use {sh.obj}" if sh.obj else "") if m]
+        steps.append("; ".join([*where, line.strip()]))
         sh.run_line(line)
     sh.finish()
+    if ctx.executed and ctx.executed[-1][1][:1] == ["cmsh"]:
+        host, _ = ctx.executed.pop()
+        ctx.executed.extend((host, ["cmsh", "-c", step]) for step in steps)
     text = "\n".join(sh.out)
     text = text + "\n" if text else ""
     if sh.errors:

@@ -5,6 +5,7 @@ solution:
   - ssh {node}
   - dmesg | grep -i xid
   - nvidia-smi
+  - nvidia-bug-report.sh
   - reboot
   - ssh {node}
   - nvidia-smi -L
@@ -36,3 +37,12 @@ edge_cases:
   - "DRAIN vs DOWN: DRAIN lets running jobs finish and blocks new ones (DRAINING -> DRAINED). DOWN kills running jobs immediately."
   - "Repeated Xid 79 on the same GPU, or AER errors on its PCIe switch, points to hardware (GPU baseboard, riser, PSU). Collect nvidia-bug-report.sh and dcgmi diag -r 3 output and open an NVIDIA Enterprise Support case."
   - "Related Xids: 48 = DBE ECC error, 63/64 = row remap event/failure, 74 = NVLink error, 92 = high SBE rate, 94/95 = contained/uncontained ECC error, 119/120 = GSP timeout/error. Know which ones need a reset and which need a reboot or RMA."
+expect:
+  'sacct -j {job}':
+    - '{job}'
+    - 'FAILED'
+  'dmesg | grep -i xid':
+    - 'Xid'
+    - '79'
+  'sinfo -R':
+    - '{node}'

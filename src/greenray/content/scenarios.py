@@ -24,7 +24,7 @@ from .domains import DOMAINS
 
 SCENARIO_DIR = Path(__file__).resolve().parent.parent / "data" / "scenarios"
 DIFFICULTIES = ("easy", "medium", "hard")
-PRIVATE_KEYS = ("solution", "explanation", "edge_cases")
+PRIVATE_KEYS = ("solution", "explanation", "edge_cases", "expect")
 PLACEHOLDER = re.compile(r"\{(\w+)\}")
 
 
@@ -127,6 +127,14 @@ class Scenario:
     def edge_cases(self) -> list[str]:
         return list(self.private.get("edge_cases", []))
 
+    @property
+    def expect(self) -> dict[str, list[str]]:
+        """Solution step -> substrings its output must contain; what a correct run shows the learner."""
+        return {
+            fill(k, self.params): [fill(x, self.params) for x in v]
+            for k, v in (self.private.get("expect") or {}).items()
+        }
+
     # ------------------------------------------------------------ state
 
     def build_state(self) -> AttrDict:
@@ -210,6 +218,14 @@ def check_env(shell) -> dict:
     def file(host: str, path: str) -> str:
         return state.nodes[host].files.get(path, "")
 
+    def generated(host: str, path: str) -> bool:
+        """True when the file on ``host`` is exactly what BCM's cmd would write (so it was not edited by hand)."""
+        from ..commands.cmsh.wlm import render_slurm_conf
+
+        if path != "/etc/slurm/slurm.conf":
+            return False
+        return state.nodes[host].files.get(path, "") == render_slurm_conf(state)
+
     def pods(namespace=None, prefix=""):
         return [
             p for p in state.k8s.pods if (namespace is None or p.namespace == namespace) and p.name.startswith(prefix)
@@ -234,6 +250,7 @@ def check_env(shell) -> dict:
         "ran_before": ran_before,
         "audit": audit,
         "file": file,
+        "generated": generated,
         "pods": pods,
         "release": release,
         "jobs": jobs,
@@ -328,3 +345,19 @@ def replay_solution(scenario: Scenario, shell) -> list[str]:
         feed = iter(lines[1:])
         outputs.append(shell.run(lines[0], heredoc_reader=lambda _p, feed=feed: next(feed, None)))
     return outputs
+
+
+def output_problems(scenario: Scenario, outputs: list[str]) -> list[str]:
+    """Steps whose replayed output lacks what the solution's ``expect`` says the learner must see."""
+    problems = []
+    steps = [s.split("\n")[0].strip() for s in scenario.solution]
+    for step, needles in scenario.expect.items():
+        matches = [i for i, s in enumerate(steps) if s == step.strip()]
+        if not matches:
+            problems.append(f"expect names a step that is not in the solution: {step!r}")
+            continue
+        text = "\n".join(outputs[i] for i in matches)
+        for needle in needles:
+            if needle not in text:
+                problems.append(f"step {step!r} printed no {needle!r}")
+    return problems

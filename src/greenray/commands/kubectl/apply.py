@@ -471,6 +471,8 @@ def cmd_create(ctx, pos: list[str], opts: dict) -> str:
     what = pos[0]
     ns = ns_of(opts)
     if what in ("namespace", "ns"):
+        if len(pos) < 2:
+            raise CommandError("error: exactly one NAME is required, got 0", 1)
         name = pos[1]
         if name in k.namespaces:
             raise CommandError(f'Error from server (AlreadyExists): namespaces "{name}" already exists', 1)

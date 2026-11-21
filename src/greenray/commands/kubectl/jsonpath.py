@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 
+from ...core.errors import CommandError
 from .model import table
 
 
@@ -30,7 +31,10 @@ def _jp_steps(path):
             elif key:
                 steps.append(("key", key))
         elif ch == "[":
-            j = path.index("]", i) if "?(" not in path[i : i + 3] else path.index(")]", i) + 1
+            close = ")]" if "?(" in path[i : i + 3] else "]"
+            if close not in path[i:]:
+                raise CommandError(f"error: error parsing jsonpath {{{path}}}, unclosed array expect ]", 1)
+            j = path.index(close, i) + (1 if close == ")]" else 0)
             inner = path[i + 1 : j].strip()
             i = j + 1
             if inner == "*":

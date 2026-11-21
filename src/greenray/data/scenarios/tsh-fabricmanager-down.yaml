@@ -10,7 +10,7 @@ briefing: |
       RuntimeError: CUDA error: system not yet initialized
   nvidia-smi on the node looks normal: 8 GPUs, no XIDs, nothing running.
   Other DGX nodes are fine. In the maintenance window the GPU driver on
-  "{node} was upgraded from 550.54.15 to 550.90.07."
+  {node} was upgraded from 550.54.15 to 550.90.07.
   Find the root cause, fix it so it also survives the next reboot, and confirm
   that CUDA works (deviceQuery is installed on the DGX nodes).
 objectives:
@@ -56,7 +56,7 @@ checks:
     expr: ran(r'(journalctl.*fabricmanager|systemctl status nvidia-fabricmanager)', '{node}')
   - desc: you compared the Fabric Manager version with the driver version before starting the service
     kind: evidence
-    expr: ran_before(r'nv-fabricmanager (-v|--version)|dpkg.*fabricmanager|apt.*fabricmanager|cat /var/log/apt/history.log', r'systemctl (enable|start|restart).*fabricmanager', '{node}')
+    expr: ran_before(r'nv-fabricmanager (-v|--version)|^dpkg (-l|-s)|apt.*fabricmanager|(cat|less|grep|tail).*history.log', r'systemctl (enable|start|restart).*fabricmanager', '{node}')
 hints:
   - "CUDA error 802 (cudaErrorSystemNotReady) on an NVSwitch system almost always means the NVLink fabric was never set up. Which service does that?"
   - "Check `systemctl status nvidia-fabricmanager` and `journalctl -u nvidia-fabricmanager` on {node}. Read the whole story, including the last line."

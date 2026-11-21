@@ -310,6 +310,9 @@ def squeue(ctx, args):
     ids = _opt(args, "-j", "--jobs")
     states = _opt(args, "-t", "--states")
     fmt = _opt(args, "-o", "--format")
+    long_fmt = _opt(args, "-O", "--Format")
+    if long_fmt:  # -O names fields with optional widths: jobid:10,state,tres-per-node
+        fmt = " ".join(_long_field(f) for f in long_fmt.split(","))
     noheader = _has(args, "-h", "--noheader")
     long = _has(args, "-l", "--long")
     start = _has(args, "--start")
@@ -355,6 +358,42 @@ def squeue(ctx, args):
     if long:
         out = _banner_time(state) + "\n" + out
     return out
+
+
+# squeue -O field names -> the -o codes the renderer already understands
+LONG_FIELDS = {
+    "jobid": "i",
+    "jobarrayid": "i",
+    "name": "j",
+    "partition": "P",
+    "username": "u",
+    "state": "T",
+    "statecompact": "t",
+    "timeused": "M",
+    "timelimit": "l",
+    "numnodes": "D",
+    "nodelist": "N",
+    "reason": "r",
+    "reasonlist": "R",
+    "priority": "Q",
+    "tres-per-node": "b",
+    "tres": "b",
+    "account": "a",
+    "qos": "q",
+    "starttime": "S",
+    "submittime": "V",
+    "numcpus": "C",
+    "numtasks": "C",
+}
+
+
+def _long_field(spec):
+    name, _, width = spec.partition(":")
+    code = LONG_FIELDS.get(name.lower())
+    if code is None:
+        raise _err(f"squeue: error: Invalid field specification: {name}")
+    w = width.rstrip("Ll") or "20"
+    return f"%.{w}{code}" if w.isdigit() else f"%{code}"
 
 
 @command("sprio", help="pending job priority factors: sprio [-l] [-j ID]")
