@@ -737,3 +737,86 @@ def test_no_yaml_text_is_cut_at_a_hash():
         if re.match(r"\s*(- )?(\w+: )?[^\s\"'|>#\[{-][^\"']* #", line) and re.match(r"\s*(- )?\w+: |\s*- ", line)
     ]
     assert cut == []
+
+
+# ---- shared helpers for the evidence fixes below
+
+
+def _lab(scenario_id: str):
+    s = concrete(scenario_id)
+    return s, Shell(s.build_state())
+
+
+def _check(s, shell, wording: str) -> bool:
+    """The result of the one criterion whose description contains ``wording``."""
+    found = [(ok, err) for desc, ok, err in s.grade(shell) if wording in desc]
+    assert len(found) == 1 and not found[0][1], found
+    return found[0][0]
+
+
+def _solve(s, shell, skip: str) -> None:
+    """Replay the reference solution without the read-only steps matching ``skip``."""
+    for step in s.solution:
+        if not re.search(skip, step):
+            lines = step.split("\n")
+            feed = iter(lines[1:])
+            shell.run(lines[0], heredoc_reader=lambda _p, feed=feed: next(feed, None))
+
+
+# ---- adm-slurm-partition-time-limit: scontrol must have shown the defq partition
+
+ADM2_FIX = ["sed -i 's/MaxTime=INFINITE/MaxTime=2-00:00:00/' /etc/slurm/slurm.conf", "scontrol reconfigure"]
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "scontrol show partition missing",
+        "scontrol show partition",  # with no partition left to show, see the test body
+        "scontrol show part defq,missing",
+        "scontrol show config",
+        "scontrol show node dgx-01",
+        "sinfo",
+    ],
+)
+def test_adm2_failed_or_unrelated_lookups_earn_no_evidence(bad):
+    s, shell = _lab("adm-slurm-partition-time-limit")
+    for line in ADM2_FIX:
+        shell.run(line)
+    if bad == "scontrol show partition":
+        shell.ctx.state.slurm.partitions.clear()
+    out = shell.run(bad)
+    assert "PartitionName=defq" not in out
+    results = s.grade(shell)
+    assert not _check(s, shell, "scontrol showed you")
+    if shell.ctx.state.slurm.partitions:
+        assert [ok for _desc, ok, _err in results] == [True, True, True, False]
+
+
+@pytest.mark.parametrize(
+    "good",
+    [
+        "scontrol show partition defq",
+        "scontrol show partition",
+        "scontrol show partitions",
+        "scontrol show part defq",
+        "scontrol show part defq -o",
+        "scontrol -o show partition defq",
+        "scontrol show partition defq | grep MaxTime",
+    ],
+)
+@pytest.mark.parametrize("before_the_change", [True, False])
+def test_adm2_a_successful_partition_lookup_earns_evidence(good, before_the_change):
+    s, shell = _lab("adm-slurm-partition-time-limit")
+    order = [good, *ADM2_FIX] if before_the_change else [*ADM2_FIX, good]
+    for line in order:
+        shell.run(line)
+    assert all(ok for _desc, ok, _err in s.grade(shell))
+
+
+def test_adm2_still_protects_the_running_job():
+    s, shell = _lab("adm-slurm-partition-time-limit")
+    for line in ["scontrol show partition defq", *ADM2_FIX, "scancel 2301"]:
+        shell.run(line)
+    assert not _check(s, shell, "job 2301 is still running")
+    assert _check(s, shell, "scontrol showed you")

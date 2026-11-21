@@ -40,8 +40,9 @@ checks:
     expr: "slurm.partitions['defq'].max_time == '2-00:00:00'"
   - desc: alice's job 2301 is still running
     expr: "jobs(id=2301) and jobs(id=2301)[0].state == 'RUNNING'"
-  - desc: you checked the partition with scontrol
-    expr: ran(r'^scontrol show (partition|part)')
+  - desc: scontrol showed you the live settings of the defq partition
+    kind: evidence
+    expr: "printed(r'^PartitionName=defq\\b', cmd=r'^scontrol\\b.*\\bshow part')"
 hints:
   - "Partitions are the PartitionName= lines in /etc/slurm/slurm.conf on the head node. scontrol show partition defq shows what the controller is using right now; compare it with the file."
   - "Edit the file with nano, vim or sed -i. Slurm time limits are written days-hours:minutes:seconds, so two days is 2-00:00:00."
