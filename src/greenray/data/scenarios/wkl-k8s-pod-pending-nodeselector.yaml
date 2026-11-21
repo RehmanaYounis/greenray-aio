@@ -48,10 +48,12 @@ setup:
       kc.advance(state, 1200)
       kc.reconcile(state)
 checks:
-  - desc: you read the pod's events (kubectl describe pod or kubectl get events)
-    expr: "ran(r'kubectl describe (pod|pods|po)\\b') or ran(r'kubectl get (events|ev)\\b')"
-  - desc: you looked at the node labels (kubectl get nodes -L/--show-labels or describe node)
-    expr: "ran(r'kubectl get (nodes|node|no)\\b.*(-L|--show-labels|-l )') or ran(r'kubectl describe (node|nodes|no)\\b')"
+  - desc: kubectl showed you the pod's scheduling events (kubectl describe pod or kubectl get events)
+    kind: evidence
+    expr: "printed(r'FailedScheduling', cmd=r'^kubectl\\b.*\\b(describe (pod|pods|po)|get (events|ev))\\b')"
+  - desc: kubectl showed you the GPU product label of a DGX node (kubectl get nodes -L/--show-labels or describe node)
+    kind: evidence
+    expr: "printed(r'NVIDIA-H100-80GB-HBM3', cmd=r'^kubectl\\b.*\\b(get|describe) (nodes|node|no)\\b') or printed(r'^dgx-\\d+', cmd=r'^kubectl\\b.*\\bget (nodes|node|no)\\b.*gpu\\.product=NVIDIA-H100-80GB-HBM3(\\s|$)')"
   - desc: /root/cuda-test.yaml still has a nodeSelector, now matching the H100 product label
     expr: "re.search(r'nodeSelector:(\\s*\\n\\s+[\\w./-]+:[^\\n]*)*?\\s*\\n\\s+nvidia\\.com/gpu\\.product:\\s*[\"\\']?NVIDIA-H100-80GB-HBM3[\"\\']?\\s*$', file('bcm-head', '/root/cuda-test.yaml'), re.M) is not None"
   - desc: the cuda-test pod runs on a DGX node (Running or Completed)

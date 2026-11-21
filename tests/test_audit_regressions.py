@@ -820,3 +820,97 @@ def test_adm2_still_protects_the_running_job():
         shell.run(line)
     assert not _check(s, shell, "job 2301 is still running")
     assert _check(s, shell, "scontrol showed you")
+
+
+# ---- wkl-k8s-pod-pending-nodeselector: kubectl must have returned the events and the label
+
+WKL2 = "wkl-k8s-pod-pending-nodeselector"
+WKL2_EVENTS, WKL2_LABELS = "scheduling events", "GPU product label"
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "kubectl describe pod missing",
+        "kubectl describe pod cuda-test -n kube-system",
+        "kubectl get events -n kube-system",
+        "kubectl get events --field-selector involvedObject.name=nope",
+        "kubectl get pods",
+    ],
+)
+def test_wkl2_lookups_that_return_no_pod_events_earn_no_evidence(bad):
+    s, shell = _lab(WKL2)
+    assert "FailedScheduling" not in shell.run(bad)
+    assert not _check(s, shell, WKL2_EVENTS)
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "kubectl get node missing --show-labels",
+        "kubectl describe node missing",
+        "kubectl get nodes",
+        "kubectl get nodes -L nosuch",
+        "kubectl get node bcm-head --show-labels",
+        "kubectl describe node bcm-head",
+        "kubectl get nodes -l nvidia.com/gpu.product=NVIDIA-H100-80GB",
+        "kubectl describe pod cuda-test",
+    ],
+)
+def test_wkl2_lookups_that_return_no_gpu_label_earn_no_evidence(bad):
+    s, shell = _lab(WKL2)
+    shell.run(bad)
+    assert not _check(s, shell, WKL2_LABELS)
+
+
+def test_wkl2_the_reported_failed_lookups_earn_nothing():
+    s, shell = _lab(WKL2)
+    assert "NotFound" in shell.run("kubectl describe pod missing")
+    assert "NotFound" in shell.run("kubectl get node missing --show-labels")
+    assert not any(ok for _desc, ok, _err in s.grade(shell))
+
+
+@pytest.mark.parametrize(
+    "good",
+    [
+        "kubectl describe pod cuda-test",
+        "kubectl describe pods",
+        "kubectl describe po cuda-test",
+        "kubectl -n default describe pod cuda-test",
+        "kubectl get events",
+        "kubectl get ev -A",
+        "kubectl get events | grep cuda-test",
+    ],
+)
+def test_wkl2_pod_events_earn_evidence(good):
+    s, shell = _lab(WKL2)
+    shell.run(good)
+    assert _check(s, shell, WKL2_EVENTS) and not _check(s, shell, WKL2_LABELS)
+
+
+@pytest.mark.parametrize(
+    "good",
+    [
+        "kubectl get nodes -L nvidia.com/gpu.product",
+        "kubectl get nodes --show-labels",
+        "kubectl get node dgx-02 --show-labels",
+        "kubectl get no --show-labels",
+        "kubectl describe node dgx-01",
+        "kubectl describe nodes",
+        "kubectl describe node dgx-01 | grep -i product",
+        "kubectl get node dgx-01 -o yaml",
+        "kubectl get nodes -l nvidia.com/gpu.product=NVIDIA-H100-80GB-HBM3",
+    ],
+)
+def test_wkl2_node_labels_earn_evidence(good):
+    s, shell = _lab(WKL2)
+    shell.run(good)
+    assert _check(s, shell, WKL2_LABELS) and not _check(s, shell, WKL2_EVENTS)
+
+
+def test_wkl2_recreating_the_pod_without_diagnosis_leaves_only_the_evidence_open():
+    s, shell = _lab(WKL2)
+    _solve(s, shell, r"^kubectl (get|describe|logs)|^cat ")
+    assert [ok for _desc, ok, _err in s.grade(shell)] == [False, False, True, True, True]
+    shell.run("kubectl describe pod cuda-test")  # the recreated pod has no FailedScheduling event to show
+    assert not _check(s, shell, WKL2_EVENTS)
