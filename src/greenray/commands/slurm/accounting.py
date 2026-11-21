@@ -199,6 +199,12 @@ def sacct(ctx, args):
     if head is not None and head.services.get("slurmdbd", "active") != "active":
         raise _err("sacct: error: Problem talking to the database: Connection refused")
     _begin(ctx)
+    if args and args[-1] in ("-j", "--jobs"):  # getopt's complaint when the value is missing
+        raise _err(
+            "sacct: option requires an argument -- 'j'"
+            if args[-1] == "-j"
+            else "sacct: option '--jobs' requires an argument"
+        )
     ids = _opt(args, "-j", "--jobs")
     if ids and not all(re.fullmatch(r"\d+(\.\w+)?", x) for x in ids.split(",")):
         raise _err(f"sacct: error: Invalid job id: {ids}")
