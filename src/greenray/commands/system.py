@@ -681,7 +681,10 @@ def ssh(ctx, args):
         sub.ctx.results = ctx.results
         # one quoted argument is a command line for the remote shell (redirects and pipes included)
         line = remote[0] if len(remote) == 1 else " ".join(shlex.quote(a) for a in remote)
-        return sub.run(line)
+        out = sub.run(line)
+        if sub.ctx.last_code:  # ssh exits with the status of the remote command
+            raise CommandError(out.rstrip("\n"), sub.ctx.last_code)
+        return out
     source = ctx.state.nodes[ctx.host]
     ctx.saved_cwd[len(ctx.host_stack)] = ctx.cwd
     ctx.host_stack.append(ctx.host)
