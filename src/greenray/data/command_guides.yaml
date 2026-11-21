@@ -109,7 +109,7 @@ scontrol:
 
 sbatch:
   summary: submit a Slurm batch script
-  purpose: Queues a script; #SBATCH lines at the top set resources (nodes, GPUs, tasks, time, partition).
+  purpose: "Queues a script; #SBATCH lines at the top set resources (nodes, GPUs, tasks, time, partition)."
   when: Running or testing a batch workload.
   options:
     - "--gres=gpu:N (per node) / --gpus=N (per job total) / --gpus-per-node=N"

@@ -2,6 +2,12 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.7.3] - 2026-11-22
+
+### Fixed
+- Lab `wkl-1` (`wkl-slurm-first-gpu-job`): the job criterion is met only when the completed `hello-gpu` job asked for exactly one GPU and a five-minute time limit, in any spelling Slurm accepts (`--gres=gpu:1`, `--gpus=1`, `-G 1`, `--gpus-per-node=1`, `--time=00:05:00`, `-t 5`, in the script or on the `sbatch` command line); a job with two GPUs or ten minutes no longer passes. The monitoring criterion is met only when `squeue` or `sacct` actually showed the job, so an empty query such as `sacct -j 999999` earns nothing.
+- The `wkl-1` criterion about the GPU request and the `sbatch` entry of the command guide were cut off before the word `#SBATCH`; both now show their full text.
+
 ## [1.7.2] - 2026-11-22
 
 ### Fixed
