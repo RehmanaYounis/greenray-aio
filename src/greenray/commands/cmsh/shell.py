@@ -1723,13 +1723,23 @@ class Cmsh:
                 f"{v.kind} {v.name} ({v.op}: {', '.join(v.fields) or '-'})" for v in self.bcm.uncommitted.values()
             )
             self.p(self.prompt.rstrip())
-            self.p(f"Warning: uncommitted changes: {pending}. Nothing is applied until you run 'commit'.")
+            self.p(f"Warning: uncommitted changes discarded on exit: {pending}. Run 'commit' before leaving cmsh.")
+            self.bcm.uncommitted.clear()  # staged changes live only inside one cmsh session
 
 
 @command("cmsh", help='BCM shell: cmsh -c "device; use dgx-01; set category dgx-h100; commit" | cmsh -f file')
 def cmsh(ctx, args):
     if ctx.host != HEAD:
         raise CommandError("bash: cmsh: command not found (cmsh runs on the BCM head node)", 127)
+    user = ctx.user
+    if user != "root":
+        rec = (ctx.state.bcm.get("users") or {}).get(user) or {}
+        if rec.get("profile") != "admin":
+            raise CommandError(
+                f"cmsh: Permission denied: user {user} has no certificate for the cluster management daemon "
+                "(an administrator profile is required)",
+                1,
+            )
     script = None
     it = iter(args)
     for a in it:

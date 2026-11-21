@@ -8,5 +8,6 @@ Commands:
 	power status  Report whether the chassis power is on or off
 	sdr           Print the Sensor Data Repository: temperatures, fans, PSUs
 	sel list      Print the System Event Log, oldest entry first
+	chassis status  Power state, power faults, intrusion and fan fault flags
 
 (GreenRay AIO simulates the options listed above.)

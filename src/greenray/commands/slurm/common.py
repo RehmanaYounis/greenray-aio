@@ -238,11 +238,43 @@ def _kv(tokens) -> list[tuple[str, str]]:
 
 
 def _find_job(state, jid):
-    jid = str(jid).split(".")[0].split("_")[0]
+    """``1002`` is the job (or an array's master), ``1002_3`` the array task, ``1002.0`` the job of a step."""
+    text = str(jid).split(".")[0]
+    base, _, task = text.partition("_")
+    if task:
+        for j in state.slurm.jobs:
+            if str(j.get("array_job_id")) == base and str(j.get("array_task_id")) == task:
+                return j
+        return None
     for j in state.slurm.jobs:
-        if str(j.get("id")) == jid:
+        if str(j.get("id")) == base:
             return j
     return None
+
+
+def mem_text(mb: int) -> str:
+    """Memory the way scontrol and sacct print it: whole gigabytes as G, otherwise M."""
+    if mb and mb % 1024 == 0:
+        return f"{mb // 1024}G"
+    return f"{mb}M"
+
+
+def job_id_text(j) -> str:
+    """How squeue and sacct print a job id: plain, ``1002_3`` for a task, ``1002_[3-4%2]`` for a pending array."""
+    if j.get("array_job_id") is not None:
+        return f"{j.array_job_id}_{j.array_task_id}"
+    tasks = j.get("array_tasks")
+    if tasks:
+        spec = compress_hostlist([str(t) for t in tasks]).replace("[", "[").strip()
+        if not spec.startswith("["):
+            spec = f"[{spec}]"
+        limit = f"%{j.array_limit}" if j.get("array_limit") else ""
+        return f"{j.id}_{spec[:-1]}{limit}]"
+    return str(j.id)
+
+
+def is_admin() -> bool:
+    return _USER[-1] == "root"
 
 
 _FMT_RX = re.compile(r"%(\.?)(\d*)([a-zA-Z])")

@@ -164,6 +164,20 @@ def _ibstat_port(host, i, p):
     ]
 
 
+@command("ibdev2netdev", help="ibdev2netdev [-v]: which netdev belongs to which HCA port, and whether it is up")
+def ibdev2netdev(ctx, args):
+    out = []
+    for p in ctx.node.ib:
+        state = "Up" if _active(p) and p.netdev not in ctx.node.get("netdev_admin_down", []) else "Down"
+        if "-v" in args:
+            out.append(
+                f"{p.bus_id if 'bus_id' in p else '0000:00:00.0'} {p.ca} (MT4129 - MCX755106AS-HEAT) ConnectX-7 fw {p.fw} port 1 ({state}) ==> {p.netdev} ({state})"
+            )
+        else:
+            out.append(f"{p.ca} port 1 ==> {p.netdev} ({state})")
+    return "\n".join(out) + "\n"
+
+
 @command("ibstat", help="ibstat [-l|-s|-p] [ca] [port] — HCA and port state, rate, LID")
 def ibstat(ctx, args):
     _ib_ready(ctx)

@@ -28,6 +28,7 @@ from .model import (
     ns_of,
     pod_restarts,
     pod_tolerations,
+    pods_of,
     restarts_str,
     selector_matches,
     split_targets,
@@ -81,6 +82,49 @@ def list_objects(state, kind: str, opts: dict, names=()) -> list:
         items = sorted([d for d in k.jobs if ns_ok(d)], key=lambda d: (d.namespace, d.name))
     elif kind == "namespaces":
         items = [AttrDict({"name": n}) for n in sorted(k.namespaces)]
+    elif kind == "replicasets":
+        from .controllers import template_hash
+
+        items = []
+        for d in sorted(k.deployments, key=lambda d: (d.namespace, d.name)):
+            if not ns_ok(d) or (sel and not selector_matches(sel, d.labels)):
+                continue
+            rs = f"{d.name}-{template_hash(d.template)}"
+            pods = pods_of(state, "ReplicaSet", rs, d.namespace)
+            items.append(
+                AttrDict(
+                    {
+                        "name": rs,
+                        "namespace": d.namespace,
+                        "deployment": d.name,
+                        "labels": {**d.labels, "pod-template-hash": template_hash(d.template)},
+                        "replicas": int(d.replicas),
+                        "current": len(pods),
+                        "ready": sum(1 for p in pods if p.status == "Running"),
+                        "created": d.created,
+                    }
+                )
+            )
+            # the old replica sets a rollout left behind, scaled to zero, as kubectl shows them
+            for rev in d.get("revisions", [])[:-1]:
+                items.append(
+                    AttrDict(
+                        {
+                            "name": f"{d.name}-{rev['hash']}",
+                            "namespace": d.namespace,
+                            "deployment": d.name,
+                            "labels": {**d.labels, "pod-template-hash": rev["hash"]},
+                            "replicas": 0,
+                            "current": 0,
+                            "ready": 0,
+                            "created": d.created,
+                        }
+                    )
+                )
+    elif kind == "customresourcedefinitions":
+        from .model import crd_list
+
+        items = [AttrDict(c) for c in crd_list(state)]
     elif kind == "events":
         items = [e for e in k.events if all_ns or e.namespace == ns]
         if fsel:
@@ -131,11 +175,8 @@ def list_objects(state, kind: str, opts: dict, names=()) -> list:
             if n_ in k.namespaces
         ]
     elif kind == "services":
-        items = (
-            [AttrDict({"name": "kubernetes", "namespace": "default", "created": -41 * 86400})]
-            if (all_ns or ns == "default")
-            else []
-        )
+        api = AttrDict({"name": "kubernetes", "namespace": "default", "created": -41 * 86400, "ports": ["443/TCP"]})
+        items = sorted([s for s in [api] + list(k.services) if ns_ok(s)], key=lambda s: (s.namespace, s.name))
     elif kind in EXTRA_KINDS:
         items = [i for i in EXTRA_KINDS[kind].list(state, opts) if ns_ok(i)]
         if sel:
@@ -360,7 +401,17 @@ def print_table(state, kind: str, items: list, opts: dict, prefix: str = "") -> 
     elif kind == "services":
         hdr = ["NAME", "TYPE", "CLUSTER-IP", "EXTERNAL-IP", "PORT(S)", "AGE"]
         for s in items:
-            rows.append((s, [s.name, "ClusterIP", "10.96.0.1", "<none>", "443/TCP", age(state, s.created)]))
+            ip = s.get("cluster_ip", "10.96.0.1")
+            ext = "<pending>" if s.get("type") == "LoadBalancer" else "<none>"
+            rows.append((s, [s.name, s.get("type", "ClusterIP"), ip, ext, ",".join(s.ports), age(state, s.created)]))
+    elif kind == "replicasets":
+        hdr = ["NAME", "DESIRED", "CURRENT", "READY", "AGE"]
+        for r_ in items:
+            rows.append((r_, [r_.name, r_.replicas, r_.current, r_.ready, age(state, r_.created)]))
+    elif kind == "customresourcedefinitions":
+        hdr = ["NAME", "CREATED AT"]
+        for c in items:
+            rows.append((AttrDict({"namespace": ""}), [c.name, ts(c.created)]))
     elif kind in EXTRA_KINDS:
         hdr, raw = EXTRA_KINDS[kind].table(state, items)
         rows = [(i, list(r)) for i, r in zip(items, raw, strict=True)]

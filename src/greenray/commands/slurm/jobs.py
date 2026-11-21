@@ -9,6 +9,7 @@ import shlex
 from ...core import audit
 from ...core.errors import CommandError
 from .. import command
+from ..common import int_arg
 from .common import (
     _USER,
     BATCH_DEFAULT_DURATION,
@@ -19,8 +20,10 @@ from .common import (
     _find_job,
     _has,
     _opt,
+    _ts,
     compress_hostlist,
     expand_hostlist,
+    is_admin,
     parse_gres_spec,
     parse_time,
     time_arg,
@@ -64,6 +67,15 @@ OPTS_ARG = {
     "--gpus-per-node": "gpus_per_node",
     "--gpus-per-task": "gpus_per_task",
     "--mem": "mem",
+    "--mem-per-cpu": "mem_per_cpu",
+    "--mail-type": "mail_type",
+    "--mail-user": "mail_user",
+    "--tasks-per-node": "ntasks_per_node",
+    "--ntasks-per-core": "ntasks_per_core",
+    "--threads-per-core": "threads_per_core",
+    "--gpu-bind": "gpu_bind",
+    "--open-mode": "open_mode",
+    "--priority": "priority",
     "-d": "dependency",
     "--dependency": "dependency",
     "--wrap": "wrap",
@@ -74,7 +86,7 @@ OPTS_ARG = {
     "--reservation": "reservation",
     "--comment": "comment",
     "--begin": "begin",
-    "--mem-per-gpu": "mem",
+    "--mem-per-gpu": "mem_per_gpu",
     "--cpus-per-gpu": "cpus_per_gpu",
     "--container-image": "container_image",
     "--container-mounts": "container_mounts",
@@ -98,6 +110,12 @@ OPTS_ARG = {
 }
 OPTS_FLAG = {
     "--exclusive",
+    "--wait",
+    "-W",
+    "--oversubscribe",
+    "-s",
+    "--spread-job",
+    "--kill-on-invalid-dep",
     "--pty",
     "-l",
     "--label",
@@ -307,7 +325,103 @@ def _build_job(ctx, prog, opts, extra_check=True):
     if any(f not in ok_flags for f in str(job["gres_flags"]).split(",") if f):
         raise _err(f"{prog}: error: Invalid --gres-flags specification")
     job.update(_specification(prog, opts, state, pnodes, tl, fail))
+    # memory: one of --mem, --mem-per-cpu, --mem-per-gpu, checked against the biggest node in the partition
+    per_node = job.get("ntasks_per_node") or 1
+    if "mem_per_cpu" in opts:
+        job["mem_per_cpu"] = _mem_mb(prog, "--mem-per-cpu", opts["mem_per_cpu"])
+        job["min_memory_mb"] = job["mem_per_cpu"] * per_node * job["cpus_per_task"]
+    elif "mem_per_gpu" in opts:
+        job["mem_per_gpu"] = _mem_mb(prog, "--mem-per-gpu", opts["mem_per_gpu"])
+        job["min_memory_mb"] = job["mem_per_gpu"] * (job["gpus_per_node"] or 0)
+    biggest = max([int(s.nodes[n].get("real_memory", 0)) for n in pnodes] + [0])
+    if job.get("min_memory_mb", 0) and biggest and job["min_memory_mb"] > biggest:
+        raise fail("Requested node configuration is not available")
+    usable_after_exclude = [n for n in pnodes if n not in job["exc_nodes"]]
+    if job["exc_nodes"] and (num_nodes or 1) > len(usable_after_exclude):
+        raise fail("Requested node configuration is not available")
+    for clause in [c for c in str(job["dependency"]).split(",") if c]:
+        kind, _, ids = clause.partition(":")
+        if kind == "singleton":
+            continue
+        if kind not in ("after", "afterok", "afterany", "afternotok", "afterburstbuffer", "aftercorr"):
+            raise fail("Job dependency problem")
+        for one in [x for x in ids.split(":") if x]:
+            if one.endswith("+") or not one.split("_")[0].isdigit() or _find_job(state, one) is None:
+                raise fail("Job dependency problem")
+    if "begin" in opts:
+        job["eligible_time"] = _begin_time(prog, state, opts["begin"])
+    if "array" in opts:
+        job["array_tasks"], job["array_limit"] = _parse_array(prog, opts["array"])
+        job["array_task_count"] = len(job["array_tasks"])
+        job["array_spec"] = opts["array"]
+    for key in ("mail_type", "mail_user", "gpu_bind", "open_mode"):
+        if key in opts:
+            job[key] = opts[key]
+    if "priority" in opts:
+        if _USER[-1] != "root":
+            raise _err(f"{prog}: error: Batch job submission failed: Access/permission denied")
+        job["priority"] = int_arg(
+            opts["priority"], f'{prog}: error: Invalid numeric value "{opts["priority"]}" for --priority.'
+        )
+        job["priority_fixed"] = True
     return job
+
+
+def _begin_time(prog, state, spec: str) -> int:
+    """``--begin`` as simulated clock seconds: now+<n><unit>, HH:MM, YYYY-MM-DD[THH:MM[:SS]], tomorrow, midnight."""
+    import datetime as _dt
+
+    from .common import BASE_TIME
+
+    clock = state.slurm.get("clock", 0)
+    now = BASE_TIME + _dt.timedelta(seconds=clock)
+    s = spec.strip().lower()
+    if s == "now":
+        return clock
+    m = re.fullmatch(r"now\+(\d+)\s*(second|seconds|minute|minutes|hour|hours|day|days)?", s)
+    if m:
+        unit = (m.group(2) or "seconds").rstrip("s")
+        mult = {"second": 1, "minute": 60, "hour": 3600, "day": 86400}[unit]
+        return clock + int(m.group(1)) * mult
+    if s in ("midnight", "tomorrow"):
+        day = now.replace(hour=0, minute=0, second=0) + _dt.timedelta(days=1)
+        return int((day - BASE_TIME).total_seconds())
+    if s == "noon":
+        day = now.replace(hour=12, minute=0, second=0)
+        day += _dt.timedelta(days=1) if day <= now else _dt.timedelta()
+        return int((day - BASE_TIME).total_seconds())
+    m = re.fullmatch(r"(\d{1,2}):(\d{2})(?::(\d{2}))?", s)
+    if m:
+        t = now.replace(hour=int(m.group(1)), minute=int(m.group(2)), second=int(m.group(3) or 0))
+        if t <= now:
+            t += _dt.timedelta(days=1)
+        return int((t - BASE_TIME).total_seconds())
+    for fmt in ("%Y-%m-%dt%H:%M:%S", "%Y-%m-%dt%H:%M", "%Y-%m-%d"):
+        try:
+            t = _dt.datetime.strptime(s, fmt)
+            return int((t - BASE_TIME).total_seconds())
+        except ValueError:
+            continue
+    raise _err(f"{prog}: error: Invalid --begin specification")
+
+
+def _parse_array(prog, spec: str) -> tuple[list[int], int | None]:
+    """``1-4%2`` -> ([1, 2, 3, 4], 2); also ``0,3,5`` and ``1-10:2``."""
+    body, _, limit = spec.partition("%")
+    tasks: list[int] = []
+    for part in body.split(","):
+        m = re.fullmatch(r"(\d+)(?:-(\d+)(?::(\d+))?)?", part.strip())
+        if not m:
+            raise _err(f"{prog}: error: Invalid job array specification")
+        lo, hi, step = int(m.group(1)), int(m.group(2) or m.group(1)), int(m.group(3) or 1)
+        if hi < lo or step < 1:
+            raise _err(f"{prog}: error: Invalid job array specification")
+        tasks.extend(range(lo, hi + 1, step))
+    if not tasks or len(tasks) > 1001:
+        raise _err(f"{prog}: error: Batch job submission failed: Invalid job array specification")
+    if limit and not limit.isdigit():
+        raise _err(f"{prog}: error: Invalid job array specification")
+    return sorted(set(tasks)), (int(limit) if limit else None)
 
 
 HINTS = {"compute_bound", "memory_bound", "multithread", "nomultithread", "help"}
@@ -455,6 +569,12 @@ def sbatch(ctx, args):
         sopts, _ = parse_job_opts("sbatch", _parse_script(script), stop_at_positional=False, pyxis=pyxis)
         sopts.update(opts)
         opts = sopts
+    elif ctx.stdin.strip():  # sbatch <<EOF ... EOF, or a script piped in
+        script = ctx.stdin if ctx.stdin.startswith("#!") else "#!/bin/bash\n" + ctx.stdin
+        cmd_path = "(null)"
+        sopts, _ = parse_job_opts("sbatch", _parse_script(script), stop_at_positional=False, pyxis=pyxis)
+        sopts.update(opts)
+        opts = sopts
     else:
         raise _err("sbatch: error: Batch script is empty!")
     _need_ctl(ctx, "sbatch: error: Batch job submission failed: ")
@@ -462,17 +582,60 @@ def sbatch(ctx, args):
     job = _build_job(ctx, "sbatch", opts)
     if not job["name"]:
         job["name"] = "wrap" if "wrap" in opts else (cmd_path.rsplit("/", 1)[-1] if rest else "sbatch")
-    job.update({"script": script, "command": cmd_path, "batch": True, "duration": BATCH_DEFAULT_DURATION})
+    job.update({"script": script, "command": cmd_path, "batch": True, "duration": _script_duration(script)})
+    if opts.get("test-only"):
+        return _test_only(ctx, "sbatch", job)
     j = _new_job(state, job)
-    out_pat = opts.get("output") or "slurm-%j.out"
+    out_pat = opts.get("output") or ("slurm-%A_%a.out" if j.get("array_tasks") else "slurm-%j.out")
     j.stdout = _expand_pattern(out_pat, j)
     j.stdout_pattern = out_pat
     if not j.stdout.startswith("/"):
         j.stdout = j.work_dir.rstrip("/") + "/" + j.stdout
     schedule(state)
+    if opts.get("wait") or opts.get("W"):  # sbatch --wait returns when the job has finished
+        from .scheduler import tick
+
+        for _ in range(400):
+            if j.state in TERMINAL and not j.get("array_tasks"):
+                break
+            tick(ctx)
     if opts.get("parsable"):
         return _verbose_block("sbatch", opts) + f"{j.id}\n"
     return _verbose_block("sbatch", opts) + f"Submitted batch job {j.id}\n"
+
+
+def _script_duration(script: str) -> int:
+    """How long the batch script runs: a ``sleep N`` says so, anything else takes the default."""
+    for line in script.splitlines():
+        m = re.search(r"\bsleep\s+(\d+)([smh]?)\b", line.split("#", 1)[0])
+        if m:
+            return int(m.group(1)) * {"": 1, "s": 1, "m": 60, "h": 3600}[m.group(2)]
+    return BATCH_DEFAULT_DURATION
+
+
+def _test_only(ctx, prog, job) -> str:
+    """``--test-only``: report where and when the job could start, without submitting it."""
+    from ...core.state import wrap
+    from .scheduler import _job_defaults, _place, _static_reason
+
+    state = ctx.state
+    probe = wrap(dict(job))
+    probe["id"] = state.slurm.next_job_id
+    _job_defaults(state, probe)
+    reason = _static_reason(state, probe)
+    if reason:
+        raise _err(
+            f"{prog}: error: Batch job submission failed: {reason}" if prog == "sbatch" else f"{prog}: error: {reason}"
+        )
+    chosen = _place(state, probe)
+    when = _ts(state, state.slurm.clock) if chosen else _ts(state, state.slurm.clock + 3600)
+    nodes = (
+        compress_hostlist(list(chosen))
+        if chosen
+        else compress_hostlist(_part_nodes(state, probe.partition)[: probe.num_nodes])
+    )
+    cpus = probe.num_nodes * probe.ntasks_per_node * probe.cpus_per_task
+    return f"{prog}: Job {probe.id} to start at {when} using {cpus} processors on nodes {nodes} in partition {probe.partition}\n"
 
 
 def _alloc_now(ctx, prog, opts):
@@ -573,17 +736,54 @@ def salloc(ctx, args):
         raise _err("salloc: unrecognized option '--pty'\nTry \"salloc --help\" for more information")
     _need_ctl(ctx, "salloc: error: Unable to allocate resources: ")
     _begin(ctx)
+    if opts.get("test-only"):
+        return _test_only(ctx, "salloc", _build_job(ctx, "salloc", opts))
     j, _ = _alloc_now(ctx, "salloc", opts)
     j.name = opts.get("name") or "interactive"
     ctx.node.env["SLURM_JOB_ID"] = str(j.id)
     ctx.node.env["SLURM_JOB_NODELIST"] = compress_hostlist(j.nodelist)
-    if opts.get("Q") or opts.get("quiet"):
-        return ""
-    return (
-        _verbose_block("salloc", opts) + f"salloc: Granted job allocation {j.id}\n"
-        f"salloc: Nodes {compress_hostlist(j.nodelist)} are ready for job\n"
-        f"(SLURM_JOB_ID={j.id} exported; run 'srun ...' for steps, 'scancel {j.id}' to release)\n"
+    ctx.node.env["SLURM_NNODES"] = str(j.num_nodes)
+    granted = _verbose_block("salloc", opts) + (
+        ""
+        if opts.get("Q") or opts.get("quiet")
+        else f"salloc: Granted job allocation {j.id}\nsalloc: Nodes {compress_hostlist(j.nodelist)} are ready for job\n"
     )
+    if cmd:  # salloc ... <command>: run it inside the allocation, then release
+        from ...core.shell import Shell
+
+        sh = Shell(state, ctx.host)
+        sh.ctx.executed = ctx.executed
+        out = sh.run(" ".join(shlex.quote(a) for a in cmd))
+        _release_allocation(ctx, j)
+        return (
+            granted
+            + out
+            + ("\n" if out and not out.endswith("\n") else "")
+            + f"salloc: Relinquishing job allocation {j.id}\n"
+        )
+    # the allocation is a shell: `exit` leaves it and releases the job
+    ctx.alloc_stack.append((j.id, len(ctx.host_stack)))
+    return granted
+
+
+def _release_allocation(ctx, j) -> None:
+    state = ctx.state
+    if j.state not in TERMINAL:
+        _finish(state, j, "COMPLETED", "0:0")
+    for key in ("SLURM_JOB_ID", "SLURM_JOB_NODELIST", "SLURM_NNODES"):
+        ctx.node.env.pop(key, None)
+    schedule(state)
+
+
+def leave_allocation(ctx) -> str | None:
+    """Called by ``exit``: when the learner is in an salloc shell at this ssh depth, release it."""
+    if not ctx.alloc_stack or ctx.alloc_stack[-1][1] != len(ctx.host_stack):
+        return None
+    jid, _ = ctx.alloc_stack.pop()
+    j = _find_job(ctx.state, jid)
+    if j is not None:
+        _release_allocation(ctx, j)
+    return f"salloc: Relinquishing job allocation {jid}\n"
 
 
 @command("scancel", help="cancel jobs: scancel ID... | -u USER | -p PART | -t STATE | -n NAME")
@@ -622,6 +822,8 @@ def scancel(ctx, args):
                     )
                     continue
                 targets.append(j)
+                if j.get("array_tasks") is not None and "_" not in one:
+                    pass
     else:
         if not (user or part or st or name):
             raise _err("scancel: error: No job identification provided")
@@ -638,6 +840,18 @@ def scancel(ctx, args):
                 continue
             targets.append(j)
     gentle = signal is not None and signal.upper().removeprefix("SIG") not in ("KILL", "9")
+    denied = [j for j in targets if j.user != _USER[-1] and not is_admin()]
+    if denied:
+        raise _err(
+            "\n".join(f"scancel: error: Kill job error on job id {j.id}: Access/permission denied" for j in denied)
+        )
+    expanded = []
+    for j in targets:  # cancelling an array master cancels every task that has not finished
+        expanded.append(j)
+        if j.get("array_tasks") is not None:
+            j.array_tasks = []
+            expanded.extend(c for c in state.slurm.jobs if c.get("array_job_id") == j.id and c.state not in TERMINAL)
+    targets = expanded
     for j in targets:
         if j.user != "root" and _USER[-1] == "root":
             audit.record(state, audit.CANCEL_USER_JOB, ctx.host, "scancel", f"{j.id} ({j.user})")

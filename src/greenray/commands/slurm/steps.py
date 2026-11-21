@@ -17,12 +17,21 @@ def _expand_pattern(pat, j):
         .replace("%x", j.name)
         .replace("%u", j.user)
         .replace("%N", j.nodelist[0] if j.nodelist else "node")
-        .replace("%A", str(j.id))
+        .replace("%A", str(j.get("array_job_id") or j.id))
+        .replace("%a", str(j.get("array_task_id", "4294967294")))
     )
 
 
 def _job_env(j, node_name):
+    env = {}
+    if j.get("array_job_id") is not None:
+        env = {
+            "SLURM_ARRAY_JOB_ID": str(j.array_job_id),
+            "SLURM_ARRAY_TASK_ID": str(j.array_task_id),
+            "SLURM_ARRAY_TASK_COUNT": str(j.get("array_task_count", "")),
+        }
     return {
+        **env,
         "SLURM_JOB_ID": str(j.id),
         "SLURM_JOBID": str(j.id),
         "SLURM_JOB_NAME": j.name,
