@@ -1130,3 +1130,54 @@ def test_wkl4_safety_criteria_still_catch_a_deleted_inference_pod():
     victim = next(p.name for p in shell.ctx.state.k8s.pods if p.name.startswith("inference-"))
     shell.run(f"kubectl delete pod {victim}")
     assert not _check(s, shell, "no running pod was deleted")
+
+
+# ---- ins-bcm-add-node-category: cmsh must have returned inventory of dgx-04 or of dgx-h100
+
+INS2 = "ins-bcm-add-node-category"
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        'cmsh -c "device; show missing"',
+        'cmsh -c "device; use missing; show"',
+        'cmsh -c "category; use nosuch; show"',
+        'cmsh -c "device; use dgx-01; show"',
+        'cmsh -c "device; status dgx-01"',
+        'cmsh -c "category; use default; show"',
+        'cmsh -c "partition; list"',
+        'cmsh -c "device; use dgx-04; get nosuchproperty"',
+    ],
+)
+def test_ins2_cmsh_without_relevant_inventory_earns_no_evidence(bad):
+    s, shell = _lab(INS2)
+    shell.run(bad)
+    assert not _check(s, shell, "cmsh showed you")
+
+
+def test_ins2_changing_the_node_without_looking_leaves_the_evidence_open():
+    s, shell = _lab(INS2)
+    shell.run('cmsh -c "device; use dgx-04; set category dgx-h100; commit"')
+    shell.run('cmsh -c "device; reboot -n dgx-04"')
+    assert [ok for _desc, ok, _err in s.grade(shell)] == [True, True, True, True, False]
+
+
+@pytest.mark.parametrize(
+    "good",
+    [
+        'cmsh -c "device; list"',
+        'cmsh -c "device; use dgx-04; show"',
+        'cmsh -c "device; use dgx-04; get category"',
+        'cmsh -c "device; status"',
+        'cmsh -c "device; status dgx-04"',
+        'cmsh -c "category; list"',
+        'cmsh -c "category; use dgx-h100; show"',
+        'cmsh -c "category; use dgx-h100; get softwareimage"',
+        'cmsh -c "softwareimage; list"',
+    ],
+)
+def test_ins2_device_and_category_inspections_earn_evidence(good):
+    s, shell = _lab(INS2)
+    shell.run(good)
+    assert _check(s, shell, "cmsh showed you")
