@@ -2,6 +2,11 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.7.0] - 2026-11-22
+
+### Changed
+- The mock exam follows the real sequence reported by recent candidates: 35 questions in a first section, a submit step after which the questions cannot be reopened, then the three labs on the same 120-minute clock. The question section can be submitted with unanswered questions after a confirmation that says how many count as wrong; the lab section keeps its menu, `f` to finish and `x` to leave. `greenray mock --labs-only` is unchanged. The CLI, menu and documentation describe the new shape.
+
 ## [1.6.1] - 2026-11-22
 
 ### Fixed

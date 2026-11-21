@@ -3,7 +3,7 @@
 greenray                     interactive menu
 greenray list                scenarios by domain, with your status
 greenray lab <code|id>       hands-on scenario (practice mode)
-greenray mock [--labs-only]  full mock exam: 30 questions + 3 labs, 120 minutes
+greenray mock [--labs-only]  full mock exam: 35 questions, then 3 labs, 120 minutes
 greenray exam [-n] [-m] [-d] question drill
 greenray sandbox             healthy cluster, free practice
 greenray progress            scores and weakest domain
@@ -33,7 +33,7 @@ from .content.validate import check_scenario, hint_leaks, structural_problems
 MENU = """\
 0  Incident        investigate a random problem; root cause hidden
 1  Labs            pick a hands-on scenario (guided)
-2  Mock exam       30 questions + 3 labs in 120 minutes
+2  Mock exam       35 questions, then 3 labs, in 120 minutes
 3  Question drill  60 questions, weighted like the blueprint
 4  Domain drill    20 questions from one domain
 5  Sandbox         a healthy cluster to explore
@@ -222,7 +222,7 @@ def build_parser() -> argparse.ArgumentParser:
     inc.add_argument("-d", "--domain", choices=DOMAINS)
     inc.add_argument("-t", "--topic", help="scenario tag, e.g. slurm, kubernetes, bcm, mig, infiniband")
     inc.add_argument("--id", help="retry a specific scenario (code or id) as an incident; objectives stay hidden")
-    mock = sub.add_parser("mock", help="full mock exam: 30 questions + 3 labs in 120 minutes")
+    mock = sub.add_parser("mock", help="full mock exam: 35 questions, then 3 labs, in 120 minutes")
     mock.add_argument("--labs-only", action="store_true", help="the 3 labs alone in 40 minutes (exam-day pacing)")
     ex = sub.add_parser("exam", help="timed question drill")
     ex.add_argument("-n", type=_positive, default=60, help="number of questions (default 60)")
