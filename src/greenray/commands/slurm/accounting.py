@@ -301,7 +301,7 @@ def sshare(ctx, args):
     )
     rows = []
     for depth, acct, user in _assoc_walk(s):
-        if accts and acct not in accts and not (acct == "root" and user is None and depth == 0):
+        if accts and acct not in accts:
             continue
         if user is not None:
             if users and user not in users:

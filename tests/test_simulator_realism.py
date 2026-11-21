@@ -120,3 +120,52 @@ def test_no_reference_solution_uses_an_option_the_gate_refuses():
             for _host, argv in shell.ctx.executed:
                 fn = commands.REGISTRY.get(argv[0])
                 assert fn is None or helppages.unknown_long_option(argv, fn.__module__) is None, (s.id, argv)
+
+
+# ---- unknown subcommands and names
+
+
+@pytest.mark.parametrize(
+    ("line", "message"),
+    [
+        ("ipmitool bogus", "Invalid command: bogus"),
+        ("ipmitool sel bogus", "Invalid SEL command: bogus"),
+        ("ipmitool power bogus", "Invalid chassis power command: bogus"),
+        ("systemctl bogus", "Unknown command verb bogus."),
+        ("systemctl bogus docker", "Unknown command verb bogus."),
+        ('cmsh -c "device; status missing"', "Error: device missing not found"),
+    ],
+)
+def test_unknown_subcommands_and_names_are_refused(line, message):
+    out, code = run(line)
+    assert message in out and code == 1
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        ("ipmitool sel list", "SEL has no entries"),
+        ("ipmitool sel elist", "SEL has no entries"),
+        ("ipmitool sdr", "Inlet Temp"),
+        ("ipmitool power status", "Chassis Power is on"),
+        ("ipmitool chassis status", "System Power"),
+        ("ipmitool -I lanplus -H 10.141.0.1 -U admin -P secret sel list", "SEL has no entries"),
+        ("systemctl status slurmctld", "slurmctld"),
+        ("systemctl is-active slurmctld", "active"),
+        ("systemctl list-units", ".service"),
+        ("systemctl daemon-reload", ""),
+        ('cmsh -c "device; status"', "dgx-04"),
+        ('cmsh -c "device; status dgx-02"', "dgx-02"),
+        ('cmsh -c "device; status -n dgx-02"', "dgx-02"),
+    ],
+)
+def test_valid_subcommands_still_work(line, expected):
+    out, code = run(line)
+    assert expected in out and code == 0
+
+
+def test_sshare_shows_only_the_accounts_asked_for():
+    shell = Shell(make_cluster())
+    assert len(shell.run("sshare -A nosuchaccount").strip().splitlines()) == 2  # the header and its rule
+    assert "root" in shell.run("sshare -A root")
+    assert "root" in shell.run("sshare")
