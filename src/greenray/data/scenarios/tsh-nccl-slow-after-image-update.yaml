@@ -51,11 +51,14 @@ setup:
       state.slurm.next_job_id = 5121
 checks:
   - desc: you looked at NCCL's own view of the transport (NCCL_DEBUG=INFO)
-    expr: ran(r'NCCL_DEBUG=INFO')
+    kind: evidence
+    expr: "printed(r'NCCL INFO')"
   - desc: you checked the loaded kernel modules on a node
-    expr: ran(r'\blsmod\b|/proc/modules')
+    kind: evidence
+    expr: "printed(r'\\S', cmd=r'^lsmod\\b|^(cat|grep|less|head|tail|wc)\\b.*/proc/modules')"
   - desc: you checked the IB port rates on {slow} (ibstat/ibstatus/mlxlink)
-    expr: ran(r'^(ibstat|ibstatus|mlxlink|ibv_devinfo)', '{slow}')
+    kind: evidence
+    expr: "printed(r'(?i)rate|speed|width', '{slow}', r'^(ibstat|ibstatus|mlxlink|ibv_devinfo)\\b')"
   - desc: nvidia_peermem is loaded on dgx-01 and dgx-02
     expr: all(any(m.replace('-', '_') == 'nvidia_peermem' for m in nodes[h].modules) for h in ('dgx-01', 'dgx-02'))
   - desc: both nodes load the module at boot (modules-load.d or /etc/modules)

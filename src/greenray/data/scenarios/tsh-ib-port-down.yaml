@@ -27,12 +27,14 @@ checks:
   - desc: all 8 compute-fabric ports on {node} are Active
     expr: all(p.state == 'Active' and p.phys_state == 'LinkUp' for p in nodes['{node}'].ib)
   - desc: you checked port state on {node} (ibstat / ibstatus / ibv_devinfo)
-    expr: ran(r'^(ibstat|ibstatus|ibv_devinfo)', '{node}')
+    kind: evidence
+    expr: "printed(r'(?i)\\bstate:', '{node}', r'^(ibstat|ibstatus|ibv_devinfo)\\b')"
   - desc: you looked at link/module diagnostics with mlxlink
-    expr: ran(r'^mlxlink .*-d', '{node}')
+    kind: evidence
+    expr: "printed(r'Operational Info|Module Info|Troubleshooting Info', '{node}', r'^mlxlink\\b.*-d')"
   - desc: the module diagnostics came before the cable was reseated
     kind: evidence
-    expr: ran_before(r'^mlxlink .*-d', r'^reseat-cable')
+    expr: "printed_before(r'Operational Info|Module Info|Troubleshooting Info', r'^reseat-cable', cmd=r'^mlxlink\\b.*-d')"
   - desc: a multi-node NCCL test including {node} reached >= 350 GB/s over IB
     expr: (lambda r:r.get('ok') and '{node}' in r.get('hosts', []) and len(r.get('hosts', [])) > 1 and r.get('transport') == 'IB' and r.get('busbw', 0) >= 350)(flags.get('nccl_last', {}))
 hints:

@@ -80,7 +80,8 @@ setup:
       st.next_job_id = 4002
 checks:
   - desc: you checked what is mounted and what the server exports (df / findmnt / mount / showmount)
-    expr: ran(r'^(df|findmnt|mount|showmount)')
+    kind: evidence
+    expr: "printed(r'\\S', cmd=r'^(df|findmnt|mount|showmount)\\b')"
   - desc: category dgx-h100 has an NFS fsmount for /home from the head node
     expr: any(e.get('mountpoint') == '/home' and re.match(r'^(master|bcm-head|10\.141\.255\.254):/home/?$', e.get('device', '')) and e.get('filesystem', '').startswith('nfs') for e in bcm.categories['dgx-h100'].fsmounts)
   - desc: the /cm/shared fsmount points at the real export

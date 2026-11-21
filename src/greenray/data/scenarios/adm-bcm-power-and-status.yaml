@@ -33,7 +33,8 @@ checks:
   - desc: cluster-wide BMC settings were not changed
     expr: bcm.get('partitions', {}).get('base', {}).get('bmcsettings', {}).get('password', 'Bmc!Superpod24') == 'Bmc!Superpod24'
   - desc: you checked node status and power state in cmsh
-    expr: ran(r'cmsh .*device.*(status|power status)')
+    kind: evidence
+    expr: "printed(r'dgx-02 \\.+ \\[|\\] dgx-02\\b', cmd=r'^cmsh\\b.*device.*(status|power status)', errors=True)"
 hints:
   - "cmsh -c \"device; status\" shows BCM's view. `power status -n dgx-02` asks the BMC directly over IPMI."
   - "If IPMI cannot open a session, BCM is using the wrong BMC credentials for this node. Where do BMC settings come from, and can a single node override them?"

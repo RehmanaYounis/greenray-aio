@@ -60,7 +60,8 @@ checks:
   - desc: a job bob submitted without -A was charged to nlp
     expr: any(j.user == 'bob' and j.account == 'nlp' and j.id > 4003 for j in slurm.jobs)
   - desc: you looked at the fair-share tree with sshare
-    expr: ran(r'^sshare')
+    kind: evidence
+    expr: "printed(r'^\\s*root\\b.*\\d', cmd=r'^sshare\\b')"
 hints:
   - "Look at what exists first: sacctmgr show assoc format=account,user,share tree, and sshare -a. Accounts form a tree. Every account has a parent, and root is the top."
   - "sacctmgr add account <name> parent=<parent> fairshare=<shares>. Shares are relative to the siblings under the same parent, so 60/40 means nlp gets 60% of whatever research is entitled to."

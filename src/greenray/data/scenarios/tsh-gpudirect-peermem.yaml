@@ -47,9 +47,11 @@ checks:
   - desc: the last two-node NCCL run used IB with GPUDirect RDMA on both nodes and reached >= 350 GB/s
     expr: "(lambda r: r.get('ok') and {'dgx-01', 'dgx-02'} <= set(r.get('hosts', [])) and r.get('transport') == 'IB' and all((r.get('gdr') or {}).get(h) for h in ('dgx-01', 'dgx-02')) and r.get('busbw', 0) >= 350)(flags.get('nccl_last', {}))"
   - desc: you looked at NCCL's debug output (NCCL_DEBUG=INFO)
-    expr: ran(r'NCCL_DEBUG=INFO')
+    kind: evidence
+    expr: "printed(r'NCCL INFO')"
   - desc: you checked which kernel modules are loaded
-    expr: ran(r'\blsmod\b|/proc/modules')
+    kind: evidence
+    expr: "printed(r'\\S', cmd=r'^lsmod\\b|^(cat|grep|less|head|tail|wc)\\b.*/proc/modules')"
 hints:
   - "Rerun the reference test with -x NCCL_DEBUG=INFO. The NET/IB lines tell you more than \"Using network IB\": check whether GPU Direct RDMA is used, and the Channel ... via NET/IB/0 lines."
   - "\"GPU Direct RDMA Disabled for HCA ... (no module)\", and channels that say via NET/IB/0 without /GDRDMA, mean NCCL has to copy every message through host memory. Which kernel module lets the IB HCA read and write GPU memory directly?"

@@ -78,7 +78,8 @@ checks:
   - desc: infer-triton-b-1 is up with exactly GPUs 2 and 3
     expr: "any(c.name == 'infer-triton-b-1' and c.status.startswith('Up') and sorted(c.gpus) == [2, 3] for c in nodes['dgx-02'].containers)"
   - desc: you read the Docker daemon's own error
-    expr: "ran(r'^(journalctl .*docker|systemctl status docker)', 'dgx-02')"
+    kind: evidence
+    expr: "printed(r'docker\\.service|dockerd', 'dgx-02', r'^(journalctl\\b.*docker|systemctl status docker)', errors=True)"
 hints:
   - "Start with the daemon itself: `systemctl status docker` and `journalctl -u docker` on dgx-02. Docker prints exactly what it doesn't like about daemon.json."
   - "Once dockerd starts, look at `docker ps -a` and the journal again. The containers were created with a runtime name stored in their config (`docker inspect -f '{{.HostConfig.Runtime}}' infer-triton-a-1`). Does the new daemon.json still define that runtime?"
