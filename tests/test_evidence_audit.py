@@ -225,3 +225,18 @@ def test_wkl2_a_selector_that_does_not_match_fails(selector):
     files["/root/cuda-test.yaml"] = files["/root/cuda-test.yaml"].replace(SELECTOR, selector)
     desc, ok, err = s.grade(shell)[2]
     assert "nodeSelector" in desc and not ok and not err
+
+
+def test_tsh13_containerd_config_is_matched_whatever_its_spacing():
+    s = concrete("tsh-13")
+    shell = Shell(s.build_state())
+    sc.replay_solution(s, shell)
+    index = next(i for i, c in enumerate(s.checks) if "containerd config" in c["desc"])
+    assert _grade(s, shell, index)
+    for node in ("dgx-03", "dgx-04"):
+        files = shell.ctx.state.nodes[node].files
+        assert 'default_runtime_name = "nvidia"' in files["/etc/containerd/config.toml"]
+        files["/etc/containerd/config.toml"] = files["/etc/containerd/config.toml"].replace(
+            'default_runtime_name = "nvidia"', 'default_runtime_name="nvidia"'
+        )
+    assert _grade(s, shell, index)

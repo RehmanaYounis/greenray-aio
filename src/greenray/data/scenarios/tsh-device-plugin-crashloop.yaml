@@ -61,7 +61,7 @@ checks:
   - desc: dgx-03 and dgx-04 advertise 8 allocatable GPUs
     expr: "all(k8s.nodes[n].allocatable.get('nvidia.com/gpu') == '8' for n in ('dgx-03', 'dgx-04'))"
   - desc: containerd config on dgx-03/dgx-04 has the nvidia runtime as default
-    expr: "all('default_runtime_name = \"nvidia\"' in file(n, '/etc/containerd/config.toml') and 'runtimes.nvidia]' in file(n, '/etc/containerd/config.toml') for n in ('dgx-03', 'dgx-04'))"
+    expr: "all(re.search(r'(?m)^\\s*default_runtime_name\\s*=\\s*\"nvidia\"', file(n, '/etc/containerd/config.toml')) is not None and 'runtimes.nvidia]' in file(n, '/etc/containerd/config.toml') for n in ('dgx-03', 'dgx-04'))"
   - desc: the running containerd on dgx-03/dgx-04 actually loaded that config
     expr: "all(nodes[n].runtime_loaded.containerd.default == 'nvidia' for n in ('dgx-03', 'dgx-04'))"
   - desc: nccl-test is Running on dgx-03
