@@ -2,6 +2,12 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.7.2] - 2026-11-22
+
+### Fixed
+- Lab `adm-1` (`adm-bcm-cmsh-inventory`): the cmsh criterion is met only when a successful `cmsh` read showed one of dgx-03's inventory facts (device, category or software image settings); a lookup of a node that does not exist earns nothing. The category and software image criteria no longer name the expected values in their wording.
+- `cmsh -c` without a script reports that the option requires an argument and prints the usage, instead of returning silently.
+
 ## [1.7.1] - 2026-11-22
 
 ### Fixed

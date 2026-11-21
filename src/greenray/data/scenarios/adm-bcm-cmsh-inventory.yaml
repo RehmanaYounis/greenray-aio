@@ -23,13 +23,14 @@ objectives:
   - Nothing in BCM was modified
 setup: []
 checks:
-  - desc: you used cmsh
-    expr: ran(r'^cmsh')
+  - desc: cmsh showed you dgx-03's inventory (its device, category or software image settings)
+    kind: evidence
+    expr: "printed(r'(?i)7c:c2:55:1a:00:03|dgx-h100|dgx-os-6\\.2-h100-image|5\\.15\\.0-1042-nvidia', cmd=r'^cmsh')"
   - desc: the record holds the MAC address of dgx-03
     expr: "re.search(r'7c:c2:55:1a:00:03', file('bcm-head', '/root/cmdb-dgx-03.txt'), re.I) is not None"
-  - desc: the record names the category dgx-h100
+  - desc: the record names the node's category
     expr: "'dgx-h100' in file('bcm-head', '/root/cmdb-dgx-03.txt')"
-  - desc: the record names the software image dgx-os-6.2-h100-image
+  - desc: the record names the node's software image
     expr: "'dgx-os-6.2-h100-image' in file('bcm-head', '/root/cmdb-dgx-03.txt')"
   - desc: the record holds the image's kernel version
     expr: "'5.15.0-1042-nvidia' in file('bcm-head', '/root/cmdb-dgx-03.txt')"

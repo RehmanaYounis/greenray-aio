@@ -1744,7 +1744,12 @@ def cmsh(ctx, args):
     it = iter(args)
     for a in it:
         if a in ("-c", "--command"):
-            script = next(it, "")
+            script = next(it, None)
+            if not script or not script.strip():  # the client's option parser refuses -c without a script
+                raise CommandError(
+                    f"cmsh: option requires an argument -- 'c'\n"
+                    f'Usage: cmsh [-c "cmd; cmd; ..."] [-f file]\nModes: {", ".join(MODES)}'
+                )
         elif a in ("-f", "--file"):
             path = next(it, "")
             if path not in ctx.node.files:
