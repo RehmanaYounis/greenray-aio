@@ -2,6 +2,17 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.7.7] - 2026-11-22
+
+### Fixed
+- `ssh <host> <command>` ends with the exit status of the remote command instead of always 0, so `ssh dgx-01 false && echo next` stops and `|| echo fallback` runs, as on a real node. The remote message is still printed.
+- A `--long` option a tool does not know is refused in the tool's own words instead of being ignored: `squeue --bogus` prints `squeue: unrecognized option '--bogus'`, `kubectl get pods --bogus` prints `error: unknown flag: --bogus`, `nvidia-smi --bogus` prints its "Invalid combination of input arguments" line. This applies to every tool with a help page and to `nvidia-smi`, `dcgmi`, `df`, `lscpu`, `lsmod`, `dmesg`, `findmnt`, `lsblk`, `ibstat`, `ibstatus` and `ibv_devinfo`. Options a tool supports, arguments after `--` and the arguments of a wrapped command (`ssh`, `srun`, `mpirun`, `pdsh` and the like) are untouched. Short options are not judged.
+- `ipmitool` refuses an unknown command (`Invalid command: ...`), an unknown `sel` command and an unknown `power` command instead of printing the event log or its usage with status 0.
+- `systemctl` refuses an unknown verb also when no unit follows (`Unknown command verb ...`).
+- `cmsh`: `device; status <name>` reports a name that is not a device instead of listing every device.
+- `sshare -A <account>` lists only the accounts asked for; an account that does not exist gives the header alone.
+- `nvsm show versions` names the operating system the node runs. On the stock-Ubuntu node of lab `ins-1` it no longer says "DGX OS 6.2".
+
 ## [1.7.6] - 2026-11-22
 
 ### Fixed

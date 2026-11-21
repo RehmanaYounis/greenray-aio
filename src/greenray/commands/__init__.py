@@ -68,6 +68,9 @@ def dispatch(ctx, argv: list[str]) -> str:
     page = helppages.help_request(argv)
     if page is not None:
         return page
+    unknown = helppages.unknown_long_option(argv, fn.__module__)
+    if unknown is not None:  # a real tool refuses an option it does not know instead of ignoring it
+        raise CommandError(helppages.unknown_option_message(name, unknown), 1)
     return fn(ctx, argv[1:])
 
 

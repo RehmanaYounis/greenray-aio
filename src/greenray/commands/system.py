@@ -681,7 +681,10 @@ def ssh(ctx, args):
         sub.ctx.results = ctx.results
         # one quoted argument is a command line for the remote shell (redirects and pipes included)
         line = remote[0] if len(remote) == 1 else " ".join(shlex.quote(a) for a in remote)
-        return sub.run(line)
+        out = sub.run(line)
+        if sub.ctx.last_code:  # ssh exits with the status of the remote command
+            raise CommandError(out.rstrip("\n"), sub.ctx.last_code)
+        return out
     source = ctx.state.nodes[ctx.host]
     ctx.saved_cwd[len(ctx.host_stack)] = ctx.cwd
     ctx.host_stack.append(ctx.host)
@@ -825,11 +828,42 @@ def _service_hook(ctx, name, action):
         fn(ctx, name, action)
 
 
+SYSTEMCTL_VERBS = frozenset(
+    {
+        "status",
+        "start",
+        "stop",
+        "restart",
+        "reload",
+        "enable",
+        "disable",
+        "is-active",
+        "is-enabled",
+        "daemon-reload",
+        "list-units",
+        "list-unit-files",
+        "help",
+        "cat",
+        "show",
+        "mask",
+        "unmask",
+        "is-failed",
+        "reset-failed",
+        "edit",
+        "kill",
+        "try-restart",
+        "reload-or-restart",
+    }
+)
+
+
 @command("systemctl", help="systemctl status|start|stop|restart|enable|disable|is-active <unit>")
 def systemctl(ctx, args):
     if not args:
         raise CommandError("usage: systemctl <action> <unit>")
     action, units = args[0], [a for a in args[1:] if not a.startswith("-")]
+    if action not in SYSTEMCTL_VERBS:
+        raise CommandError(f"Unknown command verb {action}.", 1)
     if action == "list-units" or action == "list-unit-files":
         return "".join(f"{s}.service  loaded {st} running\n" for s, st in sorted(ctx.node.services.items()))
     if action == "daemon-reload":
@@ -1186,6 +1220,20 @@ def last(ctx, args):
 @command("ipmitool", help="ipmitool sel list | sdr | power status|on|off|cycle | chassis status")
 def ipmitool(ctx, args):
     node = ctx.node
+    words, it = [], iter(args)
+    for a in it:
+        if a in ("-I", "-H", "-U", "-P", "-L", "-p", "-C"):  # connection options carry a value
+            next(it, None)
+        elif not a.startswith("-"):
+            words.append(a)
+    if words and words[0] not in ("chassis", "sel", "sdr", "power"):
+        raise CommandError(
+            f"Invalid command: {words[0]}\nusage: ipmitool [sel list|sdr|power status|chassis status]", 1
+        )
+    if words[:1] == ["sel"] and len(words) > 1 and words[1] not in ("list", "elist", "info"):
+        raise CommandError(f"Invalid SEL command: {words[1]}", 1)
+    if words[:1] == ["power"] and len(words) > 1 and words[1] not in ("status", "on", "off", "cycle", "reset", "soft"):
+        raise CommandError(f"Invalid chassis power command: {words[1]}", 1)
     if "chassis" in args:
         on = node.get("power", "on") == "on"
         return (

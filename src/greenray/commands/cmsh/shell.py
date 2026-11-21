@@ -1476,7 +1476,10 @@ class Cmsh:
         return nodes, rest
 
     def dev_status(self, args):
-        nodes, _ = self._nodes_from(args)
+        nodes, rest = self._nodes_from(args)
+        unknown = [a for a in rest if not a.startswith("-")]
+        if unknown:  # a name that is not a device is an error, not a request for every device
+            self.err(f"Error: device {unknown[0]} not found")
         nodes = nodes or sorted(self.bcm.devices)
         for n in nodes:
             st = self._status(n)
