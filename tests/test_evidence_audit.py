@@ -175,3 +175,53 @@ def test_printed_before_orders_output_against_a_completed_command():
     shell.run(f"ssh {node} mlxlink -d mlx5_{rail} -m")
     shell.run(f"reseat-cable {node} mlx5_{rail}")
     assert _grade(s, shell, 4)
+
+
+# ---- wkl-k8s-pod-pending-nodeselector: the node selector is graded as parsed YAML
+
+SELECTOR = "nodeSelector:\n    nvidia.com/gpu.product: NVIDIA-H100-80GB\n"
+
+
+@pytest.mark.parametrize(
+    "selector",
+    [
+        "nodeSelector:\n    nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3\n",
+        'nodeSelector:\n    "nvidia.com/gpu.product": NVIDIA-H100-80GB-HBM3\n',
+        "nodeSelector:\n    nvidia.com/gpu.product: 'NVIDIA-H100-80GB-HBM3'   # the label GFD sets\n",
+        "nodeSelector: {nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3}\n",
+        "nodeSelector:\n    kubernetes.io/os: linux\n    nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3\n",
+    ],
+    ids=["plain", "quoted-key", "quoted-value-comment", "flow", "two-labels"],
+)
+def test_wkl2_every_yaml_spelling_of_the_selector_passes(selector):
+    s = concrete("wkl-2")
+    shell = Shell(s.build_state())
+    files = shell.ctx.state.nodes["bcm-head"].files
+    assert SELECTOR in files["/root/cuda-test.yaml"]
+    files["/root/cuda-test.yaml"] = files["/root/cuda-test.yaml"].replace(SELECTOR, selector)
+    for line in (
+        "kubectl describe pod cuda-test",
+        "kubectl get nodes -L nvidia.com/gpu.product",
+        "kubectl delete pod cuda-test",
+        "kubectl apply -f /root/cuda-test.yaml",
+    ):
+        shell.run(line)
+    assert all(ok for _desc, ok, _err in s.grade(shell)), s.grade(shell)
+
+
+@pytest.mark.parametrize(
+    "selector",
+    [
+        SELECTOR,
+        "",
+        "# nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3\n  nodeSelector:\n    nvidia.com/gpu.product: NVIDIA-A100\n",
+    ],
+    ids=["unchanged", "removed", "fix-only-in-a-comment"],
+)
+def test_wkl2_a_selector_that_does_not_match_fails(selector):
+    s = concrete("wkl-2")
+    shell = Shell(s.build_state())
+    files = shell.ctx.state.nodes["bcm-head"].files
+    files["/root/cuda-test.yaml"] = files["/root/cuda-test.yaml"].replace(SELECTOR, selector)
+    desc, ok, err = s.grade(shell)[2]
+    assert "nodeSelector" in desc and not ok and not err
