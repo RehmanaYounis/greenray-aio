@@ -914,3 +914,107 @@ def test_wkl2_recreating_the_pod_without_diagnosis_leaves_only_the_evidence_open
     assert [ok for _desc, ok, _err in s.grade(shell)] == [False, False, True, True, True]
     shell.run("kubectl describe pod cuda-test")  # the recreated pod has no FailedScheduling event to show
     assert not _check(s, shell, WKL2_EVENTS)
+
+
+# ---- wkl-k8s-taint-toleration: evidence needs output, and the manifest is graded as parsed YAML
+
+WKL3 = "wkl-k8s-taint-toleration"
+WKL3_SEEN, WKL3_FILE = "kubectl showed you", "/root/triton.yaml"
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "kubectl describe pod missing",
+        "kubectl describe node missing",
+        "kubectl describe node bcm-head",
+        "kubectl describe deployment triton-inference",
+        "kubectl get events -n kube-system",
+        "kubectl get pods",
+    ],
+)
+def test_wkl3_lookups_that_show_neither_events_nor_taints_earn_no_evidence(bad):
+    s, shell = _lab(WKL3)
+    shell.run(bad)
+    assert not _check(s, shell, WKL3_SEEN)
+
+
+@pytest.mark.parametrize(
+    "good",
+    [
+        "kubectl describe pod -l app=triton-inference",
+        "kubectl describe pods",
+        "kubectl get events",
+        "kubectl describe node dgx-01",
+        "kubectl describe node dgx-01 | grep Taints",
+        "kubectl describe nodes",
+    ],
+)
+def test_wkl3_pod_events_or_node_taints_earn_evidence(good):
+    s, shell = _lab(WKL3)
+    shell.run(good)
+    assert _check(s, shell, WKL3_SEEN)
+
+
+def _wkl3_with_toleration(toleration: str):
+    """wkl-3 after the manifest's toleration block was replaced by ``toleration`` and applied."""
+    s, shell = _lab(WKL3)
+    files = shell.ctx.state.nodes["bcm-head"].files
+    old = '      - key: nvidia.com/gpu\n        operator: Equal\n        value: "true"\n        effect: NoSchedule\n'
+    assert old in files["/root/triton.yaml"]
+    files["/root/triton.yaml"] = files["/root/triton.yaml"].replace(old, toleration)
+    shell.run("kubectl describe pod -l app=triton-inference")
+    shell.run("kubectl apply -f /root/triton.yaml")
+    shell.run("kubectl rollout status deployment/triton-inference")
+    return s, shell
+
+
+@pytest.mark.parametrize(
+    "toleration",
+    [
+        '      - key: nvidia.com/gpu\n        operator: Equal\n        value: "present"\n        effect: NoSchedule\n',
+        "      - key: nvidia.com/gpu\n        operator: Equal\n        value: 'present'\n        effect: NoSchedule\n",
+        "      - key: nvidia.com/gpu\n        operator: Equal\n        value: present\n        effect: NoSchedule\n",
+        "      - key: 'nvidia.com/gpu'\n        value:   present   # the taint's value\n        effect: \"NoSchedule\"\n",
+        "      - key: nvidia.com/gpu\n        operator: Exists\n        effect: NoSchedule\n",
+        "      - key: nvidia.com/gpu\n        operator: 'Exists'\n",
+        "      - {key: nvidia.com/gpu, operator: Equal, value: present, effect: NoSchedule}\n",
+        "      - operator: Exists\n",
+    ],
+    ids=["double", "single", "plain", "comment", "exists", "exists-any-effect", "flow", "exists-any-key"],
+)
+def test_wkl3_every_yaml_spelling_of_a_matching_toleration_passes(toleration):
+    s, shell = _wkl3_with_toleration(toleration)
+    assert all(ok for _desc, ok, _err in s.grade(shell)), s.grade(shell)
+
+
+@pytest.mark.parametrize(
+    "toleration",
+    [
+        '      - key: nvidia.com/gpu\n        operator: Equal\n        value: "true"\n        effect: NoSchedule\n',
+        "      - key: nvidia.com/gpu\n        operator: Equal\n        value: present\n        effect: NoExecute\n",
+        "      - key: nvidia.com/mig\n        operator: Exists\n",
+        "      # value: present\n      # operator: Exists\n      - key: nvidia.com/gpu\n        value: absent\n",
+    ],
+    ids=["unchanged", "wrong-effect", "wrong-key", "fix-only-in-a-comment"],
+)
+def test_wkl3_a_toleration_that_does_not_match_the_taint_fails(toleration):
+    s, shell = _wkl3_with_toleration(toleration)
+    assert not _check(s, shell, WKL3_FILE)
+    assert not _check(s, shell, "replicas Running")
+
+
+def test_wkl3_a_manifest_that_is_not_valid_yaml_fails_without_an_error():
+    s, shell = _lab(WKL3)
+    shell.ctx.state.nodes["bcm-head"].files["/root/triton.yaml"] = "kind: Deployment\n  value: present\n: ["
+    assert not _check(s, shell, WKL3_FILE)
+    del shell.ctx.state.nodes["bcm-head"].files["/root/triton.yaml"]
+    assert not _check(s, shell, WKL3_FILE)
+
+
+def test_wkl3_fixing_the_live_object_only_does_not_satisfy_the_manifest_criterion():
+    s, shell = _lab(WKL3)
+    patch = '{"spec":{"template":{"spec":{"tolerations":[{"key":"nvidia.com/gpu","operator":"Exists"}]}}}}'
+    assert "patched" in shell.run(f"kubectl patch deployment triton-inference -p '{patch}'")
+    assert _check(s, shell, "Deployment's pod template")
+    assert not _check(s, shell, WKL3_FILE)

@@ -230,6 +230,22 @@ def check_env(shell) -> dict:
     def file(host: str, path: str) -> str:
         return state.nodes[host].files.get(path, "")
 
+    def manifest(host: str, path: str) -> list:
+        """The YAML documents in a file on ``host``, parsed; empty when the file is missing or not valid YAML.
+
+        Grade a manifest through this, not through its text: quoting and layout are the author's choice.
+        """
+        try:
+            return [wrap(d) for d in yaml.safe_load_all(file(host, path)) if isinstance(d, dict)]
+        except yaml.YAMLError:
+            return []
+
+    def tolerates(tolerations, taint: dict) -> bool:
+        """True when the scheduler would let a pod with these tolerations onto a node with ``taint``."""
+        from ..commands.kubectl.model import tolerates as scheduler_tolerates
+
+        return scheduler_tolerates(tolerations, taint)
+
     def generated(host: str, path: str) -> bool:
         """True when the file on ``host`` is exactly what BCM's cmd would write (so it was not edited by hand)."""
         from ..commands.cmsh.wlm import render_slurm_conf
@@ -264,6 +280,8 @@ def check_env(shell) -> dict:
         "audit": audit,
         "file": file,
         "generated": generated,
+        "manifest": manifest,
+        "tolerates": tolerates,
         "pods": pods,
         "release": release,
         "jobs": jobs,

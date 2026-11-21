@@ -67,15 +67,16 @@ checks:
   - desc: all four DGX nodes still have nvidia.com/gpu=present:NoSchedule
     expr: "all(any(t.key == 'nvidia.com/gpu' and t.get('value') == 'present' and t.effect == 'NoSchedule' for t in k8s.nodes[n].taints) for n in ('dgx-01', 'dgx-02', 'dgx-03', 'dgx-04'))"
   - desc: the Deployment's pod template tolerates nvidia.com/gpu=present:NoSchedule
-    expr: "any(d.name == 'triton-inference' and any(t.get('key') == 'nvidia.com/gpu' and t.get('effect') in (None, '', 'NoSchedule') and (t.get('operator') == 'Exists' or str(t.get('value')) == 'present') for t in (d.template.spec.get('tolerations') or [])) for d in k8s.deployments)"
-  - desc: /root/triton.yaml contains the fix
-    expr: "'value: \"present\"' in file('bcm-head', '/root/triton.yaml') or 'value: present' in file('bcm-head', '/root/triton.yaml') or 'operator: Exists' in file('bcm-head', '/root/triton.yaml')"
+    expr: "any(d.name == 'triton-inference' and tolerates(d.template.spec.get('tolerations'), {'key': 'nvidia.com/gpu', 'value': 'present', 'effect': 'NoSchedule'}) for d in k8s.deployments)"
+  - desc: the pod template in /root/triton.yaml tolerates the taint
+    expr: "any(d.kind == 'Deployment' and d.metadata.name == 'triton-inference' and tolerates(d.spec.template.spec.get('tolerations'), {'key': 'nvidia.com/gpu', 'value': 'present', 'effect': 'NoSchedule'}) for d in manifest('bcm-head', '/root/triton.yaml'))"
   - desc: two triton-inference replicas Running on DGX nodes
     expr: "len([p for p in pods('default', 'triton-inference-') if p.status == 'Running' and (p.node or '').startswith('dgx-')]) == 2"
   - desc: no triton-inference pod left Pending
     expr: "not [p for p in pods('default', 'triton-inference-') if p.status == 'Pending']"
-  - desc: you inspected the pod events or the node taints
-    expr: "ran(r'kubectl describe (pod|pods|po|node|nodes|no)') or ran(r'kubectl get (events|ev)')"
+  - desc: kubectl showed you the scheduling events of the pods or the taints of a DGX node
+    kind: evidence
+    expr: "printed(r'FailedScheduling|Taints:\\s+nvidia\\.com/gpu=present:NoSchedule', cmd=r'^kubectl\\b.*\\b(describe (pod|pods|po|node|nodes|no)|get (events|ev))\\b')"
 hints:
   - "`kubectl describe pod -l app=triton-inference`: the FailedScheduling message names the exact taint the pods don't tolerate."
   - "Compare that taint with the toleration in /root/triton.yaml. With operator: Equal the key, value AND effect must all match."
