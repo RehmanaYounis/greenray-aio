@@ -6,8 +6,11 @@ cmsh behaviour. Each case states the real tool's behaviour in its expected text.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
+from conftest import concrete
 from greenray.core.shell import Shell
 from greenray.core.state import make_cluster
 
@@ -380,3 +383,90 @@ def test_date_and_journals_share_one_day():
     s = sh()
     assert "Oct 19" in s.run("date") and "2026" in s.run("date")
     assert "Oct 19" in s.run("ssh dgx-01")
+
+
+# ---- tsh-first-look-at-logs: credit for the accounting lookup needs the query to return the incident job
+
+
+def _tsh1(variant: int):
+    s = concrete("tsh-first-look-at-logs", variant)
+    shell = Shell(s.build_state())
+    return s, shell
+
+
+def _accounting_check(s, shell) -> bool:
+    desc, ok, err = s.grade(shell)[0]
+    assert "accounting" in desc and not err, (desc, err)
+    return ok
+
+
+@pytest.mark.parametrize("variant", [0, 1, 2])
+def test_empty_or_wrong_accounting_queries_earn_no_credit(variant):
+    s, shell = _tsh1(variant)
+    assert not _accounting_check(s, shell)
+    assert shell.run("sacct -j 999999").count("\n") == 1  # the header only
+    shell.run("sacct -j 1")
+    shell.run("scontrol show job 999999")
+    assert "requires an argument" in shell.run("sacct -j")
+    assert not _accounting_check(s, shell)
+
+
+@pytest.mark.parametrize("variant", [0, 1, 2])
+@pytest.mark.parametrize(
+    "query",
+    [
+        "sacct -j {job}",
+        "sacct -j {job} --format=JobID,State,ExitCode",
+        "sacct -j {job} --format=State,ExitCode",
+        "sacct -j {job} -p -n",
+        "sacct -u {user}",
+        "sacct",
+        "sacct -a -X",
+        "sacct -j {job}.batch",
+        "scontrol show job {job}",
+    ],
+)
+def test_valid_accounting_queries_earn_credit(variant, query):
+    s, shell = _tsh1(variant)
+    shell.run(query.format(**s.params))
+    assert _accounting_check(s, shell)
+
+
+def test_accounting_credit_follows_a_reset_and_a_crash():
+    s, shell = _tsh1(2)
+    shell.run("sacct -j 2954")
+    assert _accounting_check(s, shell)
+    shell = Shell(s.build_state())  # what `reset` does
+    assert not _accounting_check(s, shell) and shell.ctx.outputs == []
+    from greenray import commands
+
+    @commands.command("crashsacct")
+    def crashsacct(ctx, args):
+        raise RuntimeError("boom")
+
+    try:
+        out = shell.run("crashsacct 2954")
+    finally:
+        commands.REGISTRY.pop("crashsacct", None)
+    assert "internal simulator error" in out and shell.ctx.outputs == []
+
+
+def test_tsh1_feedback_does_not_name_the_cause():
+    s, shell = _tsh1(2)
+    for desc, _ok, _ in s.grade(shell):
+        assert not re.search(r"oom|memory", desc, re.I), desc
+    shell.run("echo 'Job 2954 ended OUT_OF_MEMORY: oom_kill in step 2954.batch' > /root/ticket-4488.txt")
+    assert all(ok for desc, ok, _ in s.grade(shell) if "ticket" in desc)
+
+
+def test_journalctl_without_a_unit_prints_nothing_but_the_error():
+    shell = Shell(concrete("tsh-first-look-at-logs", 2).build_state())
+    shell.run("ssh dgx-01")
+    for line in ("journalctl -u", "journalctl --unit", "journalctl -xeu"):
+        out = shell.run(line)
+        assert "requires an argument" in out and "oom" not in out, line
+    assert "oom_kill" in shell.run("journalctl -u slurmd")
+    assert "oom_kill" in shell.run("journalctl --unit=slurmd.service")
+    assert "oom_kill" in shell.run("journalctl -xeu slurmd")
+    assert shell.run("journalctl").count("\n") >= 3  # unfiltered on purpose still works
+    assert shell.run("journalctl -k").startswith("[")

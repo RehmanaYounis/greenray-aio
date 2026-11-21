@@ -31,6 +31,12 @@ CASES = [
     ("scancel", "No job identification provided"),
     ("sacctmgr -i add user nobody account=nope", "account"),
     ("sacct -j abc", "Invalid job id"),
+    ("sacct -j", "option requires an argument -- 'j'"),
+    ("sacct --jobs", "option '--jobs' requires an argument"),
+    ("sacct -X --jobs", "option '--jobs' requires an argument"),
+    ("ssh dgx-01 journalctl -u", "option requires an argument -- 'u'"),
+    ("ssh dgx-01 journalctl --unit", "option '--unit' requires an argument"),
+    ("ssh dgx-01 journalctl -xeu", "option requires an argument -- 'u'"),
     ("ssh dgx-09", "Could not resolve hostname"),
     # GPU tools
     ("ssh dgx-01 nvidia-smi -pl 900", "not a valid power limit"),
