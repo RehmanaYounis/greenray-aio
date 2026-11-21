@@ -11,12 +11,15 @@ from .common import (
     STATE_CODES,
     TERMINAL,
     _err,
+    _find_job,
     _has,
     _opt,
     _ts,
     compress_hostlist,
     fmt_elapsed,
     fmt_limit_upper,
+    job_id_text,
+    mem_text,
 )
 from .fairshare import _acct_usage, _assoc_shares, _fs_factor, _level_total, _norm_acct, _user_usage
 from .sacctmgr import _assoc_walk
@@ -116,7 +119,7 @@ def _sacct_rows(state, j, steps=True):
     if st == "CANCELLED" and j.start_time is not None:
         st = "CANCELLED by 0"
     base = {
-        "jobid": str(j.id),
+        "jobid": job_id_text(j),
         "jobidraw": str(j.id),
         "jobname": j.name,
         "partition": j.partition,
@@ -147,7 +150,7 @@ def _sacct_rows(state, j, steps=True):
         "submitline": j.command,
         "derivedexitcode": "0:0",
         "ncpus": str(acpu if j.start_time is not None else ncpu),
-        "reqmem": f"{j.get('min_memory_mb') or 0}M",
+        "reqmem": mem_text(int(j.get("min_memory_mb") or 0)),
         "reqnodes": str(j.num_nodes),
         "uid": "0" if j.user == "root" else str(1000 + sum(map(ord, j.user)) % 500),
         "group": j.user,
@@ -231,7 +234,12 @@ def sacct(ctx, args):
         spec.append((key, int(w) if w else SACCT_W.get(key, 10)))
     rows = []
     for j in state.slurm.jobs:
-        if ids and str(j.id) not in [x.split(".")[0] for x in ids.split(",")]:
+        if j.get("array_tasks") is not None and j.state == "COMPLETED":
+            continue  # the tasks carry the accounting; a finished master has nothing of its own
+        if ids and not any(
+            _find_job(state, x) is j or (str(j.get("array_job_id")) == x.split(".")[0].split("_")[0] and "_" not in x)
+            for x in ids.split(",")
+        ):
             continue
         if user and j.user != user:
             continue

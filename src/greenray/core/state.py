@@ -166,6 +166,20 @@ def make_ib_port(idx: int) -> dict:
     }
 
 
+HOSTS_FILE = (
+    "127.0.0.1\tlocalhost\n"
+    "10.141.255.254\tbcm-head bcm-head.cm.cluster master\n"
+    + "".join(f"10.141.0.{i}\tdgx-0{i} dgx-0{i}.cm.cluster\n" for i in range(1, 5))
+    + "".join(f"10.148.0.{i}\tdgx-0{i}-bmc\n" for i in range(1, 5))
+)
+OS_RELEASE = (
+    'PRETTY_NAME="Ubuntu 22.04.4 LTS"\nNAME="Ubuntu"\nVERSION_ID="22.04"\nVERSION="22.04.4 LTS (Jammy Jellyfish)"\n'
+    'VERSION_CODENAME=jammy\nID=ubuntu\nID_LIKE=debian\nHOME_URL="https://www.ubuntu.com/"\n'
+    'SUPPORT_URL="https://help.ubuntu.com/"\nBUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"\n'
+    'PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"\nUBUNTU_CODENAME=jammy\n'
+)
+
+
 def make_node(name: str, node_no: int) -> dict:
     gpus = [make_gpu(node_no, i) for i in range(8)]
     ib = [make_ib_port(i) for i in range(8)]
@@ -229,6 +243,8 @@ def make_node(name: str, node_no: int) -> dict:
         "pyxis_installed": True,
         "files": {
             "/etc/hostname": name + "\n",
+            "/etc/hosts": HOSTS_FILE,
+            "/etc/os-release": OS_RELEASE,
             "/etc/slurm/gres.conf": "AutoDetect=nvml\nName=gpu Type=h100 File=/dev/nvidia[0-7]\n",
             "/etc/slurm/plugstack.conf": "required /usr/lib/x86_64-linux-gnu/slurm/spank_pyxis.so\n",
             "/etc/nvidia-container-runtime/config.toml": '[nvidia-container-cli]\nldconfig = "@/sbin/ldconfig.real"\n',
@@ -276,6 +292,8 @@ def make_head() -> dict:
     head["ib"][0]["lid"] = 1
     head["files"] = {
         "/etc/hostname": HEAD + "\n",
+        "/etc/hosts": HOSTS_FILE,
+        "/etc/os-release": OS_RELEASE,
         "/etc/slurm/slurm.conf": SLURM_CONF,
         "/etc/slurm/gres.conf": "AutoDetect=nvml\nName=gpu Type=h100 File=/dev/nvidia[0-7]\n",
         "/etc/slurm/cgroup.conf": "ConstrainCores=yes\nConstrainDevices=yes\nConstrainRAMSpace=yes\n",

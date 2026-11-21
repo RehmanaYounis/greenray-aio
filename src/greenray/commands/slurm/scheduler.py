@@ -14,6 +14,7 @@ from .common import (
     TICK,
     _err,
     _find_job,
+    _ts,
     compress_hostlist,
     expand_hostlist,
     parse_gres_spec,
@@ -262,33 +263,58 @@ def _qos_reason(state, j):
     return None
 
 
+def _effective_state(state, other) -> tuple[str, str]:
+    """A job's state for dependency purposes; an array master is done when every task is."""
+    if other.get("array_tasks") is not None:
+        children = [c for c in state.slurm.jobs if c.get("array_job_id") == other.id]
+        if other.get("array_tasks") or any(c.state not in TERMINAL for c in children):
+            return ("PENDING" if other.get("array_tasks") else "RUNNING"), "0:0"
+        if any(c.state != "COMPLETED" or c.exit_code != "0:0" for c in children):
+            return "FAILED", "1:0"
+        return "COMPLETED", "0:0"
+    return other.state, other.exit_code
+
+
 def _dependency_reason(state, j):
     dep = j.get("dependency") or ""
     if not dep:
         return None
     for clause in dep.split(","):
+        if clause == "singleton":
+            earlier = [
+                o
+                for o in state.slurm.jobs
+                if o.id < j.id
+                and o.name == j.name
+                and o.user == j.user
+                and o.state in ("PENDING", "RUNNING", "SUSPENDED")
+            ]
+            if earlier:
+                return "Dependency"
+            continue
         if ":" not in clause:
             continue
         kind, ids = clause.split(":", 1)
         for i in ids.split(":"):
             other = _find_job(state, i)
             if other is None:
-                continue
+                return "DependencyNeverSatisfied"
+            st, code = _effective_state(state, other)
             if kind == "afterok":
-                if other.state == "COMPLETED" and other.exit_code == "0:0":
+                if st == "COMPLETED" and code == "0:0":
                     continue
-                if other.state in TERMINAL:
+                if st in TERMINAL:
                     return "DependencyNeverSatisfied"
                 return "Dependency"
-            if kind == "afterany" and other.state not in TERMINAL:
+            if kind == "afterany" and st not in TERMINAL:
                 return "Dependency"
             if kind == "afternotok":
-                if other.state in TERMINAL and other.state != "COMPLETED":
+                if st in TERMINAL and st != "COMPLETED":
                     continue
-                if other.state == "COMPLETED":
+                if st == "COMPLETED":
                     return "DependencyNeverSatisfied"
                 return "Dependency"
-            if kind == "after" and other.state == "PENDING":
+            if kind == "after" and st == "PENDING":
                 return "Dependency"
     return None
 
@@ -300,6 +326,8 @@ def _static_reason(state, j):
     r = _dependency_reason(state, j)
     if r:
         return r
+    if j.get("eligible_time") is not None and s.clock < j.eligible_time:
+        return "BeginTime"
     p = s.partitions.get(j.partition)
     if p is None:
         return "PartitionDown"
@@ -338,10 +366,35 @@ def _fits(state, j, name) -> list | None:
     cpus = sn.cpus if j.exclusive else j.ntasks_per_node * j.cpus_per_task
     if sn.alloc_cpus + cpus > sn.cpus:
         return None
+    need_mem = int(j.get("min_memory_mb") or 0)
+    if need_mem:
+        used_mem = sum(int(o.get("min_memory_mb") or 0) for o in running)
+        if used_mem + need_mem > int(sn.get("real_memory") or 0):
+            return None
+    if not _reservation_allows(state, j, name):
+        return None
     if "enforce-binding" in str(j.get("gres_flags", "")) and j.gpus_per_node and not j.exclusive:
         if _local_free_cores(state, j, name, free[:need]) < math.ceil(cpus / 2):
             return None
     return free[:need]
+
+
+def _active_reservations(state):
+    s = state.slurm
+    out = []
+    for r in (s.get("reservations") or {}).values():
+        end = r.get("end")
+        if r.get("start", 0) <= s.clock < (end if end is not None else 1 << 62):
+            out.append(r)
+    return out
+
+
+def _reservation_allows(state, j, node) -> bool:
+    """A node inside an active reservation only takes jobs submitted into that reservation."""
+    for r in _active_reservations(state):
+        if node in r.get("nodes", []):
+            return j.get("reservation") == r["name"]
+    return not j.get("reservation")  # a reserved job runs only on its reservation's nodes
 
 
 def _place(state, j):
@@ -370,7 +423,13 @@ def _not_avail_reason(state, j):
     bad_req = [n for n in j.req_nodes if not _usable(state, n)]
     if bad_req:
         return "ReqNodeNotAvail, UnavailableNodes:" + compress_hostlist(bad_req)
+    reserved = {n for r in _active_reservations(state) for n in r.get("nodes", []) if j.get("reservation") != r["name"]}
     usable = [n for n in _part_nodes(state, j.partition) if _usable(state, n) and n not in j.exc_nodes]
+    if any(n in reserved for n in j.req_nodes) or (
+        reserved and len([n for n in usable if n not in reserved]) < j.num_nodes
+    ):
+        maint = any("MAINT" in r.get("flags", "") for r in _active_reservations(state))
+        return "ReqNodeNotAvail, Reserved for maintenance" if maint else "ReqNodeNotAvail, Reserved"
     if len(usable) < j.num_nodes:
         return NOT_AVAIL_TEXT
     return None
@@ -430,10 +489,45 @@ def _proc_name(j):
     return "bash"
 
 
+def _expand_arrays(state):
+    """Turn pending array tasks into runnable jobs, up to the array's concurrency limit."""
+    s = state.slurm
+    for master in [j for j in list(s.jobs) if j.get("array_tasks") is not None and j.state == "PENDING"]:
+        if _static_reason(state, master):
+            continue
+        children = [c for c in s.jobs if c.get("array_job_id") == master.id]
+        active = [c for c in children if c.state in ("PENDING", "RUNNING", "SUSPENDED")]
+        limit = master.get("array_limit") or len(master.array_tasks) + len(active)
+        while master.array_tasks and len(active) < limit:
+            task = master.array_tasks.pop(0)
+            child = {
+                k: (list(v) if isinstance(v, list) else (dict(v) if isinstance(v, dict) else v))
+                for k, v in dict(master).items()
+                if k not in ("id", "array_tasks", "array_limit", "priority", "steps", "stdout")
+            }
+            child.update({"array_job_id": master.id, "array_task_id": task, "array_spec": None})
+            child["id"] = s.next_job_id
+            s.next_job_id += 1
+            s.jobs.append(child)
+            c = s.jobs[-1]
+            _job_defaults(state, c)
+            if master.get("stdout_pattern"):
+                from .steps import _expand_pattern
+
+                c.stdout = _expand_pattern(master.stdout_pattern, c)
+                if not c.stdout.startswith("/"):
+                    c.stdout = c.work_dir.rstrip("/") + "/" + c.stdout
+            active.append(c)
+        if not master.array_tasks and all(c.state in TERMINAL for c in children + active):
+            master.state = "COMPLETED"
+            master.end_time = s.clock
+
+
 def schedule(state):
     s = state.slurm
     _refresh(state)
-    pend = [j for j in s.jobs if j.state == "PENDING"]
+    _expand_arrays(state)
+    pend = [j for j in s.jobs if j.state == "PENDING" and j.get("array_tasks") is None]
     for j in pend:
         j.priority = _priority(state, j)
     pend.sort(key=lambda j: (-s.partitions.get(j.partition, {}).get("priority_tier", 1), -j.priority, j.id))
@@ -466,18 +560,23 @@ def tick(ctx):
     for j in list(s.jobs):
         if j.state != "RUNNING":
             continue
-        if j.duration is not None and j.start_time is not None and s.clock >= j.start_time + j.duration:
-            _finish(state, j, "COMPLETED", j.get("final_exit", "0:0") or "0:0")
-            if j.get("final_state"):
-                j.state = j.final_state
-        elif (
+        limit_hit = (
             j.time_limit is not None
             and j.start_time is not None
             and s.clock >= j.start_time + j.time_limit * 60
-            and j.duration is None
-            and j.get("enforce_timeout")
-        ):
+            and (j.duration is None or j.time_limit * 60 < j.duration)
+        )
+        if limit_hit and (j.batch or j.get("enforce_timeout")):
             _finish(state, j, "TIMEOUT", "0:0")
+            head = state.nodes.get(HEAD)
+            if head is not None:
+                head.journal.setdefault("slurmctld", []).append(
+                    f"{_ts(state).replace('T', ' ')} {HEAD} slurmctld[2211]: Time limit exhausted for JobId={j.id}"
+                )
+        elif j.duration is not None and j.start_time is not None and s.clock >= j.start_time + j.duration:
+            _finish(state, j, "COMPLETED", j.get("final_exit", "0:0") or "0:0")
+            if j.get("final_state"):
+                j.state = j.final_state
         elif j.get("pty") and len(ctx.host_stack) < j.get("pty_depth", 0):
             _finish(state, j, "COMPLETED", "0:0")
     for name, sn in s.nodes.items():
@@ -485,6 +584,7 @@ def tick(ctx):
             _do_slurm_reboot(ctx, name)
     _health_check(state)
     schedule(state)
+    _expand_arrays(state)
 
 
 def _controller_ok(state) -> bool:

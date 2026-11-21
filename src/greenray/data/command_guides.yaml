@@ -31,6 +31,8 @@ dcgmi:
     - "health -s a / -c        set health watches / check them"
     - "diag -r 1|2|3|4         diagnostics: 1 quick, 2 medium, 3 long, 4 extended (higher = more intrusive)"
     - "dmon -e FIELD_IDS       stream metrics; policy --get/--set/--reg   automatic violation handling"
+    - "nvlink -s / -e -g GPU   link status per GPU and NVSwitch / error counters"
+    - "topo, fieldgroup -l, profile -l   topology, field groups for dmon and stats, profiling metrics"
   read:
     - "Diag table: any test marked Fail names the GPU and the reason."
     - "Health check: Healthy / Warning / Failure per subsystem (memory, NVLink, PCIe, thermal, power)."
@@ -145,6 +147,7 @@ kubectl:
     - "describe pod|node NAME [-n NS]   events at the bottom explain scheduling and pull problems"
     - "logs POD [-n NS] [-p]   container output (-p: the previous, crashed container)"
     - "apply -f FILE, delete, label, taint, cordon, drain"
+    - "set image deploy/NAME C=IMAGE, rollout history|undo, expose, explain, config get-contexts"
   read:
     - "Pod STATUS (Pending, ContainerCreating, CrashLoopBackOff, ImagePullBackOff) and RESTARTS."
     - "FailedScheduling events: '0/N nodes are available: <reason per node>'."
@@ -271,6 +274,39 @@ ipmitool:
     - "sel list                hardware event log"
     - "sdr                     sensor readings (fans, temperatures, PSUs)"
     - "power status|on|off|cycle"
+    - "chassis status          power state and fault flags in one page"
+
+pdsh:
+  summary: run one command on many nodes in parallel
+  purpose: Runs the same command over ssh on a list of nodes and prefixes every output line with the node name, so one screen compares the whole cluster.
+  when: Checking that every DGX agrees (driver version, a kernel module, a mount, a service) or applying a one-off command before you make it permanent in BCM.
+  options:
+    - "-w dgx-0[1-4] CMD        the nodes, as a hostlist"
+    - "-g CATEGORY CMD          every node of a BCM category"
+    - "-a CMD                   every compute node; -x HOSTLIST leaves some out"
+  read:
+    - "A node that does not answer prints an ssh error on its own line: powered off, or not reachable."
+    - "Sort the output (pdsh ... | sort) to see the nodes side by side; dshbak is the real tool for that."
+
+ibdev2netdev:
+  summary: map InfiniBand devices to their network interfaces
+  purpose: Prints which netdev belongs to each HCA port and whether the port is up, which is what you need before reading ibstat or ethtool for the right device.
+  when: A fabric port is down or a NIC is missing and you need to know which mlx5_N it is.
+  read:
+    - "Eight lines on a healthy DGX H100, all (Up). (Down) names the port to look at with ibstat and mlxlink."
+
+lsblk:
+  summary: list block devices
+  purpose: Shows the drives, partitions and RAID arrays with their sizes and mount points.
+  when: Disk space or a missing /raid mount; before touching anything with mkfs or mdadm.
+  options:
+    - "-d                      drives only"
+    - "-o NAME,SIZE,TYPE,MOUNTPOINT   the columns you want"
+
+last:
+  summary: recent logins and reboots
+  purpose: Shows who logged in when and, at the end, when the system last booted.
+  when: Finding out whether someone was on the node when a problem started, or when it rebooted.
 
 nvsm:
   summary: NVIDIA System Management CLI on a DGX (health, firmware versions, support dump)
@@ -280,6 +316,7 @@ nvsm:
     - "show health            every health check with OK/FAIL and a reason"
     - "show versions          BMC, BIOS, VBIOS, NVSwitch, ConnectX, driver and Fabric Manager versions"
     - "show alerts            the checks that currently fail"
+    - "show gpus|storage|power|fans   one subsystem in detail"
     - "dump health            support bundle under /tmp"
     - "update firmware --type nvswitch|bmc|bios|all   stage an update, applied at the next reboot"
   read:

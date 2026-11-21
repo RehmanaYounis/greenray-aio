@@ -2,6 +2,25 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.6.0] - 2026-11-22
+
+The shell and Slurm behave like the real ones in the places a candidate notices in the first minutes of a lab.
+
+### Added
+- Shell: variables (`X=1`, `export X`, `$X`, `${X:-default}`, `${X:=default}`, `$((2 + 3))`, `$HOME`, `$USER`, `$HOSTNAME`, `$PWD`, `$OLDPWD`), `$?` with the exit status of the last pipeline, `cd -`, `env VAR=x cmd`, globbing with `*`, `?` and `[...]` (an unmatched pattern stays as typed, a quoted one is never expanded), redirections `2>`, `2>>`, `2>&1`, `&>`, `&>>` and `<`, quoted heredoc markers with a redirect after them (`cat <<'EOF' > file`), `sudo -u USER cmd`, and `ssh NODE 'cmd > file'` running the whole quoted line on the node.
+- Slurm: job arrays (`--array=1-4%2`, `0,3,5`, `1-10:2`; `1002_3` ids in `squeue`, `sacct`, `scontrol show job` and `scancel`; `squeue -r`; `%A` and `%a` in output names; `SLURM_ARRAY_JOB_ID`, `SLURM_ARRAY_TASK_ID` and `SLURM_ARRAY_TASK_COUNT`); `--begin` with the `BeginTime` reason and `EligibleTime`; `--mem`, `--mem-per-cpu` and `--mem-per-gpu` checked against the nodes and accounted when placing jobs (`ReqTRES mem=`, `MinMemoryNode`, `sacct ReqMem`); `--test-only`; `--wait`; `sbatch` reading the script from stdin; a job that reaches its time limit ends as `TIMEOUT` with the controller's journal line, and `--wrap='sleep N'` runs for N seconds; `salloc` opens an allocation shell with `SLURM_*` set that `exit` relinquishes, or runs the command it is given and releases; `--dependency` on an unknown job and `-x` leaving fewer nodes than `-N` are refused as slurmctld refuses them, `singleton` works; `--mail-type`, `--mail-user`, `--tasks-per-node`, `--ntasks-per-core`, `--threads-per-core`, `--oversubscribe`, `--spread-job`, `--gpu-bind`, `--open-mode`, `--priority` (root) and `--kill-on-invalid-dep` are accepted and shown.
+- Reservations: `scontrol create|update|delete reservation` and `show reservation`; a node in an active `MAINT` reservation shows `maint` in `sinfo` and holds other jobs with `ReqNodeNotAvail, Reserved for maintenance`; `scontrol suspend`, `resume` and `top`.
+- Permissions: a plain user is refused `scancel` on another user's job, `scontrol update|create|delete|reconfigure|reboot`, `sacctmgr add|modify|delete` and `cmsh` (a BCM user with the `admin` profile may run it); drains and `sacct` records carry the user who acted.
+- `scontrol reconfigure` rejects a `slurm.conf` with an unknown key or a partition of unknown nodes the way slurmctld does, and keeps the previous configuration.
+- Commands: `pdsh` (`-w`, `-x`, `-g category`, `-a`), `ibdev2netdev`, `lsblk`, `last`, `ipmitool chassis status`; `kubectl get rs|crd`, `kubectl explain`, `kubectl config get-contexts|current-context|view`, `kubectl set image`, `kubectl expose`, `kubectl rollout history|undo` with revisions kept per deployment, services as real objects; `nvidia-smi mig -lcip`; `dcgmi nvlink -s|-e`, `topo`, `fieldgroup -l|-c|-d|-i`, `profile -l|--pause|--resume`; `nvsm show gpus|storage|power|fans|version`; `docker system df|prune`, `docker volume ls|create|rm|inspect|prune`, `docker network ls|inspect`.
+- Node files: `/etc/hosts`, `/etc/os-release`, `/proc/uptime`, `/proc/loadavg`, and `/proc/driver/nvidia/version` with the `/dev/nvidia*` device nodes, present only while the driver is loaded.
+
+### Changed
+- Words on a command line are no longer rewritten into paths unless the command takes files or the word looks like a path, so `jq .`, `echo data` and `kubectl get ns slurm` mean what they say.
+- Error text is stderr: it reaches the terminal, not a pipe or a redirected file, unless `2>&1` or `2>` says so.
+- `cmsh -c` discards what was staged and not committed when the invocation ends, with a warning, as the real client does; `commit` belongs in the same script as the change.
+- A job without a memory request takes no memory from the node's accounting; jobs with one are placed against `RealMemory`.
+
 ## [1.5.1] - 2026-11-18
 
 Three read-only audits drove the simulator the way a learner would and compared it with the real tools; about ninety findings were reproduced and are fixed here, each with a test.

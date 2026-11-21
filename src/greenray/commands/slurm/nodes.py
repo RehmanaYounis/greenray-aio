@@ -82,8 +82,16 @@ def _derive_state(state, sn):
 def _refresh(state):
     s = state.slurm
     rts = str(_param(state, "ReturnToService", "0"))
+    reserved = {
+        n
+        for r in (s.get("reservations") or {}).values()
+        if "MAINT" in r.get("flags", "")
+        and r.get("start", 0) <= s.clock < (r.get("end") if r.get("end") is not None else 1 << 62)
+        for n in r.get("nodes", [])
+    }
     for name, sn in s.nodes.items():
         _node_defaults(state, sn)
+        sn["maint"] = name in reserved
         node = state.nodes.get(name)
         if node is not None:
             alive = node.get("up", True) and node.get("power", "on") == "on"
@@ -146,6 +154,8 @@ def _node_label(sn, long=False) -> str:
             "INVAL": "inval",
         }
     out = m.get(st, st.lower())
+    if sn.get("maint") and st in ("IDLE", "DRAIN"):
+        out = "maint"
     if sn.get("not_responding"):
         out += "*"
     return out

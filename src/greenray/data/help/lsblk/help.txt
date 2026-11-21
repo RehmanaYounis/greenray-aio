@@ -1,0 +1,14 @@
+Usage:
+ lsblk [options] [<device> ...]
+
+List information about block devices.
+
+Options:
+ -d, --nodeps         don't print slaves or holders
+ -o, --output <list>  output columns (NAME,SIZE,TYPE,MOUNTPOINT)
+ -h, --help           display this help
+
+The DGX H100 carries two NVMe drives in a RAID 1 for the operating system
+and eight NVMe drives in a RAID 0 mounted on /raid for data sets.
+
+(GreenRay AIO simulates the options listed above.)

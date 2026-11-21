@@ -71,5 +71,7 @@ Options:
     --show-labels=false:
         Print all labels of each object as the last column.
 
+Replica sets (rs) and custom resource definitions (crd) are listed too.
+
 Usage:
   kubectl get [(-o|--output=)FORMAT] (TYPE [NAME ...] | TYPE/NAME ...) [flags] [options]

@@ -1,0 +1,11 @@
+Usage: pdsh [-options] command ...
+    -S                return largest of remote command return values
+    -h                output usage menu and quit
+    -w hostlist       target the specified hosts (node01,node03 or node[01-04])
+    -x hostlist       exclude the specified hosts
+    -g category       target the nodes of a BCM category
+    -a                target all compute nodes BCM knows
+    -R name           use the given rcmd module (ssh is the only one here)
+available rcmd modules: ssh (default)
+
+(GreenRay AIO simulates the options listed above.)
