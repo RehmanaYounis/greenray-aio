@@ -45,7 +45,7 @@ def _check_scenario(s: sc.Scenario) -> str | None:
 def fix_steps(s: sc.Scenario) -> list[str]:
     """Solution steps that make a non-evidence check pass: the commands that change the cluster."""
     shell = Shell(s.build_state())
-    evidence = {c.get("desc", c["expr"]) for c in s.checks if "ran(" in c["expr"]}
+    evidence = {c.get("desc", c["expr"]) for c, kind in zip(s.checks, s.kinds, strict=True) if kind != "outcome"}
     passing = {d for d, ok, _ in s.grade(shell) if ok}
     steps = []
     for step in s.solution:

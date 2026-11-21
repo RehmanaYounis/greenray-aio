@@ -535,3 +535,67 @@ def test_tsh2_feedback_does_not_name_the_index():
         assert not re.search(r"\(3\)|\b3\b", desc), desc
     shell.run("echo 'GPU index: 3' > /root/gpu-report-dgx-03.txt")
     assert next(ok for desc, ok, _ in s.grade(shell) if "index" in desc)
+
+
+# ---- adm-bcm-cmsh-inventory: cmsh evidence needs output that carries an inventory fact
+
+
+def _adm1():
+    s = concrete("adm-bcm-cmsh-inventory")
+    return s, Shell(s.build_state())
+
+
+def _cmsh_evidence(s, shell) -> bool:
+    desc, ok, err = s.grade(shell)[0]
+    assert "cmsh" in desc and not err, (desc, err)
+    return ok
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "cmsh -c 'device; use dgx-99; show'",
+        "cmsh -c 'category; use nosuch; show'",
+        "cmsh -c",
+        "cmsh -c ''",
+        'cmsh -c "partition; list"',
+    ],
+)
+def test_cmsh_without_inventory_output_earns_no_evidence(bad):
+    s, shell = _adm1()
+    assert not _cmsh_evidence(s, shell)
+    shell.run(bad)
+    assert not _cmsh_evidence(s, shell)
+
+
+@pytest.mark.parametrize(
+    "good",
+    [
+        'cmsh -c "device; list"',
+        'cmsh -c "device; use dgx-03; show"',
+        'cmsh -c "device; use dgx-03; get mac"',
+        'cmsh -c "device; use dgx-03; get mac; get category"',
+        'cmsh -c "category; use dgx-h100; show"',
+        'cmsh -c "category; use dgx-h100; get softwareimage"',
+        'cmsh -c "softwareimage; list"',
+        'cmsh -c "softwareimage; use dgx-os-6.2-h100-image; get kernelversion"',
+    ],
+)
+def test_cmsh_inventory_reads_earn_evidence(good):
+    s, shell = _adm1()
+    shell.run(good)
+    assert _cmsh_evidence(s, shell)
+
+
+def test_adm1_feedback_does_not_name_the_answers():
+    s, shell = _adm1()
+    for desc, _ok, _ in s.grade(shell):
+        assert not re.search(r"dgx-h100|dgx-os-6\.2|7c:c2:55|5\.15\.0-1042", desc, re.I), desc
+
+
+def test_cmsh_dash_c_needs_a_script():
+    shell = Shell(make_cluster())
+    for line in ("cmsh -c", "cmsh -c ''"):
+        out = shell.run(line)
+        assert "option requires an argument -- 'c'" in out and "Usage: cmsh" in out and shell.ctx.last_code == 1
+    assert "dgx-03" in shell.run('cmsh -c "device; list"')
