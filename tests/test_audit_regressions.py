@@ -1181,3 +1181,50 @@ def test_ins2_device_and_category_inspections_earn_evidence(good):
     s, shell = _lab(INS2)
     shell.run(good)
     assert _check(s, shell, "cmsh showed you")
+
+
+# ---- ins-gpu-operator-preinstalled-driver: kubectl must have returned driver logs or events
+
+INS3 = "ins-gpu-operator-preinstalled-driver"
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "kubectl logs -n gpu-operator nvidia-driver-missing",
+        "kubectl logs ds/nvidia-driver-daemonset",  # wrong namespace
+        "kubectl describe pod -n gpu-operator nvidia-driver-missing",
+        "kubectl describe pod nvidia-driver-daemonset",
+        "kubectl get events",  # the default namespace has none of the driver's events
+        "kubectl get pods -n gpu-operator",
+    ],
+)
+def test_ins3_lookups_that_return_nothing_about_the_driver_earn_no_evidence(bad):
+    s, shell = _lab(INS3)
+    shell.run(bad)
+    assert not any(ok for _desc, ok, _err in s.grade(shell))
+
+
+@pytest.mark.parametrize(
+    "good",
+    [
+        "kubectl logs -n gpu-operator ds/nvidia-driver-daemonset",
+        "kubectl logs -n gpu-operator daemonset/nvidia-driver-daemonset --tail=3",
+        "kubectl logs -n gpu-operator -l app=nvidia-driver-daemonset",
+        "kubectl describe pod -n gpu-operator -l app=nvidia-driver-daemonset",
+        "kubectl describe pods -n gpu-operator",
+        "kubectl get events -n gpu-operator",
+        "kubectl get ev -A",
+    ],
+)
+def test_ins3_driver_logs_and_events_earn_evidence(good):
+    s, shell = _lab(INS3)
+    assert "nvidia-driver" in shell.run(good) or "NVIDIA" in shell.run(good)
+    assert _check(s, shell, "kubectl showed you")
+
+
+def test_ins3_a_driver_pod_named_in_full_earns_evidence():
+    s, shell = _lab(INS3)
+    pod = next(p.name for p in shell.ctx.state.k8s.pods if p.name.startswith("nvidia-driver-daemonset-"))
+    shell.run(f"kubectl logs -n gpu-operator {pod}")
+    assert _check(s, shell, "kubectl showed you")
