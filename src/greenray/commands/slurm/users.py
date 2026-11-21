@@ -22,6 +22,7 @@ def _run_as(ctx, user, line, prog):
         raise _err(f"{prog}: user {user} does not exist or the user entry does not contain all the required fields", 1)
     sub = Shell(ctx.state, ctx.host)
     sub.ctx.executed = ctx.executed
+    sub.ctx.outputs = ctx.outputs
     sub.ctx.host_stack = list(ctx.host_stack)
     sub.ctx.cwd = "/root" if user == "root" else f"/home/{user}"
     _USER.append(user)

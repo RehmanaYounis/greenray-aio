@@ -585,6 +585,7 @@ def bash(ctx, args):
             lines = lines[1:]
     sub = Shell(ctx.state, ctx.host)
     sub.ctx.executed = ctx.executed
+    sub.ctx.outputs = ctx.outputs
     sub.ctx.cwd = ctx.cwd
     out = []
     for line in lines:

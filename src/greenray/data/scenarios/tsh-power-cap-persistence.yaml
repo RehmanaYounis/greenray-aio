@@ -34,8 +34,9 @@ checks:
     expr: not any('SW Power Cap' in g.throttle_reasons for g in nodes['{node}'].gpus)
   - desc: persistence mode enabled on every {node} GPU
     expr: all(g.persistence_mode for g in nodes['{node}'].gpus)
-  - desc: you looked at the clock event reasons
-    expr: ran(r'nvidia-smi.*(-q.*PERFORMANCE|-d PERFORMANCE|clocks_(event|throttle)_reasons|-q$)', '{node}') or ran(r'nvidia-smi -q', '{node}')
+  - desc: nvidia-smi on {node} showed you the clock event reasons
+    kind: evidence
+    expr: "printed(r'Clocks Event Reasons|clocks_(event|throttle)_reasons', '{node}', r'^nvidia-smi\\b') or printed(r'\\S', '{node}', r'^nvidia-smi\\b.*clocks_(event|throttle)_reasons')"
 hints:
   - "Compare power.draw with power.limit: nvidia-smi --query-gpu=index,power.draw,power.limit,clocks.sm --format=csv"
   - "nvidia-smi -q -d PERFORMANCE shows the active clock event (throttle) reasons."

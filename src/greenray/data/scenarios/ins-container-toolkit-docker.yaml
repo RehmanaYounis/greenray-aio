@@ -16,12 +16,13 @@ briefing: |
   Make GPU containers work with Docker on dgx-03. The team's compose files select the
   runtime by name (`runtime: nvidia`), so Docker must also know an "nvidia" runtime.
   The provisioning system already added NVIDIA's apt repository for the container toolkit
-  (/etc/apt/sources.list.d/nvidia-container-toolkit.list). Finish by proving it works with
-  a CUDA container that runs nvidia-smi and sees all 8 GPUs.
+  (/etc/apt/sources.list.d/nvidia-container-toolkit.list). Finish by proving it works: a
+  container started with GPU access (the team's CUDA image, or any other image) runs
+  nvidia-smi and sees all 8 GPUs.
 objectives:
   - The NVIDIA Container Toolkit packages are installed on dgx-03
   - /etc/docker/daemon.json registers the nvidia runtime and the running Docker daemon has loaded it
-  - A CUDA container on dgx-03 ran nvidia-smi and saw all 8 GPUs
+  - A GPU-enabled container on dgx-03 ran nvidia-smi and saw all 8 GPUs
 setup:
   - python: |
       from greenray.commands import container as ct
@@ -47,7 +48,7 @@ checks:
     expr: "re.search(r'\"nvidia\"\\s*:\\s*\\{[^}]*nvidia-container-runtime', file('dgx-03', '/etc/docker/daemon.json')) is not None"
   - desc: docker is running on dgx-03 and has loaded the nvidia runtime and GPU device driver
     expr: "nodes['dgx-03'].services.docker == 'active' and 'nvidia' in nodes['dgx-03'].runtime_loaded.docker.handlers and nodes['dgx-03'].runtime_loaded.docker.gpu_driver"
-  - desc: a CUDA container on dgx-03 ran nvidia-smi and saw all 8 GPUs
+  - desc: a GPU-enabled container on dgx-03 ran nvidia-smi and saw all 8 GPUs
     expr: "any(c['host'] == 'dgx-03' and c['gpus'] == 8 for c in flags.get('gpu_containers', []))"
 hints:
   - "Docker's --gpus flag is served by the NVIDIA Container Toolkit (nvidia-container-runtime-hook). Is it installed? Try `dpkg -l | grep nvidia-container` or `nvidia-ctk --version` on dgx-03."

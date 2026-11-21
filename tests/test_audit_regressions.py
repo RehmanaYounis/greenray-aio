@@ -1018,3 +1018,391 @@ def test_wkl3_fixing_the_live_object_only_does_not_satisfy_the_manifest_criterio
     assert "patched" in shell.run(f"kubectl patch deployment triton-inference -p '{patch}'")
     assert _check(s, shell, "Deployment's pod template")
     assert not _check(s, shell, WKL3_FILE)
+
+
+# ---- wkl-k8s-pod-pending-gpu: the manifest is graded as parsed YAML, the diagnosis by its output
+
+WKL4 = "wkl-k8s-pod-pending-gpu"
+WKL4_FILE, WKL4_SEEN = "/root/bert-pretrain.yaml", "kubectl showed you"
+
+
+def _wkl4(variant: int = 0):
+    s = concrete(WKL4, variant)
+    return s, Shell(s.build_state())
+
+
+def _wkl4_recreate(s, shell, resources: str) -> None:
+    """Replace the trainer's resources block in the manifest, uncordon the nodes and recreate the pod."""
+    files = shell.ctx.state.nodes["bcm-head"].files
+    old = f"    resources:\n      limits:\n        nvidia.com/gpu: {s.params['bad']}\n"
+    assert old in files[WKL4_FILE]
+    files[WKL4_FILE] = files[WKL4_FILE].replace(old, resources)
+    shell.run("kubectl describe pod bert-pretrain")
+    shell.run(f"kubectl uncordon {s.params['c1']} {s.params['c2']}")
+    shell.run(f"kubectl replace --force -f {WKL4_FILE}")
+
+
+@pytest.mark.parametrize("variant", [0, 1, 2])
+@pytest.mark.parametrize(
+    "resources",
+    [
+        "    resources:\n      limits:\n        nvidia.com/gpu: 8\n",
+        '    resources:\n      limits:\n        "nvidia.com/gpu": 8\n',
+        "    resources:\n      limits:\n        'nvidia.com/gpu': 8\n",
+        '    resources:\n      limits:\n        nvidia.com/gpu: "8"\n',
+        "    resources:\n      limits:\n        nvidia.com/gpu: 8   # one full DGX\n",
+        "    resources:\n      limits: {nvidia.com/gpu: 8}\n",
+        "    resources:\n      requests:\n        nvidia.com/gpu: 8\n      limits:\n        nvidia.com/gpu: 8\n",
+    ],
+    ids=["plain", "quoted-key", "single-quoted-key", "quoted-value", "comment", "flow", "requests-and-limits"],
+)
+def test_wkl4_every_yaml_spelling_of_eight_gpus_passes(variant, resources):
+    s, shell = _wkl4(variant)
+    _wkl4_recreate(s, shell, resources)
+    assert "Running" in shell.run("kubectl get pod bert-pretrain")
+    assert all(ok for _desc, ok, _err in s.grade(shell)), s.grade(shell)
+
+
+@pytest.mark.parametrize(
+    "resources",
+    [
+        "    resources:\n      limits:\n        nvidia.com/gpu: 4\n",
+        "    resources:\n      limits:\n        nvidia.com/gpu: 80\n",
+        "    resources:\n      limits:\n        nvidia.com/mig-1g.10gb: 8\n",
+        "    # nvidia.com/gpu: 8\n    resources:\n      limits:\n        nvidia.com/gpu: 2\n",
+    ],
+    ids=["four", "eighty", "another-resource", "eight-only-in-a-comment"],
+)
+def test_wkl4_a_manifest_without_eight_gpus_fails(resources):
+    s, shell = _wkl4()
+    _wkl4_recreate(s, shell, resources)
+    assert not _check(s, shell, WKL4_FILE)
+
+
+def test_wkl4_eight_gpus_on_another_pod_or_container_do_not_count():
+    s, shell = _wkl4()
+    files = shell.ctx.state.nodes["bcm-head"].files
+    wrong_pod = (
+        files[WKL4_FILE].replace("name: bert-pretrain", "name: other").replace(f"gpu: {s.params['bad']}", "gpu: 8")
+    )
+    sidecar = "  - name: sidecar\n    image: busybox\n    resources:\n      limits:\n        nvidia.com/gpu: 8\n"
+    for text in (wrong_pod, files[WKL4_FILE] + sidecar, "kind: Pod\n  nvidia.com/gpu: 8\n: [", ""):
+        files[WKL4_FILE] = text
+        assert not _check(s, shell, WKL4_FILE)
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "kubectl describe pod missing",
+        "kubectl describe pod -l app=inference",
+        "kubectl describe pod bert-pretrain -n kube-system",
+        "kubectl get events -n kube-system",
+        "kubectl get pods",
+    ],
+)
+def test_wkl4_lookups_without_the_scheduling_event_earn_no_evidence(bad):
+    s, shell = _wkl4()
+    shell.run(bad)
+    assert not _check(s, shell, WKL4_SEEN)
+    assert [ok for _desc, ok, _err in s.grade(shell)] == [False, False, False, False, True, True, False]
+
+
+@pytest.mark.parametrize(
+    "good",
+    [
+        "kubectl describe pod bert-pretrain",
+        "kubectl describe pods",
+        "kubectl describe po -l app=bert-pretrain",
+        "kubectl get events",
+        "kubectl get ev -A",
+        "kubectl get events -A | grep bert",
+    ],
+)
+def test_wkl4_the_pods_scheduling_event_earns_evidence(good):
+    s, shell = _wkl4()
+    shell.run(good)
+    assert _check(s, shell, WKL4_SEEN)
+
+
+def test_wkl4_safety_criteria_still_catch_a_deleted_inference_pod():
+    s, shell = _wkl4()
+    victim = next(p.name for p in shell.ctx.state.k8s.pods if p.name.startswith("inference-"))
+    shell.run(f"kubectl delete pod {victim}")
+    assert not _check(s, shell, "no running pod was deleted")
+
+
+# ---- ins-bcm-add-node-category: cmsh must have returned inventory of dgx-04 or of dgx-h100
+
+INS2 = "ins-bcm-add-node-category"
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        'cmsh -c "device; show missing"',
+        'cmsh -c "device; use missing; show"',
+        'cmsh -c "category; use nosuch; show"',
+        'cmsh -c "device; use dgx-01; show"',
+        'cmsh -c "device; status dgx-01"',
+        'cmsh -c "category; use default; show"',
+        'cmsh -c "partition; list"',
+        'cmsh -c "device; use dgx-04; get nosuchproperty"',
+    ],
+)
+def test_ins2_cmsh_without_relevant_inventory_earns_no_evidence(bad):
+    s, shell = _lab(INS2)
+    shell.run(bad)
+    assert not _check(s, shell, "cmsh showed you")
+
+
+def test_ins2_changing_the_node_without_looking_leaves_the_evidence_open():
+    s, shell = _lab(INS2)
+    shell.run('cmsh -c "device; use dgx-04; set category dgx-h100; commit"')
+    shell.run('cmsh -c "device; reboot -n dgx-04"')
+    assert [ok for _desc, ok, _err in s.grade(shell)] == [True, True, True, True, False]
+
+
+@pytest.mark.parametrize(
+    "good",
+    [
+        'cmsh -c "device; list"',
+        'cmsh -c "device; use dgx-04; show"',
+        'cmsh -c "device; use dgx-04; get category"',
+        'cmsh -c "device; status"',
+        'cmsh -c "device; status dgx-04"',
+        'cmsh -c "category; list"',
+        'cmsh -c "category; use dgx-h100; show"',
+        'cmsh -c "category; use dgx-h100; get softwareimage"',
+        'cmsh -c "softwareimage; list"',
+    ],
+)
+def test_ins2_device_and_category_inspections_earn_evidence(good):
+    s, shell = _lab(INS2)
+    shell.run(good)
+    assert _check(s, shell, "cmsh showed you")
+
+
+# ---- ins-gpu-operator-preinstalled-driver: kubectl must have returned driver logs or events
+
+INS3 = "ins-gpu-operator-preinstalled-driver"
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "kubectl logs -n gpu-operator nvidia-driver-missing",
+        "kubectl logs ds/nvidia-driver-daemonset",  # wrong namespace
+        "kubectl describe pod -n gpu-operator nvidia-driver-missing",
+        "kubectl describe pod nvidia-driver-daemonset",
+        "kubectl get events",  # the default namespace has none of the driver's events
+        "kubectl get pods -n gpu-operator",
+    ],
+)
+def test_ins3_lookups_that_return_nothing_about_the_driver_earn_no_evidence(bad):
+    s, shell = _lab(INS3)
+    shell.run(bad)
+    assert not any(ok for _desc, ok, _err in s.grade(shell))
+
+
+@pytest.mark.parametrize(
+    "good",
+    [
+        "kubectl logs -n gpu-operator ds/nvidia-driver-daemonset",
+        "kubectl logs -n gpu-operator daemonset/nvidia-driver-daemonset --tail=3",
+        "kubectl logs -n gpu-operator -l app=nvidia-driver-daemonset",
+        "kubectl describe pod -n gpu-operator -l app=nvidia-driver-daemonset",
+        "kubectl describe pods -n gpu-operator",
+        "kubectl get events -n gpu-operator",
+        "kubectl get ev -A",
+    ],
+)
+def test_ins3_driver_logs_and_events_earn_evidence(good):
+    s, shell = _lab(INS3)
+    assert "nvidia-driver" in shell.run(good) or "NVIDIA" in shell.run(good)
+    assert _check(s, shell, "kubectl showed you")
+
+
+def test_ins3_a_driver_pod_named_in_full_earns_evidence():
+    s, shell = _lab(INS3)
+    pod = next(p.name for p in shell.ctx.state.k8s.pods if p.name.startswith("nvidia-driver-daemonset-"))
+    shell.run(f"kubectl logs -n gpu-operator {pod}")
+    assert _check(s, shell, "kubectl showed you")
+
+
+# ---- adm-bcm-wlm-new-queue: sinfo or scontrol must have shown the short partition
+
+ADM14 = "adm-bcm-wlm-new-queue"
+ADM14_CREATE = 'cmsh -c "wlm; use slurm; jobqueue; add short; set nodes dgx-03,dgx-04; set maxtime 4:00:00; commit"'
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "scontrol show partition missing",
+        "scontrol show partition short",
+        "scontrol show partition",
+        "sinfo",
+        "sinfo -p short",
+        "sinfo -s",
+    ],
+)
+def test_adm14_queries_before_the_partition_exists_earn_no_evidence(query):
+    s, shell = _lab(ADM14)
+    shell.run(query)
+    assert not _check(s, shell, "showed you the new partition")
+    shell.run(ADM14_CREATE)
+    assert [ok for _desc, ok, _err in s.grade(shell)] == [True, True, True, False, True]
+
+
+@pytest.mark.parametrize(
+    "query", ["scontrol show partition missing", "scontrol show partition defq", "sinfo -p defq", "sinfo -h -p defq"]
+)
+def test_adm14_queries_that_do_not_show_the_partition_earn_no_evidence(query):
+    s, shell = _lab(ADM14)
+    shell.run(ADM14_CREATE)
+    shell.run(query)
+    assert not _check(s, shell, "showed you the new partition")
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "sinfo",
+        "sinfo -p short",
+        "sinfo -s",
+        "sinfo -N",
+        "sinfo -o '%P %l'",
+        "sinfo | grep short",
+        "scontrol show partition short",
+        "scontrol show partition",
+        "scontrol show part short -o",
+    ],
+)
+def test_adm14_queries_that_show_the_partition_earn_evidence(query):
+    s, shell = _lab(ADM14)
+    shell.run(ADM14_CREATE)
+    shell.run(query)
+    assert all(ok for _desc, ok, _err in s.grade(shell))
+
+
+# ---- tsh-power-cap-persistence: nvidia-smi on the affected node must have printed the clock event reasons
+
+TSH3 = "tsh-power-cap-persistence"
+
+
+def _tsh3(variant: int, host: str | None = None):
+    s = concrete(TSH3, variant)
+    shell = Shell(s.build_state())
+    shell.run(f"ssh {host or s.params['node']}")
+    return s, shell
+
+
+@pytest.mark.parametrize("variant", [0, 1, 2])
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "nvidia-smi -q -d PERFORMANCE -i 99",
+        "nvidia-smi --query-gpu=clocks_event_reasons.bogus --format=csv",
+        "nvidia-smi",
+        "nvidia-smi --query-gpu=index,power.draw,power.limit --format=csv",
+        "nvidia-smi -q -d MEMORY",
+    ],
+)
+def test_tsh3_queries_without_clock_event_output_earn_no_evidence(variant, bad):
+    s, shell = _tsh3(variant)
+    assert "Clocks Event Reasons" not in shell.run(bad)
+    assert not any(ok for _desc, ok, _err in s.grade(shell))
+
+
+@pytest.mark.parametrize("variant", [0, 1, 2])
+@pytest.mark.parametrize(
+    "good",
+    [
+        "nvidia-smi -q -d PERFORMANCE",
+        "nvidia-smi -q -d PERFORMANCE -i 0",
+        "nvidia-smi -q",
+        "nvidia-smi -q | grep -A9 'Clocks Event'",
+        "nvidia-smi --query-gpu=index,clocks_event_reasons.sw_power_cap --format=csv",
+        "nvidia-smi --query-gpu=clocks_throttle_reasons.active --format=csv,noheader",
+    ],
+)
+def test_tsh3_clock_event_output_from_the_affected_node_earns_evidence(variant, good):
+    s, shell = _tsh3(variant)
+    shell.run(good)
+    assert _check(s, shell, "showed you the clock event reasons")
+
+
+def test_tsh3_clock_events_of_the_healthy_peer_earn_nothing():
+    s, shell = _tsh3(0, host=concrete(TSH3, 0).params["peer"])
+    assert "Clocks Event Reasons" in shell.run("nvidia-smi -q -d PERFORMANCE")
+    assert not _check(s, shell, "showed you the clock event reasons")
+
+
+# ---- ins-container-toolkit-docker: the proof is a container that sees all eight GPUs, whatever its image
+
+INS1 = "ins-container-toolkit-docker"
+INS1_CUDA = "nvcr.io/nvidia/cuda:12.4.1-base-ubuntu22.04"
+INS1_PROOF = "saw all 8 GPUs"
+
+
+def _ins1_ready():
+    """ins-1 on dgx-03 with the toolkit installed, the nvidia runtime configured and Docker restarted."""
+    s, shell = _lab(INS1)
+    for line in (
+        "ssh dgx-03",
+        "apt-get update",
+        "apt-get install -y nvidia-container-toolkit",
+        "nvidia-ctk runtime configure --runtime=docker",
+        "systemctl restart docker",
+    ):
+        shell.run(line)
+    assert [ok for _desc, ok, _err in s.grade(shell)] == [True, True, True, False]
+    return s, shell
+
+
+@pytest.mark.parametrize(
+    "run",
+    [
+        f"docker run --rm --gpus 1 {INS1_CUDA} nvidia-smi -L",
+        f"docker run --rm --gpus device=0 {INS1_CUDA} nvidia-smi -L",
+        f"docker run --rm --gpus '\"device=1,2\"' {INS1_CUDA} nvidia-smi -L",
+        f"docker run --rm --runtime=nvidia -e NVIDIA_VISIBLE_DEVICES=0 {INS1_CUDA} nvidia-smi -L",
+        f"docker run --rm {INS1_CUDA} nvidia-smi -L",
+        f"docker run --rm --gpus all {INS1_CUDA} hostname",
+    ],
+)
+def test_ins1_a_container_that_does_not_show_all_eight_gpus_fails(run):
+    s, shell = _ins1_ready()
+    assert shell.run(run).count("GPU ") < 8
+    assert not _check(s, shell, INS1_PROOF)
+
+
+@pytest.mark.parametrize(
+    "run",
+    [
+        f"docker run --rm --gpus all {INS1_CUDA} nvidia-smi",
+        f"docker run --rm --gpus all {INS1_CUDA} nvidia-smi -L",
+        f"docker run --rm --runtime=nvidia -e NVIDIA_VISIBLE_DEVICES=all {INS1_CUDA} nvidia-smi -L",
+        "docker run --rm --gpus all ubuntu:22.04 nvidia-smi -L",
+    ],
+)
+def test_ins1_a_gpu_container_that_shows_all_eight_gpus_passes(run):
+    s, shell = _ins1_ready()
+    shell.run(run)
+    assert all(ok for _desc, ok, _err in s.grade(shell))
+
+
+def test_ins1_wording_does_not_ask_for_an_image_the_grader_does_not_require():
+    s, _shell = _lab(INS1)
+    proof = next(c["desc"] for c in s.checks if INS1_PROOF in c["desc"])
+    assert "CUDA" not in proof and "CUDA" not in s.objectives[-1]
+    assert "any other image" in s.briefing
+
+
+def test_login_banner_names_the_os_the_node_runs():
+    s, shell = _lab(INS1)
+    stock = shell.run("ssh dgx-03")
+    assert "Welcome to Ubuntu 22.04.4 LTS (GNU/Linux" in stock and "DGX OS" not in stock
+    shell.run("exit")
+    assert "Welcome to Ubuntu 22.04.4 LTS (DGX OS 6.2) (GNU/Linux" in shell.run("ssh dgx-01")

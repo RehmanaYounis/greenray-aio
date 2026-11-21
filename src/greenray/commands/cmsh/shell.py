@@ -1680,6 +1680,7 @@ class Cmsh:
                 continue
             sub = Shell(self.state, n)
             sub.ctx.executed = self.ctx.executed
+            sub.ctx.outputs = self.ctx.outputs
             self.p(f"[{n}]")
             res = sub.run(line)
             if res:
