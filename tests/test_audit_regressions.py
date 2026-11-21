@@ -1284,3 +1284,56 @@ def test_adm14_queries_that_show_the_partition_earn_evidence(query):
     shell.run(ADM14_CREATE)
     shell.run(query)
     assert all(ok for _desc, ok, _err in s.grade(shell))
+
+
+# ---- tsh-power-cap-persistence: nvidia-smi on the affected node must have printed the clock event reasons
+
+TSH3 = "tsh-power-cap-persistence"
+
+
+def _tsh3(variant: int, host: str | None = None):
+    s = concrete(TSH3, variant)
+    shell = Shell(s.build_state())
+    shell.run(f"ssh {host or s.params['node']}")
+    return s, shell
+
+
+@pytest.mark.parametrize("variant", [0, 1, 2])
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "nvidia-smi -q -d PERFORMANCE -i 99",
+        "nvidia-smi --query-gpu=clocks_event_reasons.bogus --format=csv",
+        "nvidia-smi",
+        "nvidia-smi --query-gpu=index,power.draw,power.limit --format=csv",
+        "nvidia-smi -q -d MEMORY",
+    ],
+)
+def test_tsh3_queries_without_clock_event_output_earn_no_evidence(variant, bad):
+    s, shell = _tsh3(variant)
+    assert "Clocks Event Reasons" not in shell.run(bad)
+    assert not any(ok for _desc, ok, _err in s.grade(shell))
+
+
+@pytest.mark.parametrize("variant", [0, 1, 2])
+@pytest.mark.parametrize(
+    "good",
+    [
+        "nvidia-smi -q -d PERFORMANCE",
+        "nvidia-smi -q -d PERFORMANCE -i 0",
+        "nvidia-smi -q",
+        "nvidia-smi -q | grep -A9 'Clocks Event'",
+        "nvidia-smi --query-gpu=index,clocks_event_reasons.sw_power_cap --format=csv",
+        "nvidia-smi --query-gpu=clocks_throttle_reasons.active --format=csv,noheader",
+    ],
+)
+def test_tsh3_clock_event_output_from_the_affected_node_earns_evidence(variant, good):
+    s, shell = _tsh3(variant)
+    shell.run(good)
+    assert _check(s, shell, "showed you the clock event reasons")
+
+
+def test_tsh3_clock_events_of_the_healthy_peer_earn_nothing():
+    s, shell = _tsh3(0, host=concrete(TSH3, 0).params["peer"])
+    assert "Clocks Event Reasons" in shell.run("nvidia-smi -q -d PERFORMANCE")
+    assert not _check(s, shell, "showed you the clock event reasons")
