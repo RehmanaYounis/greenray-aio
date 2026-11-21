@@ -67,7 +67,7 @@ checks:
     expr: "all(bcm.devices[n].category == 'dgx-h100' for n in ('dgx-01', 'dgx-02', 'dgx-03')) and 'dgx-h100' in bcm.overlays['slurm-client'].categories and bcm.categories['dgx-h100'].softwareimage == 'dgx-os-6.2-h100-image'"
   - desc: you read the overlays or the node's roles before changing anything
     kind: evidence
-    expr: ran_before(r'^cmsh .*(configurationoverlay.*(list|show|get)|roles|events)', r'^cmsh .*(append|set|add) ')
+    expr: "printed_before(r'\\S', r'^cmsh .*(append|set|add) ', cmd=r'^cmsh\\b.*(configurationoverlay.*(list|show|get)|roles|events)')"
 hints:
   - "A node that is absent from sinfo, rather than down, has no NodeName line in slurm.conf. Check grep NodeName /etc/slurm/slurm.conf on bcm-head and the slurmctld journal: how many nodes did the last reconfigure read?"
   - "On a BCM cluster the node list comes from the roles, and the Slurm roles are handed out by configuration overlays: cmsh -c \"configurationoverlay; list\". Look at the Categories column of the overlays that carry slurmclient and compare it with the category dgx-04 is in now."

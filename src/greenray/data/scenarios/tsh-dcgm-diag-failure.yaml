@@ -51,7 +51,8 @@ checks:
   - desc: memory and NVLink health watches are set on dgx-03
     expr: any('m' in w and 'n' in w for w in dcgm.health_watches.get('dgx-03', {}).values())
   - desc: you ran a DCGM health check on dgx-03
-    expr: ran(r'^dcgmi health .*(-c|--check)', 'dgx-03')
+    kind: evidence
+    expr: "printed(r'Health Monitor Report|Overall Health', 'dgx-03', r'^dcgmi health\\b')"
   - desc: a level 2+ DCGM diagnostic on dgx-03 flagged GPUs 2 and 5
     expr: dcgm.diag_results.get('dgx-03', {}).get('level', 0) >= 2 and {2, 5} <= set(dcgm.diag_results['dgx-03'].get('failed_gpus', []))
   - desc: dgx-03 is drained (DRAIN/DRAINING), not DOWN

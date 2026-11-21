@@ -51,13 +51,14 @@ setup:
       state.slurm.next_job_id = {job} + 1
 checks:
   - desc: you read the kernel log on {node} (the Xid tells you what failed)
-    expr: ran(r'^(dmesg|journalctl -k|journalctl --dmesg)', '{node}')
+    kind: evidence
+    expr: "printed(r'\\S', '{node}', r'^(dmesg|journalctl -k|journalctl --dmesg)')"
   - desc: a bug report was collected before the reboot (the crash dump is gone afterwards)
     kind: evidence
-    expr: ran_before(r'^nvidia-bug-report', r'^(reboot|scontrol reboot|cmsh .*(power|reboot)|ipmitool .*power)') or ran_before(r'^ssh {node} nvidia-bug-report', r'^(reboot|scontrol reboot|cmsh .*(power|reboot))')
+    expr: "printed_before(r'nvidia-bug-report\\.log', r'^(reboot|scontrol reboot|cmsh .*(power|reboot)|ipmitool .*power)', cmd=r'^nvidia-bug-report')"
   - desc: you read the logs before rebooting or power-cycling the node
     kind: evidence
-    expr: ran_before(r'^(dmesg|journalctl)', r'^(reboot|scontrol reboot|cmsh .*(power|reboot)|ipmitool .*power)', '{node}') or ran_before(r'^ssh {node} (dmesg|journalctl)', r'^(reboot|scontrol reboot|cmsh .*(power|reboot)|ipmitool .*power)')
+    expr: "printed_before(r'\\S', r'^(reboot|scontrol reboot|cmsh .*(power|reboot)|ipmitool .*power)', '{node}', r'^(dmesg|journalctl)\\b')"
   - desc: all 8 GPUs on {node} are visible again
     expr: not any(g.fallen_off_bus for g in nodes['{node}'].gpus)
   - desc: a DCGM diagnostic of level 2+ passed on {node}

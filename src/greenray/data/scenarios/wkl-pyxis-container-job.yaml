@@ -33,7 +33,8 @@ checks:
   - desc: a 2-GPU job ran in nvcr.io#nvidia/pytorch:24.05-py3 and completed with exit code 0
     expr: any(j.container_image == 'nvcr.io#nvidia/pytorch:24.05-py3' and j.state == 'COMPLETED' and j.exit_code == '0:0' and j.gpus_per_node * j.num_nodes >= 2 for j in slurm.jobs)
   - desc: you inspected the SPANK plugin configuration
-    expr: ran(r'plugstack')
+    kind: evidence
+    expr: "printed(r'\\S', cmd=r'^(cat|less|more|head|tail|grep|ls|find)\\b.*plugstack')"
 hints:
   - "'srun: unrecognized option --container-image' means srun itself doesn't know the option. Pyxis adds it through a SPANK plugin that srun loads from /etc/slurm/plugstack.conf on the host where you run srun."
   - "Read plugstack.conf on bcm-head and follow its include line. Compare with /etc/slurm/plugstack.conf on a DGX node, where containers work."

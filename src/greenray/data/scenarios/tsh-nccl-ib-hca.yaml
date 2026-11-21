@@ -35,7 +35,8 @@ checks:
   - desc: last multi-node NCCL run used IB and reached >= 350 GB/s
     expr: (lambda r:r.get('ok') and len(r.get('hosts', [])) > 1 and r.get('transport') == 'IB' and r.get('busbw', 0) >= 350)(flags.get('nccl_last', {}))
   - desc: you collected NCCL debug output (NCCL_DEBUG=INFO)
-    expr: ran(r'NCCL_DEBUG=INFO')
+    kind: evidence
+    expr: "printed(r'NCCL INFO')"
 hints:
   - "Rerun the test with -x NCCL_DEBUG=INFO. Which network does NCCL say it is using: IB or Socket?"
   - "\"NET/IB : No device found\" while ibstat shows eight Active HCAs means NCCL was told to look for the wrong devices. Check NCCL_IB_HCA in the environment and in /etc/nccl.conf on the nodes."

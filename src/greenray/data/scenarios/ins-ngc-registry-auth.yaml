@@ -69,7 +69,8 @@ checks:
   - desc: llm/nemo-finetune is Running
     expr: "any(p.name == 'nemo-finetune' and p.status == 'Running' for p in pods('llm'))"
   - desc: you looked at why the pod could not pull its image
-    expr: "ran(r'kubectl (describe (pod|pods|po)|get (events|ev)).*') and ran(r'-n llm|--namespace[ =]llm')"
+    kind: evidence
+    expr: "printed(r'ImagePullBackOff|ErrImagePull|Failed to pull', cmd=r'^kubectl\\b.*\\b(describe (pod|pods|po)|get (events|ev))\\b')"
 hints:
   - "`kubectl describe pod nemo-finetune -n llm` shows two separate problems in the Events: a missing pull secret, and a 401 from nvcr.io."
   - "For nvcr.io the username is always the literal string $oauthtoken and the password is the API key. In bash put it in single quotes ('$oauthtoken'), otherwise the shell expands it to an empty string."

@@ -54,9 +54,11 @@ checks:
     kind: safety
     expr: all(g.power_limit_w == g.power_default_w and g.app_sm_clock_mhz == 1980 for g in nodes['{node}'].gpus)
   - desc: you read the clock event reasons / temperatures on {node}
-    expr: ran(r'nvidia-smi .*(-q(\s|$)|--query-gpu.*(clocks_event_reasons|clocks_throttle_reasons|temperature))', '{node}')
+    kind: evidence
+    expr: "printed(r'Clocks Event Reasons|Temperature|temperature|clocks_', '{node}', r'^nvidia-smi\\b.*(-q(\\s|$)|--query-gpu)') or printed(r'\\S', '{node}', r'^nvidia-smi\\b.*--query-gpu.*(clocks_event_reasons|clocks_throttle_reasons|temperature)')"
   - desc: you checked the BMC System Event Log on {node}
-    expr: ran(r'ipmitool .*sel', '{node}')
+    kind: evidence
+    expr: "printed(r'\\|', '{node}', r'^ipmitool\\b.*\\bsel\\b')"
 hints:
   - "On {node}, nvidia-smi gives a first look. Is one GPU hotter or slower than the others?"
   - "nvidia-smi -q -d PERFORMANCE,TEMPERATURE shows the clock event (throttle) reasons. 'HW Thermal Slowdown' means the hardware is protecting itself, and software limits play no part."

@@ -68,10 +68,11 @@ setup:
       state.slurm.next_job_id = {job} + 1
 checks:
   - desc: you gathered evidence (slurmd/slurmctld/munge logs, or a munge -n | unmunge test)
-    expr: ran(r'^journalctl') or ran(r'^unmunge')
+    kind: evidence
+    expr: "printed(r'(?i)munge decode|munge\\.key|munged|Invalid credential|STATUS:|slurmd|slurmctld', cmd=r'^(journalctl|unmunge)\\b', errors=True)"
   - desc: the evidence came before the key was copied or munge restarted
     kind: evidence
-    expr: ran_before(r'^(journalctl|unmunge|md5sum)', r'(scp .*munge|systemctl restart munge|imageupdate)')
+    expr: "printed_before(r'(?i)munge decode|munge\\.key|munged|Invalid credential|STATUS:|slurmd|slurmctld|^[0-9a-f]+  /', r'(scp .*munge|systemctl restart munge|imageupdate)', cmd=r'^(journalctl|unmunge|md5sum)\\b', errors=True)"
   - desc: "{node} has the cluster's MUNGE key"
     expr: file('{node}', '/etc/munge/munge.key') == file('bcm-head', '/etc/munge/munge.key')
   - desc: munged on {node} is running with that key (restarted after the copy)

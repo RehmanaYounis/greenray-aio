@@ -82,9 +82,11 @@ checks:
   - desc: the last dataloader-bench on dgx-02 used job.env as-is and showed the GPUs, not the input, as the limit, with GDS active
     expr: "(lambda b: b.get('ok') and b.get('from_config') and b.get('config') == '/home/alice/resnet50/job.env' and b.get('bound') == 'gpu' and b.get('gds'))(flags.get('dataloader_bench', {}).get('dgx-02', {}))"
   - desc: you captured the GPU starvation pattern (nvidia-smi dmon or dcgmi dmon on dgx-02)
-    expr: ran(r'nvidia-smi dmon|dcgmi dmon', 'dgx-02')
+    kind: evidence
+    expr: "printed(r'\\S', 'dgx-02', r'^(nvidia-smi dmon|dcgmi dmon)')"
   - desc: you ran the GDS platform check on dgx-02
-    expr: ran(r'gdscheck(\.py)? .*-p', 'dgx-02')
+    kind: evidence
+    expr: "printed(r'GDS release version', 'dgx-02', r'^(\\S*/)?gdscheck(\\.py)?\\b.*-p')"
 hints:
   - "Start with what the GPUs see: nvidia-smi dmon -c 10 on dgx-02. Short bursts of ~97% SM between near-idle samples is the classic sign of an input-bound job. Then run dataloader-bench once to see which limit it hits."
   - "Where does DATA_DIR live? Look at /proc/mounts and nfsiostat. iostat -x only shows local block devices. How large are the NFS read ops (kB/op, rsize), and which server is behind /home? Is there a faster filesystem on this node with the same dataset?"

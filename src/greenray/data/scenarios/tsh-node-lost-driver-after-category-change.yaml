@@ -63,10 +63,11 @@ setup:
       ]
 checks:
   - desc: you looked at the node itself (nvidia-smi, lsmod, dpkg or the cmd journal on {node})
-    expr: ran(r'^(nvidia-smi|lsmod|dpkg|journalctl|uname|dmesg)', '{node}')
+    kind: evidence
+    expr: "printed(r'NVIDIA-SMI|^GPU \\d|^Module\\s|^ii\\s|node-installer|^\\d+\\.\\d+\\.\\d+-|^\\[\\s*\\d+\\.\\d+\\]', '{node}', r'^(nvidia-smi|lsmod|dpkg|journalctl|uname|dmesg)\\b', errors=True)"
   - desc: you read the node's settings in cmsh before changing them
     kind: evidence
-    expr: ran_before(r'^cmsh .*(show|get |list|usedby)', r'^cmsh .*set ')
+    expr: "printed_before(r'\\S', r'^cmsh .*set ', cmd=r'^cmsh\\b.*(show|get |list|usedby)')"
   - desc: "{node} is back in category dgx-h100, committed"
     expr: bcm.devices['{node}'].category == 'dgx-h100' and not bcm.uncommitted
   - desc: "{node} was re-provisioned from the DGX OS image"

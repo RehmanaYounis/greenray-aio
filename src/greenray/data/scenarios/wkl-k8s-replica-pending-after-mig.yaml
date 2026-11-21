@@ -87,9 +87,11 @@ setup:
       kc.reconcile(state)
 checks:
   - desc: you read the scheduler's reasons in the pod events
-    expr: "ran(r'kubectl (describe (pod|pods|po)\\b|get (events|ev)\\b)')"
+    kind: evidence
+    expr: "printed(r'FailedScheduling', cmd=r'^kubectl\\b.*\\b(describe (pod|pods|po)|get (events|ev))\\b')"
   - desc: you looked at the nodes' labels or allocatable resources
-    expr: "ran(r'kubectl (describe (node|nodes|no)\\b|get (nodes|node|no)\\b.*(-L|--show-labels|-o))')"
+    kind: evidence
+    expr: "printed(r'\\S', cmd=r'^kubectl\\b.*\\b(describe (node|nodes|no)\\b|get (nodes|node|no)\\b.*(-L|--show-labels|-o))')"
   - desc: both triton replicas are Running on nodes labelled team=inference
     expr: "len([p for p in pods('default', 'triton-') if p.status == 'Running' and k8s.nodes[p.node].labels.get('team') == 'inference']) == 2"
   - desc: no triton replica is Pending

@@ -33,7 +33,10 @@ class Context:
     history: list = field(default_factory=list)  # raw command lines entered by the user
     executed: list = field(default_factory=list)  # (host, argv) for every simple command run
     outputs: list = field(default_factory=list)  # (host, argv, text) for every command that completed without error
-    # a shell started by another command (ssh host cmd, pdsh, bash -c, sudo, salloc cmd, cmsh pexec) shares both
+    # (position in executed, host, argv, text, completed) for every command that ended, with its output or its error
+    # message; lets a check ask what a command showed and whether that came before another command
+    results: list = field(default_factory=list)
+    # a shell started by another command (ssh host cmd, pdsh, bash -c, sudo, salloc cmd, cmsh pexec) shares these
     # lists with its parent, so evidence is found on the host where the command really ran
     reader: Callable[[str], str | None] | None = (
         None  # prompt -> line; lets interactive commands (editors) read from the learner
@@ -546,6 +549,7 @@ class Shell:
         state_blob, host, host_stack, cwd = checkpoint
         del self.ctx.executed[executed_before:]
         del self.ctx.outputs[outputs_before:]
+        self.ctx.results[:] = [r for r in self.ctx.results if r[0] < executed_before]
         self.ctx.host, self.ctx.host_stack, self.ctx.cwd = host, host_stack, cwd
         detail = f"{type(error).__name__}: {error}"
         if state_blob is not None:
@@ -655,7 +659,8 @@ class Shell:
                 data = self.ctx.node.files[src]
             self.ctx.stdin = data
             executed_before, outputs_before = len(self.ctx.executed), len(self.ctx.outputs)
-            self.ctx.executed.append((self.ctx.host, argv))
+            ran_on = self.ctx.host
+            self.ctx.executed.append((ran_on, argv))
             checkpoint = self._checkpoint()
             clock.advance(self.ctx.state)  # inside the checkpoint so a rolled-back crash takes no time
             saved_env = dict(self.ctx.node.env) if temp_env else None
@@ -666,8 +671,10 @@ class Shell:
                 data = commands.dispatch(self.ctx, argv)
                 code = 0
                 self.ctx.outputs.append((self.ctx.host, argv, data or ""))
+                self.ctx.results.append((executed_before, ran_on, argv, data or "", True))
             except CommandError as e:
                 data, err, code = "", str(e), e.code
+                self.ctx.results.append((executed_before, ran_on, argv, err, False))
             except Exception as e:  # a simulator bug, not a user error
                 return "", self._recover(argv, e, checkpoint, executed_before, outputs_before), INTERNAL_ERROR_CODE
             finally:
