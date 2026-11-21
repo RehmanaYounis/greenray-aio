@@ -599,3 +599,141 @@ def test_cmsh_dash_c_needs_a_script():
         out = shell.run(line)
         assert "option requires an argument -- 'c'" in out and "Usage: cmsh" in out and shell.ctx.last_code == 1
     assert "dgx-03" in shell.run('cmsh -c "device; list"')
+
+
+# ---- wkl-slurm-first-gpu-job: the job must match the briefing, and the queue must have shown it
+
+WKL1_JOB, WKL1_WATCH = 2, 4  # positions of the job and the squeue/sacct criteria
+
+
+def _wkl1(gres: str | None = "--gres=gpu:1", time: str | None = "--time=00:05:00", submit: str = ""):
+    """A fresh wkl-1 with the script written and submitted; ``None`` leaves that #SBATCH line out."""
+    s = concrete("wkl-slurm-first-gpu-job")
+    shell = Shell(s.build_state())
+    options = [f"#SBATCH {o}" for o in (gres, time) if o]
+    feed = iter(["#!/bin/bash", "#SBATCH --job-name=hello-gpu", *options, "nvidia-smi -L", "EOF"])
+    shell.run("cat > /root/hello-gpu.sbatch <<EOF", heredoc_reader=lambda _p: next(feed, None))
+    assert "Submitted batch job 1001" in shell.run(f"sbatch {submit} /root/hello-gpu.sbatch".replace("  ", " "))
+    return s, shell
+
+
+def _wkl1_finish(shell) -> None:
+    for _ in range(6):  # every command moves the simulated clock on
+        if "COMPLETED" in shell.run("scontrol show job 1001"):
+            return
+    raise AssertionError("job 1001 did not complete")
+
+
+def _wkl1_check(s, shell, index: int) -> bool:
+    _desc, ok, err = s.grade(shell)[index]
+    assert not err, err
+    return ok
+
+
+@pytest.mark.parametrize("gres", ["--gres=gpu:2", "--gpus=2", "-G 4", "--gpus-per-node=2", "--gres=gpu:1 -N 2"])
+def test_wkl1_job_with_the_wrong_gpu_count_earns_no_job_credit(gres):
+    s, shell = _wkl1(gres=gres)
+    _wkl1_finish(shell)
+    assert not _wkl1_check(s, shell, WKL1_JOB)
+
+
+@pytest.mark.parametrize("time", ["--time=00:10:00", "--time=10", "-t 4", "-t 00:05:30", "-t 5:00:00", None])
+def test_wkl1_job_with_the_wrong_time_limit_earns_no_job_credit(time):
+    s, shell = _wkl1(time=time)
+    _wkl1_finish(shell)
+    assert not _wkl1_check(s, shell, WKL1_JOB)
+
+
+@pytest.mark.parametrize(
+    "gres", ["--gres=gpu:1", "--gres=gpu", "--gres=gpu:h100:1", "--gpus=1", "-G 1", "--gpus-per-node=1"]
+)
+@pytest.mark.parametrize("time", ["--time=00:05:00", "--time=5", "-t 5", "-t 5:00", "-t 0-00:05"])
+def test_wkl1_accepts_every_spelling_of_one_gpu_and_five_minutes(gres, time):
+    s, shell = _wkl1(gres=gres, time=time)
+    assert not _wkl1_check(s, shell, WKL1_JOB)  # still running
+    _wkl1_finish(shell)
+    shell.run("sacct -j 1001")
+    assert all(ok for _desc, ok, _err in s.grade(shell))
+
+
+def test_wkl1_options_on_the_sbatch_command_line_count():
+    s, shell = _wkl1(gres="--gres=gpu:2", time=None, submit="--gres=gpu:1 -t 5")
+    _wkl1_finish(shell)
+    assert _wkl1_check(s, shell, WKL1_JOB)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "sacct -j 999999",
+        "sacct",
+        "sacct -u nobody",
+        "squeue",
+        "squeue -j 999999",
+        "watch squeue",
+        "sacct --name hello-gpu",
+    ],
+)
+def test_wkl1_queries_before_the_job_exists_earn_no_credit(query):
+    s = concrete("wkl-slurm-first-gpu-job")
+    shell = Shell(s.build_state())
+    shell.run(query)
+    assert not _wkl1_check(s, shell, WKL1_WATCH)
+    assert not any(ok for _desc, ok, _err in s.grade(shell))
+
+
+def test_wkl1_queries_that_do_not_show_the_job_earn_no_credit():
+    s, shell = _wkl1()
+    _wkl1_finish(shell)
+    for query in ("squeue", "sacct -j 999999", "sacct -u nobody", "squeue -u nobody", "scontrol show job 1001"):
+        shell.run(query)
+    assert not _wkl1_check(s, shell, WKL1_WATCH)
+
+
+@pytest.mark.parametrize(
+    ("query", "finished"),
+    [
+        ("squeue", False),
+        ("squeue -u root", False),
+        ("squeue -h -o %i", False),
+        ("watch squeue", False),
+        ("squeue | grep hello", False),
+        ("squeue -j 1001", True),
+        ("sacct", True),
+        ("sacct -j 1001", True),
+        ("sacct -j 1001 -p -n", True),
+        ("sacct -X -n -o JobID,State", True),
+        ("sacct --name hello-gpu", True),
+    ],
+)
+def test_wkl1_queries_that_show_the_job_earn_credit(query, finished):
+    s, shell = _wkl1()
+    if finished:
+        _wkl1_finish(shell)
+    assert not _wkl1_check(s, shell, WKL1_WATCH)
+    shell.run(query)
+    assert _wkl1_check(s, shell, WKL1_WATCH)
+
+
+def test_wkl1_criteria_are_not_cut_short_and_do_not_name_the_answers():
+    s, shell = _wkl1()
+    descs = [desc for desc, _ok, _err in s.grade(shell)]
+    assert any("#SBATCH line" in d for d in descs)
+    for desc in (descs[WKL1_JOB], descs[WKL1_WATCH]):
+        assert not re.search(r"gpu:1|\bone\b|\bfive\b|\b5\b|00:05", desc), desc
+
+
+def test_no_yaml_text_is_cut_at_a_hash():
+    """A plain YAML scalar ends at ' #', so text that mentions #SBATCH must be quoted."""
+    from pathlib import Path
+
+    import greenray
+
+    data = Path(greenray.__file__).parent / "data"
+    cut = [
+        f"{path.name}:{n}"
+        for path in sorted(data.rglob("*.yaml"))
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if re.match(r"\s*(- )?(\w+: )?[^\s\"'|>#\[{-][^\"']* #", line) and re.match(r"\s*(- )?\w+: |\s*- ", line)
+    ]
+    assert cut == []
