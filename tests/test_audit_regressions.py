@@ -1018,3 +1018,74 @@ def test_wkl3_fixing_the_live_object_only_does_not_satisfy_the_manifest_criterio
     assert "patched" in shell.run(f"kubectl patch deployment triton-inference -p '{patch}'")
     assert _check(s, shell, "Deployment's pod template")
     assert not _check(s, shell, WKL3_FILE)
+
+
+# ---- wkl-k8s-pod-pending-gpu: the manifest is graded as parsed YAML, the diagnosis by its output
+
+WKL4 = "wkl-k8s-pod-pending-gpu"
+WKL4_FILE, WKL4_SEEN = "/root/bert-pretrain.yaml", "kubectl showed you"
+
+
+def _wkl4(variant: int = 0):
+    s = concrete(WKL4, variant)
+    return s, Shell(s.build_state())
+
+
+def _wkl4_recreate(s, shell, resources: str) -> None:
+    """Replace the trainer's resources block in the manifest, uncordon the nodes and recreate the pod."""
+    files = shell.ctx.state.nodes["bcm-head"].files
+    old = f"    resources:\n      limits:\n        nvidia.com/gpu: {s.params['bad']}\n"
+    assert old in files[WKL4_FILE]
+    files[WKL4_FILE] = files[WKL4_FILE].replace(old, resources)
+    shell.run("kubectl describe pod bert-pretrain")
+    shell.run(f"kubectl uncordon {s.params['c1']} {s.params['c2']}")
+    shell.run(f"kubectl replace --force -f {WKL4_FILE}")
+
+
+@pytest.mark.parametrize("variant", [0, 1, 2])
+@pytest.mark.parametrize(
+    "resources",
+    [
+        "    resources:\n      limits:\n        nvidia.com/gpu: 8\n",
+        '    resources:\n      limits:\n        "nvidia.com/gpu": 8\n',
+        "    resources:\n      limits:\n        'nvidia.com/gpu': 8\n",
+        '    resources:\n      limits:\n        nvidia.com/gpu: "8"\n',
+        "    resources:\n      limits:\n        nvidia.com/gpu: 8   # one full DGX\n",
+        "    resources:\n      limits: {nvidia.com/gpu: 8}\n",
+        "    resources:\n      requests:\n        nvidia.com/gpu: 8\n      limits:\n        nvidia.com/gpu: 8\n",
+    ],
+    ids=["plain", "quoted-key", "single-quoted-key", "quoted-value", "comment", "flow", "requests-and-limits"],
+)
+def test_wkl4_every_yaml_spelling_of_eight_gpus_passes(variant, resources):
+    s, shell = _wkl4(variant)
+    _wkl4_recreate(s, shell, resources)
+    assert "Running" in shell.run("kubectl get pod bert-pretrain")
+    assert all(ok for _desc, ok, _err in s.grade(shell)), s.grade(shell)
+
+
+@pytest.mark.parametrize(
+    "resources",
+    [
+        "    resources:\n      limits:\n        nvidia.com/gpu: 4\n",
+        "    resources:\n      limits:\n        nvidia.com/gpu: 80\n",
+        "    resources:\n      limits:\n        nvidia.com/mig-1g.10gb: 8\n",
+        "    # nvidia.com/gpu: 8\n    resources:\n      limits:\n        nvidia.com/gpu: 2\n",
+    ],
+    ids=["four", "eighty", "another-resource", "eight-only-in-a-comment"],
+)
+def test_wkl4_a_manifest_without_eight_gpus_fails(resources):
+    s, shell = _wkl4()
+    _wkl4_recreate(s, shell, resources)
+    assert not _check(s, shell, WKL4_FILE)
+
+
+def test_wkl4_eight_gpus_on_another_pod_or_container_do_not_count():
+    s, shell = _wkl4()
+    files = shell.ctx.state.nodes["bcm-head"].files
+    wrong_pod = (
+        files[WKL4_FILE].replace("name: bert-pretrain", "name: other").replace(f"gpu: {s.params['bad']}", "gpu: 8")
+    )
+    sidecar = "  - name: sidecar\n    image: busybox\n    resources:\n      limits:\n        nvidia.com/gpu: 8\n"
+    for text in (wrong_pod, files[WKL4_FILE] + sidecar, "kind: Pod\n  nvidia.com/gpu: 8\n: [", ""):
+        files[WKL4_FILE] = text
+        assert not _check(s, shell, WKL4_FILE)
