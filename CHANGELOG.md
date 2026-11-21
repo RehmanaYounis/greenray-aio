@@ -2,6 +2,18 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.7.6] - 2026-11-22
+
+### Fixed
+- Every remaining criterion that rewarded a diagnostic step for being typed now needs the output it is named after. This covers 45 criteria in 31 labs: `adm-3`, `adm-11`, `adm-12`, `adm-13`, `adm-15`, `ins-4`, `ins-5`, `ins-6`, `ins-8`, `ins-10`, `tsh-1`, `tsh-4` to `tsh-19`, `wkl-5`, `wkl-6`, `wkl-8` and `wkl-9`. A lookup of a pod, node, device, partition or unit that does not exist, a rejected option, or `export NCCL_DEBUG=INFO` without a run no longer earns them.
+- Criteria about order ("you read the logs before rebooting", "the node was drained before the GPU was reset") count only commands that completed, so a failed attempt neither earns nor spoils them.
+- Where the tool's error is the finding, the error counts: `nvidia-smi` failing on a node without a driver in `tsh-16`, a failed BMC power query in `adm-3`, `unmunge` rejecting a credential in `tsh-9`.
+- Lab `wkl-2` (`wkl-k8s-pod-pending-nodeselector`): the node selector in `/root/cuda-test.yaml` is read as YAML, so a quoted key or a flow-style mapping is graded like the plain spelling.
+- Lab `tsh-13` (`tsh-device-plugin-crashloop`): the containerd criterion accepts `default_runtime_name="nvidia"` whatever the spacing around `=`.
+
+### Added
+- Scenario checks can use `printed(..., errors=True)` and `printed_before(regex, later, ...)`; `docs/scenario-format.md` explains when to use them.
+
 ## [1.7.5] - 2026-11-22
 
 ### Fixed
