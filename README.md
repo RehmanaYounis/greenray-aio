@@ -47,7 +47,7 @@ Python 3.10 or newer on Linux, WSL, macOS or Windows. Update later with `uv tool
 - **A grader that reads state, evidence and judgment.** Any valid fix passes. Evidence checks confirm you diagnosed before you changed things, and safe-practice checks catch the shortcuts an operations team would not accept: a reboot with a user's job still on the node, a node set DOWN instead of drained, a power limit raised to hide a thermal fault.
 - **Variants.** Scenarios change their node, GPU, job or user between attempts, so a repeat tests understanding, not memory.
 - **A study path.** `greenray next` says what to practise, `greenray plan` lays out four weeks, and every mock exam ends with a report card.
-- **A mock exam in the current format**: 30 questions plus 3 labs on Slurm, Kubernetes and BCM in 120 minutes, and a labs-only mode for pacing.
+- **A mock exam in the current format**: 35 questions first, then 3 labs on Slurm, Kubernetes and BCM, 120 minutes on one clock with no way back to the questions, and a labs-only mode for pacing.
 - **A terminal that behaves like a node**: `--help` and `man` pages, your real editor for `nano` and `vim`, tab completion, history, `watch`, live `dmon` samples.
 
 ## Documentation

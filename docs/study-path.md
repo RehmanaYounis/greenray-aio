@@ -38,13 +38,13 @@ Every scenario can be run two ways.
 
 ## The mock exam
 
-The real exam, per NVIDIA's certification page at the time of writing, is 30 multiple-choice questions plus 3 hands-on labs in one 120-minute, remotely proctored session, with the labs on live Slurm, Kubernetes and Base Command Manager systems. Re-check the official page before booking.
+The real exam, as recent candidates report it, is 35 multiple-choice questions and 3 hands-on labs in one 120-minute, remotely proctored session, in two ordered sections: the questions first, then the labs on live Slurm, Kubernetes and Base Command Manager systems. Once the question section is submitted the labs begin and the questions cannot be reopened, so the time you leave for the labs is decided before you see them. Re-check the official page before booking.
 
-`greenray mock` reproduces that shape: 30 questions drawn in blueprint proportions, three labs (one Slurm, one Kubernetes, one BCM), one clock, no hints and no grading until you finish. Labs keep their state when you switch between sections. `greenray mock --labs-only` runs the three labs alone in 40 minutes for pacing practice.
+`greenray mock` reproduces that sequence: 35 questions drawn in blueprint proportions, a submit step with no way back, then three labs (one Slurm, one Kubernetes, one BCM) on the same clock, no hints and no grading until you finish. Labs keep their state when you switch between them. `greenray mock --labs-only` runs the three labs alone in 40 minutes for pacing practice.
 
 NVIDIA does not publish how the two sections are weighted or the pass mark. The mock weights questions and labs 50/50 and uses a 70% practice target; treat the number as a guide, not a prediction.
 
-Inside the questions, answer with letters, `s` skips, `f` flags a question for review and `q` returns to the exam menu. From the menu, `f` finishes and grades; `x` leaves without grading or recording anything.
+Inside the questions, answer with letters, `s` skips, `f` flags a question for review and `q` returns to the section menu, where `s` submits the section. In the lab section, `f` finishes and grades; `x` leaves without grading or recording anything.
 
 Every mock ends with a **report card**: a bar per domain combining your questions and labs, and a practise-next list built from the labs that fell short, the labs linked from the questions you missed, and your weakest domain. The missed and flagged questions can be reviewed with their explanations straight away.
 
