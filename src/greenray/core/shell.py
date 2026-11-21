@@ -32,6 +32,7 @@ class Context:
     cwd: str = "/root"
     history: list = field(default_factory=list)  # raw command lines entered by the user
     executed: list = field(default_factory=list)  # (host, argv) for every simple command run
+    outputs: list = field(default_factory=list)  # (host, argv, text) for every command that completed without error
     reader: Callable[[str], str | None] | None = (
         None  # prompt -> line; lets interactive commands (editors) read from the learner
     )
@@ -534,7 +535,7 @@ class Shell:
             state = None
         return state, self.ctx.host, list(self.ctx.host_stack), self.ctx.cwd
 
-    def _recover(self, argv: list[str], error: Exception, checkpoint, executed_before: int) -> str:
+    def _recover(self, argv: list[str], error: Exception, checkpoint, executed_before: int, outputs_before: int) -> str:
         """Undo a command that raised an unexpected exception and explain what happened.
 
         The command (and anything it ran via ``ssh host cmd``) is dropped from the
@@ -542,6 +543,7 @@ class Shell:
         """
         state_blob, host, host_stack, cwd = checkpoint
         del self.ctx.executed[executed_before:]
+        del self.ctx.outputs[outputs_before:]
         self.ctx.host, self.ctx.host_stack, self.ctx.cwd = host, host_stack, cwd
         detail = f"{type(error).__name__}: {error}"
         if state_blob is not None:
@@ -650,7 +652,7 @@ class Shell:
                     continue
                 data = self.ctx.node.files[src]
             self.ctx.stdin = data
-            executed_before = len(self.ctx.executed)
+            executed_before, outputs_before = len(self.ctx.executed), len(self.ctx.outputs)
             self.ctx.executed.append((self.ctx.host, argv))
             checkpoint = self._checkpoint()
             clock.advance(self.ctx.state)  # inside the checkpoint so a rolled-back crash takes no time
@@ -661,10 +663,11 @@ class Shell:
             try:
                 data = commands.dispatch(self.ctx, argv)
                 code = 0
+                self.ctx.outputs.append((self.ctx.host, argv, data or ""))
             except CommandError as e:
                 data, err, code = "", str(e), e.code
             except Exception as e:  # a simulator bug, not a user error
-                return "", self._recover(argv, e, checkpoint, executed_before), INTERNAL_ERROR_CODE
+                return "", self._recover(argv, e, checkpoint, executed_before, outputs_before), INTERNAL_ERROR_CODE
             finally:
                 if saved_env is not None:
                     self.ctx.node.env.clear()

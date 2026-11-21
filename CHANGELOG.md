@@ -2,6 +2,12 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.6.1] - 2026-11-22
+
+### Fixed
+- Lab `tsh-1` (`tsh-first-look-at-logs`): the accounting criterion is met only when a successful `sacct` or `scontrol show job` query actually returns the incident job, so an empty query such as `sacct -j 999999` earns no credit; the ticket criterion no longer names the cause in its wording before the lab is solved. Scenario checks can now use `printed(pattern, cmd=...)` to look at what a command printed, not only that it ran.
+- `sacct -j` and `sacct --jobs` without a job id report that the option requires an argument instead of listing every job; `journalctl -u`, `--unit` and `-xeu` without a unit do the same instead of printing the whole journal.
+
 ## [1.6.0] - 2026-11-22
 
 The shell and Slurm behave like the real ones in the places a candidate notices in the first minutes of a lab.
