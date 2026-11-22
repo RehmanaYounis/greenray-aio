@@ -15,6 +15,7 @@ All notable changes are listed here. The project follows [Semantic Versioning](h
 - Lab `tsh-11` (`tsh-xid79-drained-node`): the kernel-log criteria need the Xid 79 entry of the affected node, seen before the reboot.
 - Lab `tsh-18` (`tsh-storage-io-bottleneck`) and every other criterion about a sampling tool: on a real terminal `nvidia-smi dmon`, `dcgmi dmon` and `watch` print their samples as they are produced, and the grader recorded nothing for them. `nvidia-smi dmon -c 10` typed directly now earns its criterion, as it already did when piped.
 - Lab `adm-10` (`adm-k8s-mig-mixed-strategy`): the test pod has to request `nvidia.com/mig-1g.10gb` and run on dgx-04; a CPU-only pod with the same name does not count.
+- Lab `tsh-12` (`tsh-dcgm-diag-failure`): the health-check criterion needs a `dcgmi health -c` that ran with the watches active and reported what they found. A check before any watch is set says Healthy and earns nothing.
 
 ## [1.7.8] - 2026-11-22
 

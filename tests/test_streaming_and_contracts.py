@@ -120,7 +120,51 @@ def test_adm10_the_original_test_pod_recreated_still_counts():
     assert all(marks(s, shell).values()), marks(s, shell)
 
 
-@pytest.mark.parametrize("code", ["tsh-18", "adm-10"])
+# ---- tsh-12: the health check has to come with the watches active
+
+CHECKED = "DCGM health check on dgx-03"
+
+
+def _tsh12(order: list[str]):
+    s = concrete("tsh-12")
+    shell = Shell(s.build_state())
+    for step in s.solution:
+        for line in order if step == "dcgmi health -g 2 -s mn" else ([] if step == "dcgmi health -g 2 -c" else [step]):
+            shell.run(line)
+    return s, shell
+
+
+@pytest.mark.parametrize(
+    "order",
+    [
+        ["dcgmi health -g 2 -c", "dcgmi health -g 2 -s mn"],  # the reported case: checked before any watch
+        ["dcgmi health -g 2 -s mn"],  # never checked
+        ["dcgmi health -g 2 -s mn", "dcgmi health -g 99 -c"],  # a group that does not exist
+    ],
+    ids=["check-before-watches", "no-check", "wrong-group"],
+)
+def test_tsh12_a_check_without_active_watches_earns_nothing(order):
+    s, shell = _tsh12(order)
+    results = marks(s, shell)
+    assert not one(results, CHECKED) and sum(results.values()) == len(results) - 1
+
+
+@pytest.mark.parametrize(
+    "order",
+    [
+        ["dcgmi health -g 2 -s mn", "dcgmi health -g 2 -c"],
+        ["dcgmi health -g 2 -c", "dcgmi health -g 2 -s mn", "dcgmi health -g 2 -c"],
+        ["dcgmi health -g 2 -s a", "dcgmi health -g 2 -c"],
+        ["dcgmi health -g 2 -s mn", "dcgmi health -g 2 -c | grep -i health"],
+    ],
+    ids=["documented", "check-twice", "all-watches", "filtered"],
+)
+def test_tsh12_a_check_after_the_watches_passes(order):
+    s, shell = _tsh12(order)
+    assert all(marks(s, shell).values()), marks(s, shell)
+
+
+@pytest.mark.parametrize("code", ["tsh-18", "adm-10", "tsh-12"])
 def test_reference_solution_still_earns_every_criterion(code):
     for s in sc.find(code).all_variants():
         shell = Shell(s.build_state())
