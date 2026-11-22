@@ -41,7 +41,7 @@ hints:
   - "Rerun the test with -x NCCL_DEBUG=INFO. Which network does NCCL say it is using: IB or Socket?"
   - "\"NET/IB : No device found\" while ibstat shows eight Active HCAs means NCCL was told to look for the wrong devices. Check NCCL_IB_HCA in the environment and in /etc/nccl.conf on the nodes."
   - "mlx5_bond_0 is the device name of a RoCE LAG bond. The DGX compute fabric uses individual HCAs mlx5_0..mlx5_7 (on InfiniBand, NCCL_IB_GID_INDEX is not used)."
-  - "Editing /etc/nccl.conf on a node is lost at the next imageupdate/reprovision. Fix /cm/images/dgx-os-6.2-h100-image/etc/nccl.conf on the head node, then imageupdate (dry run first, then -w)."
+  - "Editing /etc/nccl.conf on a node is lost at the next imageupdate/reprovision. Fix /cm/images/dgx-os-6.2-h100-image/etc/nccl.conf on the head node, then push the image to the running nodes. imageupdate is a cmsh command in device mode, not a shell command: cmsh -c \"device; imageupdate -n dgx-01,dgx-02,dgx-03,dgx-04\" is a dry run that lists what would change, and the same command with -w applies it (-c <category> selects the nodes by category instead of -n)."
 references:
   - NCCL User Guide, Environment Variables (NCCL_IB_HCA, NCCL_SOCKET_IFNAME, NCCL_DEBUG, nccl.conf)
   - nccl-tests PERFORMANCE.md (algbw vs busbw)

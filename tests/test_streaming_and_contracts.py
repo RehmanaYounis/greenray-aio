@@ -213,7 +213,22 @@ def test_wkl6_the_briefings_image_on_all_three_passes():
     assert all(marks(s, shell).values()), marks(s, shell)
 
 
-@pytest.mark.parametrize("code", ["tsh-18", "adm-10", "tsh-12", "tsh-17", "wkl-6"])
+# ---- tsh-14: the hint says where imageupdate lives
+
+
+def test_tsh14_hint_gives_imageupdate_in_its_cmsh_context():
+    s = concrete("tsh-14")
+    hint = s.hints[-1]
+    assert "cmsh" in hint and "device" in hint and "-w" in hint and "dry run" in hint
+    shell = Shell(s.build_state())
+    assert "command not found" in shell.run("imageupdate")
+    quoted = re.search(r'cmsh -c "([^"]+)"', hint)
+    assert quoted, hint
+    assert "Performing dry run" in shell.run(f'cmsh -c "{quoted.group(1)}"')
+    assert "dry run = no" in shell.run(f'cmsh -c "{quoted.group(1)} -w"')
+
+
+@pytest.mark.parametrize("code", ["tsh-18", "adm-10", "tsh-12", "tsh-17", "wkl-6", "tsh-14"])
 def test_reference_solution_still_earns_every_criterion(code):
     for s in sc.find(code).all_variants():
         shell = Shell(s.build_state())
