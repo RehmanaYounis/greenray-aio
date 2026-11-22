@@ -71,8 +71,8 @@ setup:
 checks:
   - desc: docker is active on dgx-02
     expr: "nodes['dgx-02'].services.docker == 'active'"
-  - desc: daemon.json is valid and still has the log rotation and registry mirror settings
-    expr: "nodes['dgx-02'].runtime_loaded.docker.default in nodes['dgx-02'].runtime_loaded.docker.handlers and re.search(r'\"max-size\"\\s*:\\s*\"100m\"', file('dgx-02', '/etc/docker/daemon.json')) is not None and 'registry-mirror.corp.example:5000' in file('dgx-02', '/etc/docker/daemon.json') and not re.search(r',\\s*[}\\]]', file('dgx-02', '/etc/docker/daemon.json'))"
+  - desc: daemon.json is valid and still has the logging driver, both log rotation options and the registry mirror your colleague added
+    expr: "nodes['dgx-02'].runtime_loaded.docker.default in nodes['dgx-02'].runtime_loaded.docker.handlers and not re.search(r',\\s*[}\\]]', file('dgx-02', '/etc/docker/daemon.json')) and any(d.get('log-driver') == 'json-file' and str((d.get('log-opts') or {}).get('max-size')) == '100m' and str((d.get('log-opts') or {}).get('max-file')) == '5' and 'https://registry-mirror.corp.example:5000' in [str(m).rstrip('/') for m in (d.get('registry-mirrors') or [])] for d in manifest('dgx-02', '/etc/docker/daemon.json'))"
   - desc: infer-triton-a-1 is up with exactly GPUs 0 and 1
     expr: "any(c.name == 'infer-triton-a-1' and c.status.startswith('Up') and sorted(c.gpus) == [0, 1] for c in nodes['dgx-02'].containers)"
   - desc: infer-triton-b-1 is up with exactly GPUs 2 and 3

@@ -100,8 +100,74 @@ def test_ins6_a_job_that_fails_again_earns_nothing():
     assert not criterion(s, shell, INS6_JOB)
 
 
+# ---- tsh-4: the settings to keep are read from the parsed daemon.json
+
+TSH4_KEPT = "daemon.json is valid and still has"
+MIRROR = "https://registry-mirror.corp.example:5000"
+
+
+def _tsh4(daemon_json: str) -> tuple[sc.Scenario, Shell]:
+    """tsh-4 solved the reference way, with ``daemon_json`` written before nvidia-ctk and the restart."""
+    s, shell = lab("tsh-4")
+    for step in s.solution:
+        lines = step.split("\n")
+        if lines[0].startswith("cat > /etc/docker/daemon.json"):
+            lines = [lines[0], *daemon_json.strip().split("\n"), "EOF"]
+        feed = iter(lines[1:])
+        shell.run(lines[0], heredoc_reader=lambda _p, feed=feed: next(feed, None))
+    return s, shell
+
+
+def _daemon(driver: str = "json-file", size: str = "100m", files: str | None = "5", mirror: str | None = MIRROR) -> str:
+    opts = [f'"max-size": "{size}"'] + ([f'"max-file": "{files}"'] if files is not None else [])
+    mirrors = f'["{mirror}"]' if mirror else "[]"
+    return f'{{"log-driver": "{driver}", "log-opts": {{{", ".join(opts)}}}, "registry-mirrors": {mirrors}}}'
+
+
+@pytest.mark.parametrize(
+    "daemon_json",
+    [
+        _daemon(files="1"),  # the reported case
+        _daemon(files=None),
+        _daemon(size="10m"),
+        _daemon(driver="local"),
+        _daemon(mirror=None),
+        _daemon(mirror="https://mirror.gcr.io"),
+        '{"registry-mirrors": ["' + MIRROR + '"], "comment": "max-size 100m max-file 5 json-file"}',
+    ],
+    ids=["max-file-1", "no-max-file", "max-size-10m", "other-driver", "no-mirror", "other-mirror", "words-only"],
+)
+def test_tsh4_a_changed_or_dropped_setting_fails_the_criterion(daemon_json):
+    s, shell = _tsh4(daemon_json)
+    assert not criterion(s, shell, TSH4_KEPT)
+    assert criterion(s, shell, "infer-triton-a-1") and criterion(s, shell, "infer-triton-b-1")
+
+
+@pytest.mark.parametrize(
+    "daemon_json",
+    [
+        _daemon(),  # one line
+        '{\n  "registry-mirrors": [\n    "' + MIRROR + '"\n  ],\n  "log-opts": {"max-file": "5", "max-size": "100m"},\n'
+        '  "log-driver": "json-file"\n}',  # reordered and re-indented
+        _daemon(mirror=MIRROR + "/"),
+        _daemon()[:-1] + ', "live-restore": true}',  # an extra setting
+    ],
+    ids=["compact", "reordered", "trailing-slash", "extra-key"],
+)
+def test_tsh4_json_formatting_does_not_matter(daemon_json):
+    s, shell = _tsh4(daemon_json)
+    assert all(ok for _desc, ok, _err in s.grade(shell)), s.grade(shell)
+
+
+def test_tsh4_a_file_broken_after_the_restart_fails():
+    s, shell = _tsh4(_daemon())
+    files = shell.ctx.state.nodes["dgx-02"].files
+    files["/etc/docker/daemon.json"] = files["/etc/docker/daemon.json"].rstrip().rstrip("}") + ",\n}\n"
+    assert not criterion(s, shell, TSH4_KEPT)
+
+
 @requires_solutions
-@pytest.mark.parametrize("code", ["ins-6"])
+@pytest.mark.parametrize("code", ["ins-6", "tsh-4"])
 def test_reference_solution_still_earns_every_criterion(code):
     s, shell = lab(code)
     sc.replay_solution(s, shell)
