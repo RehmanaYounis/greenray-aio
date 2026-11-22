@@ -10,6 +10,7 @@ All notable changes are listed here. The project follows [Semantic Versioning](h
 - Lab `adm-4` (`adm-bcm-user-role`): the initial password from the ticket is a criterion of its own. Another password leaves it open; the criterion's wording does not show the value.
 - Lab `adm-7` (`adm-runai-project-quota`): the access criteria need the requested roles and scopes: alice a researcher on nlp only, bob a researcher on vision only, carol Research manager on exactly nlp and vision. A wrong role or any extra project fails.
 - Lab `adm-13` (`adm-bcm-wlm-default-queue`): a new criterion needs the restored queue to have been through a restart of `cmd` and still be there, as the objective says. A restart before the repair does not count.
+- Lab `wkl-5` (`wkl-pyxis-container-job`): the smoke test has to run on exactly 2 GPUs, in any spelling (`--gres=gpu:2`, `--gpus=2`, `-G 2`, `--gpus-per-node=2`); 4 GPUs no longer pass.
 
 ## [1.7.8] - 2026-11-22
 

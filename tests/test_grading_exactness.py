@@ -120,7 +120,25 @@ def test_adm13_a_restart_alone_does_not_count():
     assert not one(marks(s, shell), RESTART)
 
 
-@pytest.mark.parametrize("code", ["adm-7", "adm-13"])
+# ---- wkl-5: exactly two GPUs
+
+TWO = "--gres=gpu:2"
+
+
+@pytest.mark.parametrize("request_", ["--gres=gpu:4", "--gres=gpu:1", "--gpus=8", "-G 3", "--gres=gpu:2 -N 2"])
+def test_wkl5_another_gpu_count_fails(request_):
+    s, shell = solved("wkl-5", edit=lambda st: st.replace(TWO, request_))
+    results = marks(s, shell)
+    assert not one(results, "exactly 2 GPUs") and one(results, "spank_pyxis.so")
+
+
+@pytest.mark.parametrize("request_", ["--gres=gpu:2", "--gres=gpu:h100:2", "--gpus=2", "-G 2", "--gpus-per-node=2"])
+def test_wkl5_every_spelling_of_two_gpus_passes(request_):
+    s, shell = solved("wkl-5", edit=lambda st: st.replace(TWO, request_))
+    assert all(marks(s, shell).values()), marks(s, shell)
+
+
+@pytest.mark.parametrize("code", ["adm-7", "adm-13", "wkl-5"])
 def test_reference_solution_still_earns_every_criterion(code):
     for s in sc.find(code).all_variants():
         shell = Shell(s.build_state())
