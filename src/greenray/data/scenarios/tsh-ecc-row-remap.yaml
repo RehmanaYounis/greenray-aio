@@ -47,7 +47,7 @@ setup:
 checks:
   - desc: you checked the row remapper / ECC state on {node}
     kind: evidence
-    expr: "printed(r'(?i)remapp|ECC Errors|Health Monitor|Diagnostic', '{node}', r'^(nvidia-smi|dcgmi)\\b', errors=True)"
+    expr: "printed(r'(?is)GPU 00000000:{busl}:00\\.0\\b(?:(?!\\nGPU 0000).)*?(Remapped Rows|ECC Errors)', '{node}', r'^nvidia-smi\\b') or printed(r'\\S', '{node}', r'^nvidia-smi\\b(?!.*\\s(-i|--id)\\b).*--query-gpu=\\S*(remapped_rows|ecc\\.errors|retired_pages)') or printed(r'\\S', '{node}', r'^nvidia-smi\\b(?=.*\\s(-i|--id)[= ]?(\\d+,)*{gpu}(,\\d+)*(\\s|$)).*--query-gpu=\\S*(remapped_rows|ecc\\.errors|retired_pages)') or printed(r'(?i)row remap|uncorrectable|double.bit', '{node}', r'^dcgmi\\b', errors=True)"
   - desc: "{node} was drained for the maintenance"
     expr: len(slurm.nodes['{node}'].get('drain_log', [])) > 0
   - desc: the node was drained before the GPU was reset or the node rebooted
