@@ -671,17 +671,30 @@ class Shell:
             if temp_env:
                 self.ctx.node.env.update(temp_env)
             err = ""
+            # a sampling tool on a terminal prints as it goes and returns nothing: keep what it printed,
+            # or the learner who watched it live would have shown the grader nothing
+            streamed: list[str] = []
+            screen = self.ctx.emit
+            if screen is not None:
+
+                def tee(text: str, screen=screen, streamed=streamed) -> None:
+                    streamed.append(text)
+                    screen(text)
+
+                self.ctx.emit = tee
             try:
                 data = commands.dispatch(self.ctx, argv)
                 code = 0
-                self.ctx.outputs.append((self.ctx.host, argv, data or ""))
-                self.ctx.results.append((executed_before, ran_on, argv, data or "", True))
+                seen = "".join(chunk + "\n" for chunk in streamed) + (data or "")
+                self.ctx.outputs.append((self.ctx.host, argv, seen))
+                self.ctx.results.append((executed_before, ran_on, argv, seen, True))
             except CommandError as e:
                 data, err, code = "", str(e), e.code
                 self.ctx.results.append((executed_before, ran_on, argv, err, False))
             except Exception as e:  # a simulator bug, not a user error
                 return "", self._recover(argv, e, checkpoint, executed_before, outputs_before), INTERNAL_ERROR_CODE
             finally:
+                self.ctx.emit = screen
                 if saved_env is not None:
                     self.ctx.node.env.clear()
                     self.ctx.node.env.update(saved_env)

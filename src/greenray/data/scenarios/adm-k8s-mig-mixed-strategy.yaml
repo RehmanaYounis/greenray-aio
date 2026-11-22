@@ -64,8 +64,8 @@ checks:
     expr: "not any(g.mig_mode or g.gpu_instances for n in ('dgx-01', 'dgx-02', 'dgx-03') for g in nodes[n].gpus)"
   - desc: dgx-04 advertises 56 nvidia.com/mig-1g.10gb
     expr: "k8s.nodes['dgx-04'].allocatable.get('nvidia.com/mig-1g.10gb') == '56'"
-  - desc: mig-inference is Running on dgx-04
-    expr: "any(p.name == 'mig-inference' and p.status == 'Running' and p.node == 'dgx-04' for p in pods('default'))"
+  - desc: "mig-inference is Running on dgx-04 on the nvidia.com/mig-1g.10gb slice it requests"
+    expr: "any(p.name == 'mig-inference' and p.status == 'Running' and p.node == 'dgx-04' and int(p.requests.get('nvidia.com/mig-1g.10gb', 0)) >= 1 for p in pods('default'))"
 hints:
   - "`kubectl describe pod mig-inference`: no node offers nvidia.com/mig-1g.10gb at all. Which resource names does the device plugin advertise today (`kubectl describe node dgx-04`)?"
   - "Resource names depend on the operator's mig.strategy. With 'single', MIG slices are still called nvidia.com/gpu; only 'mixed' advertises nvidia.com/mig-<profile>. Change it in the release: `helm upgrade ... --reuse-values --set mig.strategy=mixed`."
