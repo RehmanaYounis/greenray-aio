@@ -92,7 +92,35 @@ def test_tsh18_without_dmon_the_criterion_stays_open():
     assert not one(results, "starvation pattern") and sum(results.values()) == len(results) - 1
 
 
-@pytest.mark.parametrize("code", ["tsh-18"])
+# ---- adm-10: the test pod has to use the MIG slice
+
+CPU_ONLY = (
+    "apiVersion: v1\nkind: Pod\nmetadata:\n  name: mig-inference\nspec:\n"
+    "  nodeSelector:\n    kubernetes.io/hostname: dgx-04\n"
+    '  containers:\n  - name: c\n    image: ubuntu:22.04\n    command: ["sleep", "infinity"]\n'
+)
+MIG_POD = "mig-inference is Running on dgx-04"
+
+
+def test_adm10_a_cpu_only_pod_with_the_same_name_does_not_count():
+    s, shell = solved("adm-10")
+    assert all(marks(s, shell).values())
+    shell.ctx.state.nodes["bcm-head"].files["/root/cpu.yaml"] = CPU_ONLY
+    shell.run("kubectl delete pod mig-inference")
+    shell.run("kubectl apply -f /root/cpu.yaml")
+    assert "Running" in shell.run("kubectl get pod mig-inference -o wide")
+    results = marks(s, shell)
+    assert not one(results, MIG_POD) and sum(results.values()) == len(results) - 1
+
+
+def test_adm10_the_original_test_pod_recreated_still_counts():
+    s, shell = solved("adm-10")
+    shell.run("kubectl delete pod mig-inference")
+    shell.run("kubectl apply -f /root/mig-inference.yaml")
+    assert all(marks(s, shell).values()), marks(s, shell)
+
+
+@pytest.mark.parametrize("code", ["tsh-18", "adm-10"])
 def test_reference_solution_still_earns_every_criterion(code):
     for s in sc.find(code).all_variants():
         shell = Shell(s.build_state())
