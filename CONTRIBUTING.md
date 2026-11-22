@@ -47,9 +47,12 @@ The site's pages live in `docs/`. The architecture, contributing, security and c
 
 GreenRay AIO uses [semantic versioning](https://semver.org/):
 
-- A merged set of features bumps the **minor** version (1.0.0 → 1.1.0), a fix bumps the **patch** version (1.0.0 → 1.0.1), and a change that breaks existing scenario files bumps the **major** version.
-- In the same pull request, bump `version` in `pyproject.toml` and add a section to `CHANGELOG.md`.
-- Merging into `main` publishes. The release workflow reads the version from `pyproject.toml`, creates the `vX.Y.Z` tag if it does not exist, and then publishes to PyPI and GHCR and creates the GitHub Release with that version's changelog section as its notes. A merge that keeps the version, such as a documentation change, releases nothing. The workflow refuses a version that has no changelog section.
+- A release that holds a feature bumps the **minor** version (1.0.0 → 1.1.0), one that holds only fixes bumps the **patch** version (1.0.0 → 1.0.1), and a change that breaks existing scenario files bumps the **major** version.
+- A pull request with a fix or a feature does **not** change the version. It adds its entry to `CHANGELOG.md` under `## [Unreleased]`, in an `Added`, `Changed` or `Fixed` list, and creates that section above the latest version if it is not there yet. Merging it changes `main` and publishes nothing.
+- A release is its own small pull request, normally once a week: rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, bump `version` in `pyproject.toml` (minor if the batch holds a feature, otherwise patch) and run `uv lock`. Nothing else goes into it.
+- A fix is released on its own, without waiting for the week, only when it cannot wait: the tool does not start or a lab crashes, a correct solution cannot pass a lab, or there is a security problem.
+- Merging the release pull request publishes. The release workflow reads the version from `pyproject.toml`, creates the `vX.Y.Z` tag if it does not exist, and then publishes to PyPI and GHCR and creates the GitHub Release with that version's changelog section as its notes. A merge that keeps the version releases nothing. The workflow refuses a version that has no changelog section, and one that still has an `[Unreleased]` section left over.
+- To try what is merged but not yet released: `uv tool install --force git+https://github.com/RehmanaYounis/greenray-aio`.
 
 ## Content rules
 

@@ -1,7 +1,8 @@
 name: release
 
-# Every merge into main that raises the version in pyproject.toml is a release: the first job
-# creates the tag, the others publish that tag. A merge that keeps the version does nothing here.
+# A merge into main that raises the version in pyproject.toml is a release: the first job creates
+# the tag, the others publish that tag. Fixes and features merge without raising it and wait for
+# the next release pull request (see CONTRIBUTING.md, Versioning).
 on:
   push:
     branches: [main]
@@ -40,6 +41,8 @@ jobs:
             exit 0
           fi
           grep -q "^## \[${tag#v}\]" CHANGELOG.md || { echo "CHANGELOG.md has no section for ${tag#v}"; exit 1; }
+          # entries merged since the last release belong to this one: the release PR renames the section
+          if grep -q "^## \[Unreleased\]" CHANGELOG.md; then echo "CHANGELOG.md still has an [Unreleased] section"; exit 1; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "${tag}" -m "${tag}"
