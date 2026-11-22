@@ -65,7 +65,7 @@ checks:
     expr: any(j.name == 'ddp-train' and j.num_nodes == 2 and j.gpus_per_node == 8 and j.state in ('RUNNING', 'COMPLETED') for j in slurm.jobs)
   - desc: you read the pending reasons (squeue / scontrol show job)
     kind: evidence
-    expr: "printed(r'\\S', cmd=r'^squeue\\b') and printed(r'Reason=|PartitionName=|PARTITION|REASON|\\(\\w+\\)', cmd=r'^(scontrol show (job|partition)|sinfo|squeue .*(%r|%R|-l))')"
+    expr: "(printed(r'^\\s*2001\\b.*\\bPartitionDown\\b', cmd=r'^squeue\\b') or printed(r'(?s)JobId=2001\\b.*?Reason=PartitionDown\\b', cmd=r'^scontrol\\b.*\\bshow job')) and (printed(r'^\\s*2002\\b.*\\bPartitionTimeLimit\\b', cmd=r'^squeue\\b') or printed(r'(?s)JobId=2002\\b.*?Reason=PartitionTimeLimit\\b', cmd=r'^scontrol\\b.*\\bshow job'))"
 hints:
   - "The last column of squeue, NODELIST(REASON), is the scheduler telling you why. scontrol show job <id> and scontrol show partition give the details."
   - "PartitionDown means the partition's State is DOWN: jobs queue but never start. PartitionTimeLimit means the job's TimeLimit is longer than the partition's MaxTime."

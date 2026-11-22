@@ -138,3 +138,49 @@ def test_tsh5_the_reported_query_leaves_only_the_safety_criterion_met():
     out = shell.run("ssh dgx-03 nvidia-smi -i 0 -q -d ROW_REMAPPER")
     assert "Pending                           : No" in out
     assert [ok for _desc, ok, _err in s.grade(shell)] == [False, False, False, True, False, False, False]
+
+
+# ---- wkl-8: the reason of each pending job
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        ["squeue -t RUNNING -l"],  # the reported case: a header and no jobs
+        ["squeue -u alice", "sinfo"],  # one job only
+        ["squeue -j 2001", "scontrol show partition batch"],
+        ["scontrol show job 2001"],
+        ["squeue -h -o %r"],  # reasons that name no job
+        ["sprio", "sinfo"],
+        ["squeue -u carol", "scontrol show job 999"],
+    ],
+)
+def test_wkl8_needs_the_reason_of_both_pending_jobs(lines):
+    assert not after("wkl-8", 4, lines)
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        ["squeue"],
+        ["squeue -l"],
+        ["squeue -o '%i %r'"],
+        ["squeue -h -o '%i %r'"],
+        ["squeue -t PD"],
+        ["squeue --start"],
+        ["squeue -u alice", "squeue -u bob"],
+        ["squeue -p batch", "squeue -p short"],
+        ["squeue -j 2001", "scontrol show job 2002"],
+        ["scontrol show job"],
+        ["scontrol show job 2001", "scontrol show job 2002"],
+    ],
+)
+def test_wkl8_accepts_squeue_and_scontrol_views_of_both_jobs(lines):
+    assert after("wkl-8", 4, lines)
+
+
+def test_wkl8_the_reported_query_earns_nothing():
+    s, shell = lab("wkl-8")
+    out = shell.run("squeue -t RUNNING -l")
+    assert "NODELIST(REASON)" in out and "2001" not in out
+    assert not any(ok for _desc, ok, _err in s.grade(shell))
