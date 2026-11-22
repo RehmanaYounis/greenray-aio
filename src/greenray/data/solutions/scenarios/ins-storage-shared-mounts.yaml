@@ -15,6 +15,8 @@ solution:
   - ssh dgx-04 findmnt /home
   - su - alice -c "sbatch /home/alice/llm/train.sbatch"
   - squeue -u alice
+  - squeue -u alice
+  - sacct -j 4002 --format=JobID,JobName,State,ExitCode
   - cat /home/alice/llm/llm-ft-4002.out
 explanation: |
   BCM mounts shared filesystems on nodes from the fsmounts of the node's

@@ -20,7 +20,7 @@ briefing: |
   not with useradd on one machine. Then prove the Slurm part works by submitting
   a job as maria. Slurm on this cluster enforces associations.
 objectives:
-  - BCM user maria with UID 2010 and a password, committed
+  - BCM user maria with UID 2010 and the initial password from the ticket, committed
   - maria is a member of mlteam
   - maria's BCM profile is read-only (not admin)
   - Slurm user maria associated with account vision (default account vision)
@@ -49,6 +49,8 @@ setup:
 checks:
   - desc: BCM user maria exists with UID 2010 and a password
     expr: "'maria' in bcm.users and int(bcm.users['maria'].get('uid', 0)) == 2010 and bool(bcm.users['maria'].get('password'))"
+  - desc: maria's initial password is the one the ticket gives
+    expr: "'maria' in bcm.users and bcm.users['maria'].get('password') == 'Welcome-2026!'"
   - desc: maria is a member of mlteam
     expr: "'maria' in bcm.groups['mlteam'].get('members', [])"
   - desc: maria has the read-only BCM profile
