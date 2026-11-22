@@ -7,6 +7,7 @@ All notable changes are listed here. The project follows [Semantic Versioning](h
 ### Fixed
 - Lab `ins-6` (`ins-storage-shared-mounts`): the job criterion needs alice's new job to have completed successfully, as the briefing asks; a job that is still running does not count. The diagnostic criterion needs both sides of the comparison: what a DGX node has mounted (`df`, `findmnt`, `mount`, including an NFS query that returns nothing) and what the head node exports (`showmount`, `exportfs`, `/etc/exports`). `df -h /` on the head node earns nothing.
 - Lab `tsh-4` (`tsh-docker-gpu-runtime`): the criterion about the settings to keep reads `daemon.json` as JSON and needs the logging driver, both rotation options (`max-size` and `max-file`) and the registry mirror with their original values. Formatting, key order and extra keys do not matter.
+- Lab `adm-4` (`adm-bcm-user-role`): the initial password from the ticket is a criterion of its own. Another password leaves it open; the criterion's wording does not show the value.
 
 ## [1.7.8] - 2026-11-22
 

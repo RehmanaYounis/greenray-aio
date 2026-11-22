@@ -166,8 +166,44 @@ def test_tsh4_a_file_broken_after_the_restart_fails():
     assert not criterion(s, shell, TSH4_KEPT)
 
 
+# ---- adm-4: the ticket's initial password
+
+ADM4_REST = (
+    'cmsh -c "group; use mlteam; append members maria; commit"',
+    "sacctmgr -i add user maria account=vision",
+    'su - maria -c "sbatch --wrap=hostname"',
+)
+ADM4_PASSWORD = "initial password"
+
+
+def _adm4(password_clause: str) -> tuple[sc.Scenario, Shell]:
+    s, shell = lab("adm-4")
+    do(shell, f'cmsh -c "user; add maria; set id 2010; {password_clause}set profile readonly; commit"', *ADM4_REST)
+    return s, shell
+
+
+@pytest.mark.parametrize("clause", ["set password Different-Pass1; ", "set password welcome-2026!; ", ""])
+def test_adm4_another_password_or_none_leaves_one_criterion_open(clause):
+    s, shell = _adm4(clause)
+    assert not criterion(s, shell, ADM4_PASSWORD)
+    assert sum(not ok for _desc, ok, _err in s.grade(shell)) == (1 if clause else 2)  # none: the user check fails too
+
+
+@pytest.mark.parametrize("clause", ["set password Welcome-2026!; ", "set password 'Welcome-2026!'; "])
+def test_adm4_the_tickets_password_passes(clause):
+    s, shell = _adm4(clause)
+    assert all(ok for _desc, ok, _err in s.grade(shell)), s.grade(shell)
+
+
+def test_adm4_grading_output_does_not_show_the_password():
+    s, shell = _adm4("set password Different-Pass1; ")
+    for desc, _ok, err in s.grade(shell):
+        assert "Welcome" not in desc and "Welcome" not in err
+    assert "Welcome-2026!" in s.briefing  # the ticket is where the learner reads it
+
+
 @requires_solutions
-@pytest.mark.parametrize("code", ["ins-6", "tsh-4"])
+@pytest.mark.parametrize("code", ["ins-6", "tsh-4", "adm-4"])
 def test_reference_solution_still_earns_every_criterion(code):
     s, shell = lab(code)
     sc.replay_solution(s, shell)
