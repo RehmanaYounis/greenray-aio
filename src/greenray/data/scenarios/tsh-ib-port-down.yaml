@@ -28,13 +28,13 @@ checks:
     expr: all(p.state == 'Active' and p.phys_state == 'LinkUp' for p in nodes['{node}'].ib)
   - desc: you checked port state on {node} (ibstat / ibstatus / ibv_devinfo)
     kind: evidence
-    expr: "printed(r\"(?i)(CA|device) 'mlx5_{rail}'|hca_id:\\s*mlx5_{rail}\\b\", '{node}', r'^(ibstat|ibstatus|ibv_devinfo)\\b')"
+    expr: "printed(r\"(?i)(CA|device) 'mlx5_{rail}'|hca_id:\\s*mlx5_{rail}\\b\", '{node}', r'^(ibstat|ibstatus|ibv_devinfo)\\b') or printed(r'(?i)state', '{node}', r'^(ibstat|ibstatus|ibv_devinfo)\\b.*mlx5_{rail}\\b')"
   - desc: you looked at link/module diagnostics with mlxlink
     kind: evidence
-    expr: "printed(r'Operational Info|Module Info|Troubleshooting Info', '{node}', r'^mlxlink\\b.*-d\\s*mlx5_{rail}\\b')"
+    expr: "printed(r'Operational Info|Module Info|Troubleshooting Info|^\\s*(State|Physical state|Recommendation|Status Opcode)\\b', '{node}', r'^mlxlink\\b.*-d\\s*mlx5_{rail}\\b')"
   - desc: the module diagnostics came before the cable was reseated
     kind: evidence
-    expr: "printed_before(r'Operational Info|Module Info|Troubleshooting Info', r'^reseat-cable', '{node}', r'^mlxlink\\b.*-d\\s*mlx5_{rail}\\b')"
+    expr: "printed_before(r'Operational Info|Module Info|Troubleshooting Info|^\\s*(State|Physical state|Recommendation|Status Opcode)\\b', r'^reseat-cable', '{node}', r'^mlxlink\\b.*-d\\s*mlx5_{rail}\\b')"
   - desc: a multi-node NCCL test including {node} reached >= 350 GB/s over IB
     expr: (lambda r:r.get('ok') and '{node}' in r.get('hosts', []) and len(r.get('hosts', [])) > 1 and r.get('transport') == 'IB' and r.get('busbw', 0) >= 350)(flags.get('nccl_last', {}))
 hints:

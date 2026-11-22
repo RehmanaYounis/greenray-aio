@@ -36,7 +36,7 @@ checks:
     expr: all(g.persistence_mode for g in nodes['{node}'].gpus)
   - desc: nvidia-smi on {node} showed you the clock event reasons
     kind: evidence
-    expr: "printed(r'Clocks Event Reasons|clocks_(event|throttle)_reasons', '{node}', r'^nvidia-smi\\b') or printed(r'\\S', '{node}', r'^nvidia-smi\\b.*clocks_(event|throttle)_reasons')"
+    expr: "printed(r'Clocks Event Reasons|SW Power Cap|clocks_(event|throttle)_reasons', '{node}', r'^nvidia-smi\\b') or printed(r'\\S', '{node}', r'^nvidia-smi\\b.*clocks_(event|throttle)_reasons')"
 hints:
   - "Compare power.draw with power.limit: nvidia-smi --query-gpu=index,power.draw,power.limit,clocks.sm --format=csv"
   - "nvidia-smi -q -d PERFORMANCE shows the active clock event (throttle) reasons."

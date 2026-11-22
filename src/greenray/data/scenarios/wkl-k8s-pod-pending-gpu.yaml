@@ -94,7 +94,7 @@ checks:
     expr: not audit('delete_running_pod')
   - desc: kubectl showed you why the scheduler rejects bert-pretrain (kubectl describe pod or kubectl get events)
     kind: evidence
-    expr: "printed(r'(?s)^Name:\\s+bert-pretrain\\b.*FailedScheduling|FailedScheduling\\s+pod/bert-pretrain\\b', cmd=r'^kubectl\\b.*\\b(describe (pod|pods|po)|get (events|ev))\\b')"
+    expr: "printed(r'(?s)^Name:\\s+bert-pretrain\\b.*FailedScheduling|FailedScheduling\\s+pod/bert-pretrain\\b', cmd=r'^kubectl\\b.*\\b(describe (pod|pods|po)|get (events|ev))\\b') or printed(r'FailedScheduling', cmd=r'^kubectl\\b.*\\bdescribe (pod|pods|po)\\b.*\\bbert-pretrain\\b')"
 hints:
   - "`kubectl describe pod bert-pretrain` and read the FailedScheduling event. Count which reason applies to how many of the 5 nodes."
   - "A DGX H100 has 8 GPUs, so 'Insufficient nvidia.com/gpu' on every node can't be fixed by waiting. Compare the request with what one node can ever offer (Capacity/Allocatable in `kubectl describe node`)."

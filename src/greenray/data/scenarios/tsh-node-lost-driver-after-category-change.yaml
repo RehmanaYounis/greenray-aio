@@ -67,7 +67,7 @@ checks:
     expr: "printed(r'NVIDIA-SMI|^GPU \\d|^Module\\s|^ii\\s|node-installer|^\\d+\\.\\d+\\.\\d+-|^\\[\\s*\\d+\\.\\d+\\]', '{node}', r'^(nvidia-smi|lsmod|dpkg|journalctl|uname|dmesg)\\b', errors=True)"
   - desc: you read the node's settings in cmsh before changing them
     kind: evidence
-    expr: "printed_before(r'^Hostname\\s+{node}\\b|^PhysicalNode\\s+{node}\\b', r'^cmsh .*set ', cmd=r'^cmsh\\b.*(show|get |list|usedby)') or printed_before(r'\\S', r'^cmsh .*set ', cmd=r'^cmsh\\b.*(\\buse {node}\\b.*\\bget \\w|\\bcategory;.*(show|get |list))')"
+    expr: "printed_before(r'^Hostname\\s+{node}\\b|^PhysicalNode\\s+{node}\\b', r'^cmsh .*set ', cmd=r'^cmsh\\b.*(show|get |list|usedby)') or printed_before(r'\\S', r'^cmsh .*set ', cmd=r'^cmsh\\b.*(\\buse {node}\\b.*\\b(get \\w|show\\b)|\\bcategory;.*(show|get |list))')"
   - desc: "{node} is back in category dgx-h100, committed"
     expr: bcm.devices['{node}'].category == 'dgx-h100' and not bcm.uncommitted
   - desc: "{node} was re-provisioned from the DGX OS image"

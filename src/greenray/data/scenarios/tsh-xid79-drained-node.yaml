@@ -52,13 +52,13 @@ setup:
 checks:
   - desc: you read the kernel log on {node} (the Xid tells you what failed)
     kind: evidence
-    expr: "printed(r'\\S', '{node}', r'^(dmesg|journalctl -k|journalctl --dmesg)')"
+    expr: "printed(r'Xid\\b.*\\b79\\b|fallen off the bus', '{node}', r'^(dmesg|journalctl -k|journalctl --dmesg)')"
   - desc: a bug report was collected before the reboot (the crash dump is gone afterwards)
     kind: evidence
     expr: "printed_before(r'nvidia-bug-report\\.log', r'^(reboot|scontrol reboot|cmsh .*(power|reboot)|ipmitool .*power)', cmd=r'^nvidia-bug-report')"
-  - desc: you read the logs before rebooting or power-cycling the node
+  - desc: "you read what failed in the node's logs before rebooting or power-cycling it"
     kind: evidence
-    expr: "printed_before(r'\\S', r'^(reboot|scontrol reboot|cmsh .*(power|reboot)|ipmitool .*power)', '{node}', r'^(dmesg|journalctl)\\b')"
+    expr: "printed_before(r'Xid\\b.*\\b79\\b|fallen off the bus', r'^(reboot|scontrol reboot|cmsh .*(power|reboot)|ipmitool .*power)', '{node}', r'^(dmesg|journalctl)\\b')"
   - desc: all 8 GPUs on {node} are visible again
     expr: not any(g.fallen_off_bus for g in nodes['{node}'].gpus)
   - desc: a DCGM diagnostic of level 2+ passed on {node}

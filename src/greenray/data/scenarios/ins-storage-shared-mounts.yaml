@@ -81,7 +81,7 @@ setup:
 checks:
   - desc: you checked what a DGX node has mounted (df / findmnt / mount) and what the head node exports (showmount / exportfs)
     kind: evidence
-    expr: "any(printed(r'/raid\\b', n, r'^(df|findmnt|mount)\\b') or printed(r'', n, r'^(df|findmnt|mount)\\b.*(/home|/cm/shared|nfs)') or printed(r'(?s)\\A\\s*\\Z', n, r'^(df|findmnt|mount)\\b.*(/home|/cm/shared|nfs)', errors=True) for n in ('dgx-01', 'dgx-02', 'dgx-03', 'dgx-04')) and (printed(r'/home\\b', cmd=r'^showmount\\b') or printed(r'^/home\\b', cmd=r'^exportfs\\b') or printed(r'^/home\\s', cmd=r'^(cat|less|grep|head|tail)\\b.*/etc/exports'))"
+    expr: "any(printed(r'/raid\\b', n, r'^(df|findmnt|mount)\\b') or printed(r'', n, r'^(df|findmnt|mount)\\b.*(/home|/cm/shared|nfs)') or printed(r'(?s)\\A\\s*\\Z', n, r'^(df|findmnt|mount)\\b.*(/home|/cm/shared|nfs)', errors=True) or (printed(r'', n, r'^(df|findmnt|mount)\\b') and printed(r'', n, r'^(grep|egrep|awk)\\b.*(nfs|/home|/cm/shared)', errors=True)) for n in ('dgx-01', 'dgx-02', 'dgx-03', 'dgx-04')) and (printed(r'/home\\b', cmd=r'^showmount\\b') or printed(r'^/home\\b', cmd=r'^exportfs\\b') or printed(r'^/home\\s', cmd=r'^(cat|less|grep|head|tail)\\b.*/etc/exports'))"
   - desc: category dgx-h100 has an NFS fsmount for /home from the head node
     expr: any(e.get('mountpoint') == '/home' and re.match(r'^(master|bcm-head|10\.141\.255\.254):/home/?$', e.get('device', '')) and e.get('filesystem', '').startswith('nfs') for e in bcm.categories['dgx-h100'].fsmounts)
   - desc: the /cm/shared fsmount points at the real export

@@ -620,7 +620,11 @@ class Shell:
         data = heredoc or ""
         code = 0
         errors: list[str] = []
+        hidden_from = len(self.ctx.results)  # results from here on did not reach the screen as they were printed
+        hidden_to = hidden_from
         for i, stage in enumerate(stages):
+            if i == len(stages) - 1:
+                hidden_to = len(self.ctx.results)
             try:
                 stage, redir = self._redirects(stage)
             except CommandError as e:
@@ -698,7 +702,21 @@ class Shell:
                 target, append = redir["out"]
                 self._write(target, data, append or redir.get("err") == (target, False) and bool(errors) and False)
                 data = ""
+                hidden_to = len(self.ctx.results)  # written to a file: nothing of this stage was displayed either
+        self._show_only(hidden_from, hidden_to, data)
         return data, "\n".join(errors), code
+
+    def _show_only(self, start: int, end: int, displayed: str) -> None:
+        """Commands whose output went into a pipe or a file showed the learner only what came out at the end.
+
+        ``dmesg | grep -i xid`` shows the Xid lines, ``dmesg | grep Linux`` does not, and evidence
+        checks must tell the two apart. Applies to commands run inside those stages as well
+        (``ssh node dmesg | grep ...``).
+        """
+        results = self.ctx.results
+        for k in range(start, min(end, len(results))):
+            pos, host, argv, _text, completed = results[k]
+            results[k] = (pos, host, argv, displayed, completed)
 
     def _sudo(self, argv: list[str]) -> list[str]:
         """``sudo [-u user] cmd``: root runs it directly, another user through runuser."""
