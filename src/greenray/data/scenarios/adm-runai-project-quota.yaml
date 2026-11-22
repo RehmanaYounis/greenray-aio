@@ -57,10 +57,10 @@ checks:
     expr: "'vision' in state.runai.projects and state.runai.projects.vision.department == 'research' and state.runai.projects.vision.gpu_quota == 10 and (not state.runai.projects.vision.over_quota or (state.runai.projects.vision.max_gpus is not None and state.runai.projects.vision.max_gpus <= 10))"
   - desc: namespaces runai-nlp and runai-vision exist
     expr: "'runai-nlp' in k8s.namespaces and 'runai-vision' in k8s.namespaces"
-  - desc: alice has access to nlp only, bob to vision only
-    expr: "{a.project for a in state.runai.access_rules if a.user == 'alice@corp.ai'} == {'nlp'} and {a.project for a in state.runai.access_rules if a.user == 'bob@corp.ai'} == {'vision'}"
-  - desc: carol is Research manager on nlp and vision
-    expr: "all(any(a.user == 'carol@corp.ai' and a.project == p and a.role == 'Research manager' for a in state.runai.access_rules) for p in ('nlp', 'vision'))"
+  - desc: "alice is a researcher on nlp only, bob a researcher on vision only"
+    expr: "{(a.project, a.role.split()[-1]) for a in state.runai.access_rules if a.user == 'alice@corp.ai'} == {('nlp', 'researcher')} and {(a.project, a.role.split()[-1]) for a in state.runai.access_rules if a.user == 'bob@corp.ai'} == {('vision', 'researcher')}"
+  - desc: "carol is Research manager on nlp and vision, and on nothing else"
+    expr: "{(a.project, a.role) for a in state.runai.access_rules if a.user == 'carol@corp.ai'} == {('nlp', 'Research manager'), ('vision', 'Research manager')}"
   - desc: vision-smoke is Running in vision with 8 GPUs
     expr: "any(w.name == 'vision-smoke' and w.project == 'vision' and w.status == 'Running' and w.gpu == 8 for w in state.runai.workloads)"
   - desc: the four sandbox sweeps still exist (preempted or running, not deleted)
