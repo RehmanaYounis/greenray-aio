@@ -27,7 +27,7 @@ ROWS: list[tuple[str, int, str, list[str]]] = [
     ("adm-12", 7, r"^sshare", ["sshare --help"]),
     (
         "adm-13",
-        4,
+        5,
         r'^journalctl|^cmsh -c "main; events|^(diff|grep|cat|less|head) .*slurm\.conf',
         ["journalctl -u cmd -u", "cat /nonexistent/slurm.conf", "grep nosuchword /etc/slurm/slurm.conf"],
     ),

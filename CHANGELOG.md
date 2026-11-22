@@ -9,6 +9,7 @@ All notable changes are listed here. The project follows [Semantic Versioning](h
 - Lab `tsh-4` (`tsh-docker-gpu-runtime`): the criterion about the settings to keep reads `daemon.json` as JSON and needs the logging driver, both rotation options (`max-size` and `max-file`) and the registry mirror with their original values. Formatting, key order and extra keys do not matter.
 - Lab `adm-4` (`adm-bcm-user-role`): the initial password from the ticket is a criterion of its own. Another password leaves it open; the criterion's wording does not show the value.
 - Lab `adm-7` (`adm-runai-project-quota`): the access criteria need the requested roles and scopes: alice a researcher on nlp only, bob a researcher on vision only, carol Research manager on exactly nlp and vision. A wrong role or any extra project fails.
+- Lab `adm-13` (`adm-bcm-wlm-default-queue`): a new criterion needs the restored queue to have been through a restart of `cmd` and still be there, as the objective says. A restart before the repair does not count.
 
 ## [1.7.8] - 2026-11-22
 

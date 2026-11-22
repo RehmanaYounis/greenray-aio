@@ -91,7 +91,36 @@ def test_adm7_either_researcher_role_and_the_default_role_pass():
         assert all(marks(s, shell).values()), marks(s, shell)
 
 
-@pytest.mark.parametrize("code", ["adm-7"])
+# ---- adm-13: the repaired queue has been through a restart of cmd
+
+RESTART = "restart of cmd"
+
+
+@pytest.mark.parametrize("variant", [0, 1])
+def test_adm13_needs_a_restart_after_the_repair(variant):
+    s, shell = solved("adm-13", variant, skip=r"^systemctl restart cmd")
+    results = marks(s, shell)
+    assert not one(results, RESTART) and sum(results.values()) == len(results) - 1
+
+    shell.run("systemctl restart cmd")
+    assert shell.run("scontrol show partition " + s.params["queue"]).startswith("PartitionName=")
+    assert all(marks(s, shell).values())
+
+
+@pytest.mark.parametrize("variant", [0, 1])
+def test_adm13_a_restart_before_the_repair_does_not_count(variant):
+    s, shell = solved("adm-13", variant, skip=r"^systemctl restart cmd", first=("systemctl restart cmd",))
+    assert not one(marks(s, shell), RESTART)
+
+
+def test_adm13_a_restart_alone_does_not_count():
+    s = concrete("adm-13")
+    shell = Shell(s.build_state())
+    shell.run("systemctl restart cmd")
+    assert not one(marks(s, shell), RESTART)
+
+
+@pytest.mark.parametrize("code", ["adm-7", "adm-13"])
 def test_reference_solution_still_earns_every_criterion(code):
     for s in sc.find(code).all_variants():
         shell = Shell(s.build_state())
