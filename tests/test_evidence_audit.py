@@ -93,7 +93,7 @@ ROWS: list[tuple[str, int, str, list[str]]] = [
     ),
     ("tsh-19", 0, r"^nvsm show", ["ssh {node} nvsm show bogus"]),
     ("wkl-5", 2, r"plugstack", ["cat /etc/slurm/plugstack.conf.d/nosuch.conf"]),
-    ("wkl-6", 5, r"describe", ["runai describe job jlab-b", "kubectl describe pod jlab-b"]),
+    ("wkl-6", 6, r"describe", ["runai describe job jlab-b", "kubectl describe pod jlab-b"]),
     ("wkl-8", 4, r"^(squeue|scontrol show|sinfo)", ["squeue --bogus", "scontrol show job 999999"]),
     ("wkl-9", 0, r"^kubectl describe pod", ["kubectl describe pod missing"]),
     ("wkl-9", 1, r"^kubectl (get nodes|describe node)", ["kubectl describe node missing"]),

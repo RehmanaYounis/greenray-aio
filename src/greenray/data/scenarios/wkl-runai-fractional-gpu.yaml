@@ -61,6 +61,8 @@ checks:
     expr: "len([w for w in state.runai.workloads if w.project == 'nlp' and w.name in ('jlab-a', 'jlab-b') and w.status == 'Running' and w.alloc]) == 2 and len({(w.node, w.alloc[0][0]) for w in state.runai.workloads if w.project == 'nlp' and w.name in ('jlab-a', 'jlab-b') and w.status == 'Running' and w.alloc}) == 1"
   - desc: embed-batch is Running in nlp as preemptible training with 0.5 GPU
     expr: "any(w.name == 'embed-batch' and w.project == 'nlp' and w.type == 'Training' and w.preemptible and w.status == 'Running' and w.gpu == 0.5 for w in state.runai.workloads)"
+  - desc: jlab-a, jlab-b and embed-batch in nlp use the image the briefing names
+    expr: "all(any(w.name == n and w.project == 'nlp' and w.get('image') == 'nvcr.io/nvidia/pytorch:24.05-py3' for w in state.runai.workloads) for n in ('jlab-a', 'jlab-b', 'embed-batch'))"
   - desc: no embed-batch left in project vision
     expr: "not any(w.name == 'embed-batch' and w.project == 'vision' for w in state.runai.workloads)"
   - desc: detr-train is still Running in vision with 6 GPUs

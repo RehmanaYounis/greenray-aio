@@ -190,7 +190,30 @@ def test_tsh17_topology_of_dgx03_passes_with_or_without_a_comparison(second):
     assert one(marks(s, shell), TOPOLOGY)
 
 
-@pytest.mark.parametrize("code", ["tsh-18", "adm-10", "tsh-12", "tsh-17"])
+# ---- wkl-6: the image the briefing names, for all three workloads
+
+IMAGE = "nvcr.io/nvidia/pytorch:24.05-py3"
+IMAGES = "use the image the briefing names"
+
+
+@pytest.mark.parametrize("wrong", ["jlab-a", "jlab-b", "embed-batch", "all"])
+def test_wkl6_a_workload_on_another_image_fails(wrong):
+    def edit(step: str) -> str:
+        if step.startswith("runai submit") and (wrong == "all" or f"submit {wrong} " in step):
+            return step.replace(IMAGE, "ubuntu:22.04")
+        return step
+
+    s, shell = solved("wkl-6", edit=edit)
+    results = marks(s, shell)
+    assert not one(results, IMAGES) and sum(results.values()) == len(results) - 1
+
+
+def test_wkl6_the_briefings_image_on_all_three_passes():
+    s, shell = solved("wkl-6")
+    assert all(marks(s, shell).values()), marks(s, shell)
+
+
+@pytest.mark.parametrize("code", ["tsh-18", "adm-10", "tsh-12", "tsh-17", "wkl-6"])
 def test_reference_solution_still_earns_every_criterion(code):
     for s in sc.find(code).all_variants():
         shell = Shell(s.build_state())
