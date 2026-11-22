@@ -184,3 +184,122 @@ def test_wkl8_the_reported_query_earns_nothing():
     out = shell.run("squeue -t RUNNING -l")
     assert "NODELIST(REASON)" in out and "2001" not in out
     assert not any(ok for _desc, ok, _err in s.grade(shell))
+
+
+# ---- tsh-8 and tsh-15: the port that is down or slow
+
+
+@pytest.mark.parametrize("variant", [0, 1, 2])
+def test_tsh8_a_healthy_port_earns_nothing(variant):
+    rail = concrete("tsh-8", variant).params["rail"]
+    other = (rail + 1) % 8
+    for index, line in (
+        (2, f"ssh {{node}} ibstat mlx5_{other}"),
+        (2, f"ssh {{node}} ibstatus mlx5_{other}"),
+        (2, "ssh {peer} ibstat"),
+        (3, f"ssh {{node}} mlxlink -d mlx5_{other}"),
+        (3, f"ssh {{node}} mlxlink -d mlx5_{other} -m"),
+        (3, "ssh {peer} mlxlink -d mlx5_{rail} -m"),
+    ):
+        assert not after("tsh-8", index, [line], variant), line
+
+
+@pytest.mark.parametrize("variant", [0, 1, 2])
+def test_tsh8_the_affected_port_earns_evidence(variant):
+    for index, line in (
+        (2, "ssh {node} ibstat"),
+        (2, "ssh {node} ibstat mlx5_{rail}"),
+        (2, "ssh {node} ibstatus mlx5_{rail}"),
+        (2, "ssh {node} ibv_devinfo -d mlx5_{rail}"),
+        (3, "ssh {node} mlxlink -d mlx5_{rail}"),
+        (3, "ssh {node} mlxlink -d mlx5_{rail} -m"),
+    ):
+        assert after("tsh-8", index, [line], variant), line
+
+
+def test_tsh8_diagnostics_of_a_healthy_port_before_the_reseat_do_not_count():
+    s, shell = lab("tsh-8")
+    node, rail = s.params["node"], s.params["rail"]
+    shell.run(f"ssh {node} mlxlink -d mlx5_{(rail + 1) % 8} -m")
+    shell.run(f"reseat-cable {node} mlx5_{rail}")
+    assert not met(s, shell, 4)
+
+
+@pytest.mark.parametrize("variant", [0, 1, 2])
+def test_tsh15_needs_the_rate_of_the_slow_port(variant):
+    params = concrete("tsh-15", variant).params
+    other = (params["rail"] + 1) % 8
+    peer = "dgx-03" if params["slow"] != "dgx-03" else "dgx-04"
+    for line in (f"ssh {{slow}} ibstat mlx5_{other}", f"ssh {{slow}} mlxlink -d mlx5_{other}", f"ssh {peer} ibstat"):
+        assert not after("tsh-15", 2, [line], variant), line
+    for line in (
+        "ssh {slow} ibstat",
+        "ssh {slow} ibstat mlx5_{rail}",
+        "ssh {slow} ibstatus mlx5_{rail}",
+        "ssh {slow} mlxlink -d mlx5_{rail}",
+    ):
+        assert after("tsh-15", 2, [line], variant), line
+
+
+# ---- tsh-13: the log of a plugin pod that is crashing
+
+
+def test_tsh13_needs_the_log_of_a_crashing_plugin_pod():
+    s, shell = lab("tsh-13")
+    pods = [p for p in shell.ctx.state.k8s.pods if p.name.startswith("nvidia-device-plugin-daemonset-")]
+    healthy = next(p.name for p in pods if p.status == "Running")
+    crashing = next(p.name for p in pods if p.status != "Running")
+    assert "Registered device plugin" in shell.run(f"kubectl logs -n kube-system {healthy}")
+    assert not met(s, shell, 5)
+    assert "error starting plugins" in shell.run(f"kubectl logs -n kube-system {crashing}")
+    assert met(s, shell, 5)
+    assert after("tsh-13", 5, ["kubectl logs -n kube-system -l app=nvidia-device-plugin-daemonset --tail=8"])
+
+
+# ---- tsh-16, tsh-19, adm-15: "looked before changing" has to be a look at the right thing
+
+
+@requires_solutions
+@pytest.mark.parametrize(
+    ("code", "index", "skip", "unrelated", "related"),
+    [
+        (
+            "tsh-16",
+            1,
+            r'^cmsh -c "(device; (use \S+; show|list)|category; list)',
+            ['cmsh -c "partition; list"', 'cmsh -c "device; use dgx-04; show"'],
+            'cmsh -c "device; use {node}; get category"',
+        ),
+        ("tsh-19", 0, r"^nvsm show", ["ssh dgx-01 nvsm show health"], "ssh {node} nvsm show health"),
+        (
+            "adm-15",
+            5,
+            r"latestmetricdata|nvidia-smi|ipmitool",
+            ['cmsh -c "device; latestmetricdata -n dgx-04"'],
+            'cmsh -c "device; latestmetricdata -n {node}"',
+        ),
+    ],
+    ids=["tsh-16", "tsh-19", "adm-15"],
+)
+def test_a_look_at_something_else_before_the_change_does_not_count(code, index, skip, unrelated, related):
+    s, shell = lab(code)
+    for line in unrelated:
+        shell.run(line.format(**s.params))
+    solution_without(s, shell, skip)
+    assert not met(s, shell, index)
+
+    s, shell = lab(code)
+    shell.run(related.format(**s.params))
+    solution_without(s, shell, skip)
+    assert met(s, shell, index)
+
+
+@requires_solutions
+@pytest.mark.parametrize(
+    "code", ["tsh-5", "tsh-6", "tsh-8", "tsh-10", "tsh-13", "tsh-15", "tsh-16", "tsh-19", "adm-15", "wkl-8"]
+)
+def test_reference_solution_still_earns_every_criterion(code):
+    for s in sc.find(code).all_variants():
+        shell = Shell(s.build_state())
+        sc.replay_solution(s, shell)
+        assert all(ok for _desc, ok, _err in s.grade(shell)), (s.variant_label, s.grade(shell))

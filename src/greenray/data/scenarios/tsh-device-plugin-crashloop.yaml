@@ -68,7 +68,7 @@ checks:
     expr: "any(p.name == 'nccl-test' and p.status == 'Running' and p.node == 'dgx-03' for p in pods('default'))"
   - desc: you read the crashing device plugin's logs
     kind: evidence
-    expr: "printed(r'\\S', cmd=r'^kubectl\\b.*\\blogs\\b.*nvidia-device-plugin')"
+    expr: "printed(r'error starting plugins|platform detection failed', cmd=r'^kubectl\\b.*\\blogs\\b')"
 hints:
   - "`kubectl get pods -n kube-system -o wide | grep nvidia`: which nodes have the crashing pods, and what do they have in common?"
   - "Read the device plugin log (`kubectl logs -n kube-system <pod>`). 'could not load NVML library' inside the container, while nvidia-smi works on the host, means the container was started without the NVIDIA runtime hook."

@@ -59,7 +59,7 @@ setup:
 checks:
   - desc: "you asked the node about its own health or versions (nvsm) before changing anything"
     kind: evidence
-    expr: "printed_before(r'\\S', r'^(nvsm update|reboot|scontrol reboot|cmsh .*(reboot|power))', cmd=r'^nvsm show (health|versions|alerts)')"
+    expr: "printed_before(r'\\S', r'^(nvsm update|reboot|scontrol reboot|cmsh .*(reboot|power))', '{node}', r'^nvsm show (health|versions|alerts)')"
   - desc: "{node} runs the same NVSwitch firmware on every switch, with no update left pending"
     expr: "len(set(nodes['{node}'].firmware.nvswitch)) == 1 and not nodes['{node}'].get('firmware_pending')"
   - desc: "every NVLink on {node} is active again"
