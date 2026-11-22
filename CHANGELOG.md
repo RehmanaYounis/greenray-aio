@@ -2,6 +2,16 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [1.7.8] - 2026-11-22
+
+### Fixed
+- Lab `tsh-6` (`tsh-fabricmanager-down`): the version criterion needs the installed Fabric Manager version and the installed driver version, both shown before the service is started (`nv-fabricmanager --version` with `nvidia-smi`, `dpkg -l`, `/var/log/apt/history.log` and similar). A version of an unrelated package, or yesterday's mismatch in the journal, no longer counts.
+- Labs `tsh-5` (`tsh-ecc-row-remap`) and `tsh-10` (`tsh-thermal-throttle`): the diagnostic criterion needs output for the affected GPU. A query limited to a healthy GPU with `-i` earns nothing; queries for all GPUs or for the affected one count, including `--query-gpu` with `noheader`.
+- Lab `wkl-8` (`wkl-slurm-pending-reasons`): the criterion needs the pending reason of job 2001 and of job 2002 as `squeue` or `scontrol show job` returned them. A listing with no jobs, or of one job only, is not enough; a single `squeue` that shows both is.
+- Labs `tsh-8` (`tsh-ib-port-down`) and `tsh-15` (`tsh-nccl-slow-after-image-update`): the InfiniBand criteria need the port that is down or slow, not any port of the node.
+- Lab `tsh-13` (`tsh-device-plugin-crashloop`): the log criterion needs the log of a plugin pod that is crashing.
+- Labs `tsh-16`, `tsh-19` and `adm-15`: "looked before changing" needs a look at the affected node (its settings or category in cmsh, `nvsm` on that node, that node's temperatures).
+
 ## [1.7.7] - 2026-11-22
 
 ### Fixed
