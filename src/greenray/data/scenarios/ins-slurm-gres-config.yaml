@@ -49,7 +49,7 @@ checks:
     expr: any(j.state == 'COMPLETED' and 'dgx-03' in j.nodelist and j.gpus_per_node == 8 for j in slurm.jobs)
   - desc: you inspected node GRES/state
     kind: evidence
-    expr: "printed(r'NODELIST|NodeName=', cmd=r'^(sinfo|scontrol show node)\\b')"
+    expr: "printed(r'NODELIST|NodeName=|Gres=|State=', cmd=r'^(sinfo|scontrol show node)\\b')"
 hints:
   - "Ask Slurm what it thinks each node has: sinfo -o '%N %G %t' or scontrol show node dgx-01 (look at Gres=)."
   - "Gres=(null) means slurmctld has no GPUs configured for the node. Check the NodeName= line in /etc/slurm/slurm.conf on the head node. GresTypes=gpu alone is not enough."

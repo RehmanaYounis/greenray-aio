@@ -55,7 +55,7 @@ checks:
     expr: all(g.power_limit_w == g.power_default_w and g.app_sm_clock_mhz == 1980 for g in nodes['{node}'].gpus)
   - desc: you read the clock event reasons / temperatures on {node}
     kind: evidence
-    expr: "printed(r'(?is)GPU 00000000:{busl}:00\\.0\\b(?:(?!\\nGPU 0000).)*?(Clocks Event Reasons|Temperature)', '{node}', r'^nvidia-smi\\b') or printed(r'\\S', '{node}', r'^nvidia-smi\\b(?!.*\\s(-i|--id)\\b).*--query-gpu=\\S*(clocks_event_reasons|clocks_throttle_reasons|temperature)') or printed(r'\\S', '{node}', r'^nvidia-smi\\b(?=.*\\s(-i|--id)[= ]?(\\d+,)*{gpu}(,\\d+)*(\\s|$)).*--query-gpu=\\S*(clocks_event_reasons|clocks_throttle_reasons|temperature)')"
+    expr: "printed(r'(?is)GPU 00000000:{busl}:00\\.0\\b(?:(?!\\nGPU 0000).)*?(Clocks Event Reasons|Slowdown|Temperature|Temp\\b)', '{node}', r'^nvidia-smi\\b') or printed(r'Clocks Event Reasons|Slowdown|Temperature|Temp\\b', '{node}', r'^nvidia-smi\\b(?!.*\\s(-i|--id)\\b).*\\s-q\\b') or printed(r'Clocks Event Reasons|Slowdown|Temperature|Temp\\b', '{node}', r'^nvidia-smi\\b(?=.*\\s(-i|--id)[= ]?(\\d+,)*{gpu}(,\\d+)*(\\s|$)).*\\s-q\\b') or printed(r'\\S', '{node}', r'^nvidia-smi\\b(?!.*\\s(-i|--id)\\b).*--query-gpu=\\S*(clocks_event_reasons|clocks_throttle_reasons|temperature)') or printed(r'\\S', '{node}', r'^nvidia-smi\\b(?=.*\\s(-i|--id)[= ]?(\\d+,)*{gpu}(,\\d+)*(\\s|$)).*--query-gpu=\\S*(clocks_event_reasons|clocks_throttle_reasons|temperature)')"
   - desc: you checked the BMC System Event Log on {node}
     kind: evidence
     expr: "printed(r'\\|', '{node}', r'^ipmitool\\b.*\\bsel\\b')"

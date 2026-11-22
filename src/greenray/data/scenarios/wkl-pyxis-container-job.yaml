@@ -30,8 +30,8 @@ setup:
 checks:
   - desc: bcm-head's Slurm plugin stack loads spank_pyxis.so
     expr: re.search(r'(?m)^\s*(required|optional)\s+\S*spank_pyxis\.so', file('bcm-head', '/etc/slurm/plugstack.conf') + '\n' + '\n'.join(v for k, v in nodes['bcm-head'].files.items() if k.startswith('/etc/slurm/plugstack.conf.d/'))) is not None
-  - desc: a 2-GPU job ran in nvcr.io#nvidia/pytorch:24.05-py3 and completed with exit code 0
-    expr: any(j.container_image == 'nvcr.io#nvidia/pytorch:24.05-py3' and j.state == 'COMPLETED' and j.exit_code == '0:0' and j.gpus_per_node * j.num_nodes >= 2 for j in slurm.jobs)
+  - desc: "a job with exactly 2 GPUs ran in nvcr.io#nvidia/pytorch:24.05-py3 and completed with exit code 0"
+    expr: "any(j.container_image == 'nvcr.io#nvidia/pytorch:24.05-py3' and j.state == 'COMPLETED' and j.exit_code == '0:0' and j.gpus_per_node * j.num_nodes == 2 for j in slurm.jobs)"
   - desc: you inspected the SPANK plugin configuration
     kind: evidence
     expr: "printed(r'\\S', cmd=r'^(cat|less|more|head|tail|grep|ls|find)\\b.*plugstack')"

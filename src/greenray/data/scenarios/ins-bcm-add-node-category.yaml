@@ -46,7 +46,7 @@ checks:
     expr: bcm.categories['default'].softwareimage == 'default-image' and not bcm.categories['default'].get('roles') and all(d.category == 'dgx-h100' for k, d in bcm.devices.items() if k in ('dgx-01', 'dgx-02', 'dgx-03'))
   - desc: cmsh showed you the inventory of dgx-04 or of the category its neighbours use
     kind: evidence
-    expr: "printed(r'^PhysicalNode\\s+dgx-04\\b|^Hostname\\s+dgx-04\\b|^dgx-04 \\.+ \\[|^dgx-h100\\s|^Name\\s+dgx-h100\\b|^dgx-os-6\\.2-h100-image\\b', cmd=r'^cmsh\\b') or printed(r'\\S', cmd=r'^cmsh\\b.*\\buse (dgx-04|dgx-h100)\\b.*\\bget \\w')"
+    expr: "printed(r'^PhysicalNode\\s+dgx-04\\b|^Hostname\\s+dgx-04\\b|^dgx-04 \\.+ \\[|^dgx-h100\\s|^Name\\s+dgx-h100\\b|^dgx-os-6\\.2-h100-image\\b', cmd=r'^cmsh\\b') or printed(r'\\S', cmd=r'^cmsh\\b.*\\buse (dgx-04|dgx-h100)\\b.*\\b(get \\w|show\\b)')"
 hints:
   - "Start with the BCM view of the cluster: cmsh -c \"device; list\". What category is dgx-04 in compared to its neighbours?"
   - "Look at what the dgx-h100 category provides: cmsh -c \"category; use dgx-h100; show\". The software image and roles come from the category."

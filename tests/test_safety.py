@@ -52,10 +52,10 @@ def test_ran_before_needs_both_in_order():
     sh.run("ssh dgx-02")
     sh.run("reboot")
     sh.run("ssh dgx-02")
-    sh.run("dmesg")
+    assert "Xid" in sh.run("dmesg")  # the simulated kernel log keeps the entry across the reboot
     order = {d: ok for d, ok, _ in s.grade(sh)}
     assert order["you read the kernel log on dgx-02 (the Xid tells you what failed)"]
-    assert not order["you read the logs before rebooting or power-cycling the node"]
+    assert not order["you read what failed in the node's logs before rebooting or power-cycling it"]
 
 
 def test_results_are_tagged_by_kind():

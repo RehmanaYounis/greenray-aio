@@ -8,6 +8,11 @@ All notable changes are listed here. The project follows [Semantic Versioning](h
 - Lab `ins-6` (`ins-storage-shared-mounts`): the job criterion needs alice's new job to have completed successfully, as the briefing asks; a job that is still running does not count. The diagnostic criterion needs both sides of the comparison: what a DGX node has mounted (`df`, `findmnt`, `mount`, including an NFS query that returns nothing) and what the head node exports (`showmount`, `exportfs`, `/etc/exports`). `df -h /` on the head node earns nothing.
 - Lab `tsh-4` (`tsh-docker-gpu-runtime`): the criterion about the settings to keep reads `daemon.json` as JSON and needs the logging driver, both rotation options (`max-size` and `max-file`) and the registry mirror with their original values. Formatting, key order and extra keys do not matter.
 - Lab `adm-4` (`adm-bcm-user-role`): the initial password from the ticket is a criterion of its own. Another password leaves it open; the criterion's wording does not show the value.
+- Lab `adm-7` (`adm-runai-project-quota`): the access criteria need the requested roles and scopes: alice a researcher on nlp only, bob a researcher on vision only, carol Research manager on exactly nlp and vision. A wrong role or any extra project fails.
+- Lab `adm-13` (`adm-bcm-wlm-default-queue`): a new criterion needs the restored queue to have been through a restart of `cmd` and still be there, as the objective says. A restart before the repair does not count.
+- Lab `wkl-5` (`wkl-pyxis-container-job`): the smoke test has to run on exactly 2 GPUs, in any spelling (`--gres=gpu:2`, `--gpus=2`, `-G 2`, `--gpus-per-node=2`); 4 GPUs no longer pass.
+- Evidence is what a command showed the learner. Output piped into a filter or written to a file counts only for what came out at the end, so `dmesg | grep "Linux version"` is no longer credited with the whole kernel log. Criteria in 19 labs were adjusted so that a reasonable `grep` on the right object still earns them, for example `scontrol show partition defq | grep MaxTime` in `adm-2` and `scontrol show job 2001 | grep Reason` in `wkl-8`.
+- Lab `tsh-11` (`tsh-xid79-drained-node`): the kernel-log criteria need the Xid 79 entry of the affected node, seen before the reboot.
 
 ## [1.7.8] - 2026-11-22
 

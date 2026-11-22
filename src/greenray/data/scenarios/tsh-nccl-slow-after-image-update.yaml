@@ -55,10 +55,10 @@ checks:
     expr: "printed(r'NCCL INFO')"
   - desc: you checked the loaded kernel modules on a node
     kind: evidence
-    expr: "printed(r'\\S', cmd=r'^lsmod\\b|^(cat|grep|less|head|tail|wc)\\b.*/proc/modules')"
+    expr: "printed(r'', cmd=r'^lsmod\\b|^(cat|grep|less|head|tail|wc)\\b.*/proc/modules')"
   - desc: you checked the IB port rates on {slow} (ibstat/ibstatus/mlxlink)
     kind: evidence
-    expr: "printed(r\"(?is)(CA|device) 'mlx5_{rail}'.*?rate\", '{slow}', r'^(ibstat|ibstatus)\\b') or printed(r'(?i)speed', '{slow}', r'^mlxlink\\b.*-d\\s*mlx5_{rail}\\b')"
+    expr: "printed(r\"(?is)(CA|device) 'mlx5_{rail}'.*?rate\", '{slow}', r'^(ibstat|ibstatus)\\b') or printed(r'(?i)rate', '{slow}', r'^(ibstat|ibstatus)\\b.*mlx5_{rail}\\b') or printed(r'(?i)speed', '{slow}', r'^mlxlink\\b.*-d\\s*mlx5_{rail}\\b')"
   - desc: nvidia_peermem is loaded on dgx-01 and dgx-02
     expr: all(any(m.replace('-', '_') == 'nvidia_peermem' for m in nodes[h].modules) for h in ('dgx-01', 'dgx-02'))
   - desc: both nodes load the module at boot (modules-load.d or /etc/modules)

@@ -35,7 +35,7 @@ checks:
     expr: "bcm.wlm.slurm.jobqueues['defq'].default is True and bcm.wlm.slurm.jobqueues['defq'].nodes == 'dgx-[01-04]' and slurm.partitions['defq'].get('default') is True"
   - desc: sinfo or scontrol showed you the new partition
     kind: evidence
-    expr: "printed(r'(^|\\s)short\\*?(\\s|$)', cmd=r'^sinfo\\b') or printed(r'PartitionName=short\\b', cmd=r'^scontrol\\b.*\\bshow part')"
+    expr: "printed(r'(^|\\s)short\\*?(\\s|$)', cmd=r'^sinfo\\b') or printed(r'PartitionName=short\\b', cmd=r'^scontrol\\b.*\\bshow part') or printed(r'\\w+=', cmd=r'^scontrol\\b.*\\bshow part\\w*\\s+short\\b')"
   - desc: slurm.conf was not edited by hand
     kind: safety
     expr: generated('bcm-head', '/etc/slurm/slurm.conf')

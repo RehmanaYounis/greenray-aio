@@ -47,7 +47,7 @@ checks:
     expr: "k8s.clusterpolicy is not None and k8s.clusterpolicy.status.state == 'ready'"
   - desc: kubectl showed you the driver pods' logs or events
     kind: evidence
-    expr: "printed(r'\\S', cmd=r'^kubectl\\b.*\\blogs\\b.*nvidia-driver') or printed(r'^Name:\\s+nvidia-driver-daemonset-\\w', cmd=r'^kubectl\\b.*\\bdescribe (pod|pods|po)\\b') or printed(r'pod/nvidia-driver-daemonset-\\w', cmd=r'^kubectl\\b.*\\bget (events|ev)\\b')"
+    expr: "printed(r'\\S', cmd=r'^kubectl\\b.*\\blogs\\b.*nvidia-driver') or printed(r'^Name:\\s+nvidia-driver-daemonset-\\w', cmd=r'^kubectl\\b.*\\bdescribe (pod|pods|po)\\b') or printed(r'\\S', cmd=r'^kubectl\\b.*\\bdescribe (pod|pods|po)\\b.*nvidia-driver') or printed(r'pod/nvidia-driver-daemonset-\\w', cmd=r'^kubectl\\b.*\\bget (events|ev)\\b')"
 hints:
   - "Start with `kubectl get pods -n gpu-operator`. Which pod crashes, and which pods are only waiting in Init because of it?"
   - "Read the crashing container's output: `kubectl logs -n gpu-operator ds/nvidia-driver-daemonset`. What does it try to unload, and why does that fail on a DGX?"

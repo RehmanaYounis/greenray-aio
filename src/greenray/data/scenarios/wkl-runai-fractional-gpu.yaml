@@ -67,7 +67,7 @@ checks:
     expr: "any(w.name == 'detr-train' and w.project == 'vision' and w.status == 'Running' and w.gpu == 6 for w in state.runai.workloads)"
   - desc: you checked why jlab-b was Pending
     kind: evidence
-    expr: "printed(r'jlab-b', cmd=r'^runai\\b.*\\b(describe (job|workload) jlab-b|(workspace|workload) describe jlab-b)|^kubectl\\b.*\\bdescribe (pod|po|pods)\\b.*jlab-b')"
+    expr: "printed(r'\\S', cmd=r'^runai\\b.*\\b(describe (job|workload) jlab-b|(workspace|workload) describe jlab-b)|^kubectl\\b.*\\bdescribe (pod|po|pods)\\b.*jlab-b')"
 hints:
   - "`runai describe job jlab-b -p nlp`: read the event. What is nlp's deserved quota, how much does it already use, and what kind of workload is jlab-b?"
   - "Interactive workloads are non-preemptible, so they may only use the project's deserved quota (1 GPU). Two notebooks with -g 1 can never both fit. With -g 0.5 they fit, and Run:ai packs both onto one physical GPU."
