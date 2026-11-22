@@ -70,9 +70,9 @@ setup:
                       'batch': True, 'duration': None, 'command': '/home/bob/eval.sbatch'})
       st.next_job_id = 5002
 checks:
-  - desc: you looked at the GPU/CPU topology (nvidia-smi topo -m and numactl -H / lscpu)
+  - desc: "you looked at the GPU/CPU topology of dgx-03 (nvidia-smi topo -m and numactl -H / lscpu)"
     kind: evidence
-    expr: "printed(r'GPU0', cmd=r'^nvidia-smi topo') and printed(r'(?i)numa|node \\d+ cpus', cmd=r'^(numactl (-H|--hardware)|lscpu)')"
+    expr: "printed(r'GPU0', 'dgx-03', r'^nvidia-smi topo') and printed(r'(?i)numa|node \\d+ cpus', 'dgx-03', r'^(numactl (-H|--hardware)|lscpu)')"
   - desc: slurmd on dgx-03 now reports GPU 0-3 -> socket 0 cores and GPU 4-7 -> socket 1 cores
     expr: slurm.nodes['dgx-03'].get('gpu_affinity_ok') is True
   - desc: resnet-dali.sbatch asks Slurm to enforce GPU/CPU binding

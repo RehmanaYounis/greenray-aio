@@ -164,7 +164,33 @@ def test_tsh12_a_check_after_the_watches_passes(order):
     assert all(marks(s, shell).values()), marks(s, shell)
 
 
-@pytest.mark.parametrize("code", ["tsh-18", "adm-10", "tsh-12"])
+# ---- tsh-17: the topology of the node the incident is on
+
+TOPOLOGY = "GPU/CPU topology of dgx-03"
+
+
+def test_tsh17_topology_of_a_healthy_node_is_not_the_diagnosis():
+    s = concrete("tsh-17")
+    shell = Shell(s.build_state())
+    for line in ("ssh dgx-01 nvidia-smi topo -m", "ssh dgx-01 numactl -H", "ssh dgx-01 lscpu"):
+        shell.run(line)
+    assert not one(marks(s, shell), TOPOLOGY)
+    shell.run("ssh dgx-03 nvidia-smi topo -m")  # one half on the right node is not enough either
+    assert not one(marks(s, shell), TOPOLOGY)
+    shell.run("ssh dgx-03 lscpu")
+    assert one(marks(s, shell), TOPOLOGY)
+
+
+@pytest.mark.parametrize("second", ["numactl -H", "numactl --hardware", "lscpu", "lscpu | grep -i numa"])
+def test_tsh17_topology_of_dgx03_passes_with_or_without_a_comparison(second):
+    s = concrete("tsh-17")
+    shell = Shell(s.build_state())
+    for line in ("ssh dgx-01 nvidia-smi topo -m", "ssh dgx-03", "nvidia-smi topo -m", second):
+        shell.run(line)
+    assert one(marks(s, shell), TOPOLOGY)
+
+
+@pytest.mark.parametrize("code", ["tsh-18", "adm-10", "tsh-12", "tsh-17"])
 def test_reference_solution_still_earns_every_criterion(code):
     for s in sc.find(code).all_variants():
         shell = Shell(s.build_state())
