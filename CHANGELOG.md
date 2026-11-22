@@ -2,6 +2,11 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- Lab `ins-6` (`ins-storage-shared-mounts`): the job criterion needs alice's new job to have completed successfully, as the briefing asks; a job that is still running does not count. The diagnostic criterion needs both sides of the comparison: what a DGX node has mounted (`df`, `findmnt`, `mount`, including an NFS query that returns nothing) and what the head node exports (`showmount`, `exportfs`, `/etc/exports`). `df -h /` on the head node earns nothing.
+
 ## [1.7.8] - 2026-11-22
 
 ### Fixed
