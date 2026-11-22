@@ -13,6 +13,7 @@ All notable changes are listed here. The project follows [Semantic Versioning](h
 - Lab `wkl-5` (`wkl-pyxis-container-job`): the smoke test has to run on exactly 2 GPUs, in any spelling (`--gres=gpu:2`, `--gpus=2`, `-G 2`, `--gpus-per-node=2`); 4 GPUs no longer pass.
 - Evidence is what a command showed the learner. Output piped into a filter or written to a file counts only for what came out at the end, so `dmesg | grep "Linux version"` is no longer credited with the whole kernel log. Criteria in 19 labs were adjusted so that a reasonable `grep` on the right object still earns them, for example `scontrol show partition defq | grep MaxTime` in `adm-2` and `scontrol show job 2001 | grep Reason` in `wkl-8`.
 - Lab `tsh-11` (`tsh-xid79-drained-node`): the kernel-log criteria need the Xid 79 entry of the affected node, seen before the reboot.
+- Lab `tsh-18` (`tsh-storage-io-bottleneck`) and every other criterion about a sampling tool: on a real terminal `nvidia-smi dmon`, `dcgmi dmon` and `watch` print their samples as they are produced, and the grader recorded nothing for them. `nvidia-smi dmon -c 10` typed directly now earns its criterion, as it already did when piped.
 
 ## [1.7.8] - 2026-11-22
 
