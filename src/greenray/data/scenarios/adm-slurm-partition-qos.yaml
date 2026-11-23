@@ -43,8 +43,8 @@ checks:
     expr: re.search(r'(?im)^PartitionName=interactive\b.*\bQOS=interactive\b', file('bcm-head', '/etc/slurm/slurm.conf')) is not None
   - desc: the running slurmctld enforces limits (AccountingStorageEnforce contains limits)
     expr: "'limits' in slurm.config.params.get('accountingstorageenforce', '').lower() or 'safe' in slurm.config.params.get('accountingstorageenforce', '').lower()"
-  - desc: a job in interactive was held back with reason QOSMaxGRESPerUser
-    expr: any(j.partition == 'interactive' and j.reason == 'QOSMaxGRESPerUser' for j in slurm.jobs)
+  - desc: "a job asking for 16 GPUs in interactive was held back with reason QOSMaxGRESPerUser"
+    expr: "any(j.partition == 'interactive' and j.reason == 'QOSMaxGRESPerUser' and j.num_nodes * j.gpus_per_node == 16 for j in slurm.jobs)"
   - desc: defq is still UP, the default, and contains all four DGX nodes
     expr: slurm.partitions['defq'].default and slurm.partitions['defq'].state == 'UP' and slurm.partitions['defq'].nodes == 'dgx-[01-04]'
 hints:

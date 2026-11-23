@@ -198,7 +198,50 @@ def test_adm12_a_script_without_an_account_directive_passes():
     assert all(results(s, shell).values()), results(s, shell)
 
 
-@pytest.mark.parametrize("code", ["ins-7", "adm-9", "adm-12"])
+# ---- adm-8: the proof job asks for 16 GPUs
+
+ADM8_HELD = "16 GPUs in interactive was held back"
+
+
+def _adm8(submit: str) -> tuple[sc.Scenario, Shell]:
+    s, shell = lab("adm-8")
+    do(shell, *(step for step in s.solution if not step.startswith("sbatch")), submit)
+    return s, shell
+
+
+@pytest.mark.parametrize(
+    "submit",
+    [
+        "sbatch -p interactive -N 2 --gres=gpu:5 --wrap=hostname",  # the reported case: 10 GPUs, also over the cap
+        "sbatch -p interactive --gpus=12 --wrap=hostname",
+        "sbatch -p interactive --gres=gpu:8 --wrap=hostname",  # 8 GPUs: within the cap, it simply runs
+        "sbatch -N 2 --gres=gpu:8 --wrap=hostname",  # 16 GPUs, but in defq
+    ],
+    ids=["10-gpus", "12-gpus", "8-gpus", "16-in-defq"],
+)
+def test_adm8_another_request_is_not_the_16_gpu_proof(submit):
+    s, shell = _adm8(submit)
+    found = results(s, shell)
+    assert not one(found, ADM8_HELD) and sum(found.values()) == len(found) - 1
+
+
+@pytest.mark.parametrize(
+    "submit",
+    [
+        'sbatch -p interactive -N 2 --gres=gpu:8 --wrap="sleep 600"',
+        "sbatch -p interactive --gpus=16 --wrap=hostname",
+        "sbatch -p interactive -N 2 --gpus-per-node=8 --wrap=hostname",
+        "sbatch -p interactive -N 2 -G 16 --wrap=hostname",
+        "sbatch --partition=interactive --nodes=2 --gres=gpu:h100:8 --wrap=hostname",
+    ],
+)
+def test_adm8_every_spelling_of_16_gpus_is_held_and_passes(submit):
+    s, shell = _adm8(submit)
+    assert "QOSMaxGRESPerUser" in shell.run("squeue -p interactive")
+    assert all(results(s, shell).values()), results(s, shell)
+
+
+@pytest.mark.parametrize("code", ["ins-7", "adm-9", "adm-12", "adm-8"])
 def test_reference_solution_still_earns_every_criterion(code):
     s, shell = lab(code)
     sc.replay_solution(s, shell)
