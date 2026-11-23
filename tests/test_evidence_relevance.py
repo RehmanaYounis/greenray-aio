@@ -303,3 +303,99 @@ def test_reference_solution_still_earns_every_criterion(code):
         shell = Shell(s.build_state())
         sc.replay_solution(s, shell)
         assert all(ok for _desc, ok, _err in s.grade(shell)), (s.variant_label, s.grade(shell))
+
+
+# ---- tsh-9: the evidence has to be the authentication failure, not any log of any node
+
+SAW, SAW_FIRST = "you saw the authentication failure", "you saw it before"
+DIAGNOSTIC = r"journalctl|unmunge|md5sum|systemctl status"
+
+
+def _tsh9(variant: int, looks: list[str]) -> tuple[sc.Scenario, Shell]:
+    """The repair of tsh-9 without the solution's own diagnostic steps, after ``looks``."""
+    s, shell = lab("tsh-9", variant)
+    for line in looks:
+        shell.run(line.format(**s.params, peer=s.params["others"].split("'")[1]))
+    solution_without(s, shell, DIAGNOSTIC)
+    return s, shell
+
+
+def _open(s: sc.Scenario, shell: Shell) -> list[str]:
+    return [desc for desc, ok, err in s.grade(shell) if not ok and not err]
+
+
+@requires_solutions
+@pytest.mark.parametrize("variant", [0, 1, 2])
+@pytest.mark.parametrize(
+    "looks",
+    [
+        ["ssh {peer} journalctl -u slurmd"],  # the reported case: a healthy peer's startup log
+        ["ssh {peer} journalctl -u munge", "journalctl -u munge"],
+        ["ssh {node} journalctl -u munge"],  # munged started fine on the node: no failure in this log
+        ["ssh {peer} munge -n | unmunge"],  # a credential test between two healthy hosts succeeds
+        ["ssh {node} 'munge -n | unmunge'"],  # the node decodes its own credential
+        ["journalctl -u slurmd"],  # the head node runs no slurmd
+        ["ssh {node} journalctl -u slurmd | grep -c slurmd"],
+    ],
+    ids=[
+        "peer-slurmd",
+        "healthy-munge-logs",
+        "node-munge-log",
+        "healthy-pair",
+        "same-node-test",
+        "head-slurmd",
+        "count",
+    ],
+)
+def test_tsh9_logs_without_the_authentication_failure_earn_nothing(variant, looks):
+    s, shell = _tsh9(variant, looks)
+    still_open = _open(s, shell)
+    assert len(still_open) == 2 and SAW in still_open[0] and SAW_FIRST in still_open[1], still_open
+
+
+@requires_solutions
+@pytest.mark.parametrize("variant", [0, 1, 2])
+@pytest.mark.parametrize(
+    "looks",
+    [
+        ["ssh {node} journalctl -u slurmd"],
+        ["ssh {node} systemctl status slurmd"],
+        ["journalctl -u slurmctld"],
+        ["journalctl -u slurmctld | grep -i munge"],
+        ["ssh {node} munge -n | unmunge"],  # a credential from the node does not decode on the head node
+        ["ssh {peer} journalctl -u slurmd", "ssh {node} journalctl -u slurmd"],  # a comparison with a healthy peer
+    ],
+    ids=["node-slurmd", "node-status", "controller", "controller-filtered", "cross-node-test", "peer-then-node"],
+)
+def test_tsh9_every_view_of_the_authentication_failure_passes(variant, looks):
+    s, shell = _tsh9(variant, looks)
+    assert _open(s, shell) == [], _open(s, shell)
+
+
+@requires_solutions
+def test_tsh9_evidence_gathered_after_the_repair_is_too_late():
+    s, shell = _tsh9(2, [])
+    shell.run("journalctl -u slurmctld")  # the old errors are still in the journal
+    still_open = _open(s, shell)
+    assert len(still_open) == 1 and SAW_FIRST in still_open[0], still_open
+
+
+@requires_solutions
+def test_tsh9_reference_solution_passes_in_every_variant():
+    for s in sc.find("tsh-9").all_variants():
+        shell = Shell(s.build_state())
+        sc.replay_solution(s, shell)
+        assert all(ok for _desc, ok, _err in s.grade(shell)), (s.variant_label, s.grade(shell))
+
+
+def test_tsh19_title_matches_the_measured_slowdown():
+    s, shell = lab("tsh-19")
+    assert "half the speed" in s.title and "fifth" not in s.title
+    bench = "mpirun --allow-run-as-root -np 8 all_reduce_perf -b 8G -e 8G -f 2 -g 1"
+    peer = "dgx-01" if s.params["node"] != "dgx-01" else "dgx-02"
+
+    def busbw(host: str) -> float:
+        out = shell.run(f"ssh {host} {bench}")
+        return float(re.search(r"Avg bus bandwidth\s*:\s*([\d.]+)", out).group(1))
+
+    assert 1.9 < busbw(peer) / busbw(s.params["node"]) < 2.1
