@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from conftest import concrete, requires_solutions
@@ -119,6 +121,53 @@ def test_lsmod_on_the_head_node_is_not_the_nodes_module_list(code, wording):
 
 @pytest.mark.parametrize("code", ["ins-9", "ins-4", "tsh-13", "wkl-2", "tsh-11", "tsh-7", "tsh-15"])
 def test_reference_solution_still_earns_every_criterion(code):
+    for s in sc.find(code).all_variants():
+        shell = Shell(s.build_state())
+        sc.replay_solution(s, shell)
+        assert all(ok for _desc, ok, _err in s.grade(shell)), (s.variant_label, s.grade(shell))
+
+
+# ---- wkl-9, wkl-3: the replicas keep the GPU request the briefing states
+
+
+def _apply(code: str, variant: int, rewrite, rollout: str, fix_first: bool = False):
+    s = concrete(code, variant)
+    shell = Shell(s.build_state())
+    if fix_first:
+        sc.replay_solution(s, shell)
+    files = shell.ctx.state.nodes["bcm-head"].files
+    before = files["/root/triton.yaml"]
+    files["/root/triton.yaml"] = rewrite(before)
+    assert files["/root/triton.yaml"] != before
+    shell.run("kubectl apply -f /root/triton.yaml")
+    shell.run(f"kubectl rollout status deployment/{rollout}")
+    return s, shell
+
+
+def _without_gpu_limit(text: str) -> str:
+    return re.sub(r"\n\s+resources:\n\s+limits:\n\s+nvidia\.com/gpu: \d+", "", text)
+
+
+@pytest.mark.parametrize("variant", [0, 1, 2])
+@pytest.mark.parametrize(
+    "rewrite",
+    [lambda t: t.replace("nvidia.com/gpu: 4", "nvidia.com/gpu: 1"), _without_gpu_limit],
+    ids=["lowered-to-1", "removed"],
+)
+def test_wkl9_shrinking_the_gpu_request_is_not_a_repair(variant, rewrite):
+    s, shell = _apply("wkl-9", variant, rewrite, "triton")
+    assert shell.run("kubectl get pods").count("Running") >= 3  # both replicas run, on fewer GPUs than asked for
+    assert any("4 GPUs each" in desc for desc in open_criteria(s, shell))
+
+
+def test_wkl3_dropping_the_gpu_request_fails_the_replica_criterion():
+    s, shell = _apply("wkl-3", 0, _without_gpu_limit, "triton-inference", fix_first=True)
+    still_open = open_criteria(s, shell)
+    assert len(still_open) == 1 and "1 GPU each" in still_open[0], still_open
+
+
+@pytest.mark.parametrize("code", ["wkl-9", "wkl-3"])
+def test_reference_solution_of_the_deployment_labs_still_passes(code):
     for s in sc.find(code).all_variants():
         shell = Shell(s.build_state())
         sc.replay_solution(s, shell)
