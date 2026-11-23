@@ -67,12 +67,12 @@ setup:
           'command': '/home/{user}/{jobname}.sbatch'})
       state.slurm.next_job_id = {job} + 1
 checks:
-  - desc: you gathered evidence (slurmd/slurmctld/munge logs, or a munge -n | unmunge test)
+  - desc: "you saw the authentication failure: in the logs of {node} or of slurmctld, or in a munge -n | unmunge test between {node} and another host"
     kind: evidence
-    expr: "printed(r'(?i)munge decode|munge\\.key|munged|Invalid credential|STATUS:|slurmd|slurmctld', cmd=r'^(journalctl|unmunge)\\b', errors=True)"
-  - desc: the evidence came before the key was copied or munge restarted
+    expr: "printed(r'Munge decode failed|Invalid credential|authentication error|Unable to register', '{node}', r'^(journalctl|systemctl status)\\b') or printed(r'Munge decode failed|Invalid credential|authentication error|Unable to register', 'bcm-head', r'^journalctl\\b') or printed(r'Invalid credential', cmd=r'^unmunge\\b', errors=True)"
+  - desc: "you saw it before the key was copied or munge restarted"
     kind: evidence
-    expr: "printed_before(r'(?i)munge decode|munge\\.key|munged|Invalid credential|STATUS:|slurmd|slurmctld|^[0-9a-f]+  /', r'(scp .*munge|systemctl restart munge|imageupdate)', cmd=r'^(journalctl|unmunge|md5sum)\\b', errors=True)"
+    expr: "printed_before(r'Munge decode failed|Invalid credential|authentication error|Unable to register', r'(scp .*munge|systemctl restart munge|imageupdate)', '{node}', r'^(journalctl|systemctl status)\\b') or printed_before(r'Munge decode failed|Invalid credential|authentication error|Unable to register', r'(scp .*munge|systemctl restart munge|imageupdate)', 'bcm-head', r'^journalctl\\b') or printed_before(r'Invalid credential', r'(scp .*munge|systemctl restart munge|imageupdate)', cmd=r'^unmunge\\b', errors=True)"
   - desc: "{node} has the cluster's MUNGE key"
     expr: file('{node}', '/etc/munge/munge.key') == file('bcm-head', '/etc/munge/munge.key')
   - desc: munged on {node} is running with that key (restarted after the copy)
