@@ -53,9 +53,9 @@ checks:
   - desc: you looked at NCCL's own view of the transport (NCCL_DEBUG=INFO)
     kind: evidence
     expr: "printed(r'NCCL INFO')"
-  - desc: you checked the loaded kernel modules on a node
+  - desc: "you checked the loaded kernel modules on a DGX node"
     kind: evidence
-    expr: "printed(r'', cmd=r'^lsmod\\b|^(cat|grep|less|head|tail|wc)\\b.*/proc/modules')"
+    expr: "any(printed(r'', n, r'^lsmod\\b|^(cat|grep|less|head|tail|wc)\\b.*/proc/modules') for n in ('dgx-01', 'dgx-02', 'dgx-03', 'dgx-04'))"
   - desc: you checked the IB port rates on {slow} (ibstat/ibstatus/mlxlink)
     kind: evidence
     expr: "printed(r\"(?is)(CA|device) 'mlx5_{rail}'.*?rate\", '{slow}', r'^(ibstat|ibstatus)\\b') or printed(r'(?i)rate', '{slow}', r'^(ibstat|ibstatus)\\b.*mlx5_{rail}\\b') or printed(r'(?i)speed', '{slow}', r'^mlxlink\\b.*-d\\s*mlx5_{rail}\\b')"

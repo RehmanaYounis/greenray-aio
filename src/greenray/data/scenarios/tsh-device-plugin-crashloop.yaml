@@ -64,8 +64,8 @@ checks:
     expr: "all(re.search(r'(?m)^\\s*default_runtime_name\\s*=\\s*\"nvidia\"', file(n, '/etc/containerd/config.toml')) is not None and 'runtimes.nvidia]' in file(n, '/etc/containerd/config.toml') for n in ('dgx-03', 'dgx-04'))"
   - desc: the running containerd on dgx-03/dgx-04 actually loaded that config
     expr: "all(nodes[n].runtime_loaded.containerd.default == 'nvidia' for n in ('dgx-03', 'dgx-04'))"
-  - desc: nccl-test is Running on dgx-03
-    expr: "any(p.name == 'nccl-test' and p.status == 'Running' and p.node == 'dgx-03' for p in pods('default'))"
+  - desc: "nccl-test is Running on dgx-03 with the 8 GPUs it requests"
+    expr: "any(p.name == 'nccl-test' and p.status == 'Running' and p.node == 'dgx-03' and int(p.requests.get('nvidia.com/gpu', 0)) == 8 for p in pods('default'))"
   - desc: you read the crashing device plugin's logs
     kind: evidence
     expr: "printed(r'error starting plugins|platform detection failed', cmd=r'^kubectl\\b.*\\blogs\\b')"
