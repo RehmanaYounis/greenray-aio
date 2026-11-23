@@ -49,9 +49,9 @@ checks:
   - desc: you looked at NCCL's debug output (NCCL_DEBUG=INFO)
     kind: evidence
     expr: "printed(r'NCCL INFO')"
-  - desc: you checked which kernel modules are loaded
+  - desc: "you checked which kernel modules are loaded on dgx-01 or dgx-02"
     kind: evidence
-    expr: "printed(r'', cmd=r'^lsmod\\b|^(cat|grep|less|head|tail|wc)\\b.*/proc/modules')"
+    expr: "any(printed(r'', n, r'^lsmod\\b|^(cat|grep|less|head|tail|wc)\\b.*/proc/modules') for n in ('dgx-01', 'dgx-02'))"
 hints:
   - "Rerun the reference test with -x NCCL_DEBUG=INFO. The NET/IB lines tell you more than \"Using network IB\": check whether GPU Direct RDMA is used, and the Channel ... via NET/IB/0 lines."
   - "\"GPU Direct RDMA Disabled for HCA ... (no module)\", and channels that say via NET/IB/0 without /GDRDMA, mean NCCL has to copy every message through host memory. Which kernel module lets the IB HCA read and write GPU memory directly?"

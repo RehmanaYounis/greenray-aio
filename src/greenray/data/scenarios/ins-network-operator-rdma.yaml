@@ -71,8 +71,8 @@ checks:
     expr: "sorted(p.node for p in k8s.pods if p.component == 'rdma-shared-dp' and p.status == 'Running') == ['dgx-01', 'dgx-02', 'dgx-03', 'dgx-04']"
   - desc: DGX nodes advertise rdma/rdma_shared_device_a
     expr: "all(int(k8s.nodes[n].allocatable.get('rdma/rdma_shared_device_a', '0')) > 0 for n in ('dgx-01', 'dgx-02', 'dgx-03', 'dgx-04'))"
-  - desc: rdma-test is Running
-    expr: "any(p.name == 'rdma-test' and p.status == 'Running' for p in pods('default'))"
+  - desc: "rdma-test is Running with the 8 GPUs and the RDMA device it requests"
+    expr: "any(p.name == 'rdma-test' and p.status == 'Running' and int(p.requests.get('rdma/rdma_shared_device_a', 0)) >= 1 and int(p.requests.get('nvidia.com/gpu', 0)) == 8 for p in pods('default'))"
 hints:
   - "`kubectl describe pod rdma-test`: which resource does no node offer? Then `kubectl get pods -A | grep feature-discovery` to see what already runs."
   - "Look at the chart defaults with `helm show values nvidia/network-operator`. Three values matter here: nfd.enabled, deployCR and ofedDriver.deploy."

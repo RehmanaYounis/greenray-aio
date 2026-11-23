@@ -66,8 +66,8 @@ checks:
     expr: "'nvcr.io/b7z2ajrtgcn5/llm-team/nemo-finetune:24.05' in nodes['dgx-01'].docker_images"
   - desc: llm/ngc-secret is a dockerconfigjson secret for nvcr.io with $oauthtoken
     expr: "any(s.name == 'ngc-secret' and s.namespace == 'llm' and s.type == 'kubernetes.io/dockerconfigjson' and 'nvcr.io' in s.data['.dockerconfigjson'] and '$oauthtoken' in s.data['.dockerconfigjson'] for s in k8s.secrets)"
-  - desc: llm/nemo-finetune is Running
-    expr: "any(p.name == 'nemo-finetune' and p.status == 'Running' for p in pods('llm'))"
+  - desc: "llm/nemo-finetune is Running from the team's private image"
+    expr: "any(p.name == 'nemo-finetune' and p.status == 'Running' and any(c.get('image') == 'nvcr.io/b7z2ajrtgcn5/llm-team/nemo-finetune:24.05' for c in p.spec.containers) for p in pods('llm'))"
   - desc: you looked at why the pod could not pull its image
     kind: evidence
     expr: "printed(r'ImagePullBackOff|ErrImagePull|Failed to pull', cmd=r'^kubectl\\b.*\\b(describe (pod|pods|po)|get (events|ev))\\b')"

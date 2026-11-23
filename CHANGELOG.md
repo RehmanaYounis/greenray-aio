@@ -19,6 +19,9 @@ All notable changes are listed here. The project follows [Semantic Versioning](h
 - Lab `tsh-17` (`tsh-numa-affinity`): the topology criterion needs `nvidia-smi topo -m` and `numactl -H` or `lscpu` on dgx-03, the node the incident is on. Looking at a healthy node as a comparison is fine but is not the diagnosis.
 - Lab `wkl-6` (`wkl-runai-fractional-gpu`): a new criterion needs jlab-a, jlab-b and embed-batch to use the image the briefing names.
 - Lab `tsh-14` (`tsh-nccl-ib-hca`): the last hint says that `imageupdate` is a cmsh command in device mode and shows the dry-run form and the `-w` form.
+- Labs `ins-4`, `ins-9`, `tsh-13` and `wkl-2`: the test pod has to be the pod the lab specifies. `nemo-finetune` has to run from the team's private image, `rdma-test` with its 8 GPUs and RDMA device, `nccl-test` with its 8 GPUs on dgx-03, and `cuda-test` with its GPU. A CPU-only pod with the same name no longer counts.
+- Lab `tsh-11` (`tsh-xid79-drained-node`): the bug report has to be collected on the node that failed, not on another node.
+- Labs `tsh-7` and `tsh-15`: the kernel-module criterion needs `lsmod` on a DGX node; `lsmod` on the head node does not count.
 
 ## [1.7.8] - 2026-11-22
 

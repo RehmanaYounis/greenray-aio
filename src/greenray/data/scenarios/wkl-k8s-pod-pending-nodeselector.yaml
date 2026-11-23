@@ -56,8 +56,8 @@ checks:
     expr: "printed(r'NVIDIA-H100-80GB-HBM3', cmd=r'^kubectl\\b.*\\b(get|describe) (nodes|node|no)\\b') or printed(r'^dgx-\\d+', cmd=r'^kubectl\\b.*\\bget (nodes|node|no)\\b.*gpu\\.product=NVIDIA-H100-80GB-HBM3(\\s|$)')"
   - desc: /root/cuda-test.yaml still has a nodeSelector, now matching the H100 product label
     expr: "any(d.kind == 'Pod' and d.metadata.name == 'cuda-test' and (d.spec.get('nodeSelector') or {}).get('nvidia.com/gpu.product') == 'NVIDIA-H100-80GB-HBM3' for d in manifest('bcm-head', '/root/cuda-test.yaml'))"
-  - desc: the cuda-test pod runs on a DGX node (Running or Completed)
-    expr: "any(p.name == 'cuda-test' and p.status in ('Running', 'Completed', 'Succeeded') and (p.node or '').startswith('dgx-') for p in pods('default'))"
+  - desc: "the cuda-test pod runs on a DGX node with the GPU it requests (Running or Completed)"
+    expr: "any(p.name == 'cuda-test' and p.status in ('Running', 'Completed', 'Succeeded') and (p.node or '').startswith('dgx-') and int(p.requests.get('nvidia.com/gpu', 0)) >= 1 for p in pods('default'))"
   - desc: no cuda-test pod is left Pending
     expr: "not [p for p in pods('default', 'cuda-test') if p.status == 'Pending']"
 hints:

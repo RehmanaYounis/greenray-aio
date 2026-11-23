@@ -53,9 +53,9 @@ checks:
   - desc: you read the kernel log on {node} (the Xid tells you what failed)
     kind: evidence
     expr: "printed(r'Xid\\b.*\\b79\\b|fallen off the bus', '{node}', r'^(dmesg|journalctl -k|journalctl --dmesg)')"
-  - desc: a bug report was collected before the reboot (the crash dump is gone afterwards)
+  - desc: "a bug report was collected on {node} before the reboot (the crash dump is gone afterwards)"
     kind: evidence
-    expr: "printed_before(r'nvidia-bug-report\\.log', r'^(reboot|scontrol reboot|cmsh .*(power|reboot)|ipmitool .*power)', cmd=r'^nvidia-bug-report')"
+    expr: "printed_before(r'nvidia-bug-report\\.log', r'^(reboot|scontrol reboot|cmsh .*(power|reboot)|ipmitool .*power)', '{node}', r'^nvidia-bug-report')"
   - desc: "you read what failed in the node's logs before rebooting or power-cycling it"
     kind: evidence
     expr: "printed_before(r'Xid\\b.*\\b79\\b|fallen off the bus', r'^(reboot|scontrol reboot|cmsh .*(power|reboot)|ipmitool .*power)', '{node}', r'^(dmesg|journalctl)\\b')"
