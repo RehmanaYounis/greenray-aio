@@ -37,6 +37,7 @@ class UI:
         self.color = color and self.interactive and not os.environ.get("NO_COLOR")
         self.history_file = history_file
         self._reader: LineReader | None = None
+        self._prompt_timeout: float | None = None  # set by ask_until while its prompt is open
 
     def set_completer(self, words: Iterable[str], context: Callable[[], Context | None]) -> None:
         """Tab completion for the lab shell; no-op without a terminal."""
@@ -147,13 +148,12 @@ class UI:
         left = deadline - time.time()
         if left <= 0:
             raise TimeUp
-        if self.interactive:
-            try:
-                line = self._line_reader().read(prompt, typed, timeout=left)
-            except EOFError:
-                line = "quit"
-        else:
+        # the line still comes from ask(), so a UI that replaces ask() (a test's scripted input) is honoured
+        self._prompt_timeout = left
+        try:
             line = self.ask(prompt, typed)
+        finally:
+            self._prompt_timeout = None
         if time.time() >= deadline:
             raise TimeUp
         return line
@@ -162,7 +162,7 @@ class UI:
         """Read a line; EOF (Ctrl-D / end of piped input) reads as ``quit``. ``typed`` colours the input."""
         try:
             if self.interactive:
-                return self._line_reader().read(prompt, typed)
+                return self._line_reader().read(prompt, typed, timeout=self._prompt_timeout)
             return input(prompt)
         except EOFError:
             return "quit"
