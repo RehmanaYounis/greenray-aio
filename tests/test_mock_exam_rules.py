@@ -175,6 +175,37 @@ def test_the_terminal_prompt_closes_itself_at_the_deadline():
         assert reader.read("> ", timeout=5) == "in time"
 
 
+def test_a_scripted_ui_is_asked_through_its_own_ask_even_on_a_terminal(clock):
+    """Run from a real terminal with output capture off, the test UI counts as interactive.
+
+    ask_until must still read through ask(), or the scripted lines are skipped and a real prompt opens.
+    """
+    ui = TimedUI(["scripted"], clock)
+    ui.interactive = True
+    assert ui.ask_until("> ", time.time() + 60) == "scripted" and ui.prompts == ["> "]
+    assert ui._prompt_timeout is None
+
+
+def test_the_deadline_reaches_the_terminal_prompt_as_its_timeout(monkeypatch):
+    from greenray.app import ui as ui_module
+
+    seen: list = []
+
+    class Reader:
+        def __init__(self, history_file, **_options):
+            pass
+
+        def read(self, prompt, typed=False, timeout=None):
+            seen.append(timeout)
+            return "typed"
+
+    monkeypatch.setattr(ui_module, "LineReader", Reader)
+    ui = ui_module.UI(color=False)
+    ui.interactive = True
+    assert ui.ask_until("> ", time.time() + 90) == "typed" and 80 < seen[0] <= 90
+    assert ui.ask("> ") == "typed" and seen[1] is None  # an ordinary prompt has no timeout
+
+
 def test_ask_until_refuses_a_line_that_arrives_late(clock):
     ui = TimedUI([("after", 2, "late"), "on time"], clock)
     with pytest.raises(TimeUp):
