@@ -42,7 +42,13 @@ The real exam, as recent candidates report it, is 35 multiple-choice questions a
 
 `greenray mock` reproduces that sequence: 35 questions drawn in blueprint proportions, a submit step with no way back, then three labs (one Slurm, one Kubernetes, one BCM) on the same clock, no hints and no grading until you finish. Labs keep their state when you switch between them. `greenray mock --labs-only` runs the three labs alone in 40 minutes for pacing practice.
 
-NVIDIA does not publish how the two sections are weighted or the pass mark. The mock weights questions and labs 50/50 and uses a 70% practice target; treat the number as a guide, not a prediction.
+The clock is enforced. When the 120 minutes are up the mock grades what is there, wherever you are: an answer or a lab command that is still on the prompt line, or typed after the deadline, is not recorded and not run. Both sections draw on the same 120 minutes.
+
+In the question section an answer needs the number of letters the question asks for, one unless it says "Choose two"; anything else leaves you on the question. `f` flags a question, and until you confirm the submit step you can go back with `r` in the section menu (or `q` once everything is answered) to revisit the flagged questions, or any question by number, and change an answer. After the submit step the questions are closed; flagged ones are shown again in the review after the exam.
+
+A lab counts once you have achieved at least one of its objectives. Criteria that are already met when the lab opens, such as "nothing was rebooted", are part of its score from then on; opening a lab and leaving again earns nothing.
+
+NVIDIA does not publish how the two sections are weighted or the pass mark. The mock weights questions and labs 50/50 and uses a 70% practice target; treat the number as a guide, not a prediction. `greenray mock --labs-only` has no questions to weigh: its result is the average of the three labs, against the same 70% target.
 
 Inside the questions, answer with letters, `s` skips, `f` flags a question for review and `q` returns to the section menu, where `s` submits the section. In the lab section, `f` finishes and grades; `x` leaves without grading or recording anything.
 

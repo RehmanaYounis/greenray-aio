@@ -18,10 +18,10 @@ from ..content import questions as qb
 from ..content import scenarios as sc
 from ..content.domains import DOMAINS
 from . import progress
-from .exam import PRACTICE_PASS_PCT, ask_questions, load_scored_bank, offer_review
+from .exam import PRACTICE_PASS_PCT, ask_questions, load_scored_bank, offer_review, review_before_submit
 from .lab import LabSession, run_exam_lab, show_results, show_solution
 from .study import ON_RAMP
-from .ui import UI
+from .ui import UI, TimeUp
 
 N_QUESTIONS = 35
 MINUTES = 120
@@ -87,13 +87,19 @@ def report_card(ui: UI, qs: list[dict], res: dict, labs: list[LabSession], lab_s
             ui.out(f"  {item}")
 
 
-def _confirm(ui: UI, question: str, quit_means_yes: bool = False) -> bool:
-    """y confirms; Ctrl-C and end of input decline, except where leaving is the safe answer."""
+def _confirm(ui: UI, question: str, deadline: float, quit_means_yes: bool = False) -> bool:
+    """y confirms; Ctrl-C and end of input decline, except where leaving is the safe answer.
+
+    When the clock runs out on the question, nothing is confirmed: the exam is graded as it stands.
+    """
     try:
-        answer = ui.ask(question).strip().lower()
+        answer = ui.ask_until(question, deadline).strip().lower()
     except (KeyboardInterrupt, EOFError):
         ui.out("")
         return quit_means_yes
+    except TimeUp:
+        ui.out("")
+        return False
     return answer in ("y", "yes") or (quit_means_yes and answer in ("q", "quit"))
 
 
@@ -104,31 +110,54 @@ def _question_section(ui: UI, qs: list[dict], deadline: float, answers: dict, fl
         left = int((deadline - time.time()) // 60)
         ui.out(ui.bold(f"\n--- Question section ({left} min left) ---"))
         ui.out(ui.cyan(f"  q) Questions ({len(answers)}/{len(qs)} answered)"))
+        ui.out(ui.cyan(f"  r) Review or change answers before submitting ({len(flagged)} flagged)"))
         ui.out(ui.blue("  s) Submit the questions and start the labs (no way back)"))
         ui.out(ui.blue("  x) Leave without grading"))
         try:
-            choice = ui.ask("> ", typed=True).strip().lower()
+            choice = ui.ask_until("> ", deadline, typed=True).strip().lower()
         except KeyboardInterrupt:  # Ctrl-C at the menu is a request to leave, not a cancelled line
             ui.out("")
             choice = "x"
+        except TimeUp:
+            break
         if choice == "q":
-            ask_questions(ui, qs, deadline, answers, flagged, leave="return to the section menu")
+            if len(answers) == len(qs):  # nothing left to ask: going back in means looking again
+                review_before_submit(ui, qs, deadline, answers, flagged)
+                continue
+            ask_questions(
+                ui,
+                qs,
+                deadline,
+                answers,
+                flagged,
+                leave="return to the section menu",
+                flag_note="f flags it for review before you submit (r in the section menu) and after the exam",
+            )
             if len(answers) < len(qs) or time.time() >= deadline:
                 continue
             ui.out(ui.green(f"\nAll {len(qs)} questions answered."))
+            if flagged:
+                ui.out(ui.yellow(f"{len(flagged)} flagged. Answer n here to review them first (r in the menu)."))
             choice = "s"
-        if choice in ("s", "submit"):
+        if choice in ("r", "review"):
+            review_before_submit(ui, qs, deadline, answers, flagged)
+        elif choice in ("s", "submit"):
             unanswered = len(qs) - len(answers)
             note = f"{unanswered} unanswered count as wrong; " if unanswered else ""
-            if _confirm(ui, f"Submit the question section and start the labs? {note}you cannot come back. [y/N] "):
+            question = f"Submit the question section and start the labs? {note}you cannot come back. [y/N] "
+            if _confirm(ui, question, deadline):
                 ui.out(ui.yellow("Question section submitted."))
                 return True
         elif choice in ("x", "exit", "quit", "abandon"):
-            if _confirm(ui, "Leave the exam? Nothing is graded or recorded. [y/N] ", quit_means_yes=True):
+            if _confirm(ui, "Leave the exam? Nothing is graded or recorded. [y/N] ", deadline, quit_means_yes=True):
                 ui.out(ui.dim("Exam abandoned."))
                 return None
         elif choice:
-            ui.out(ui.red(f"Unknown choice '{choice}'. Enter q for the questions, s to submit, or x to leave."))
+            ui.out(
+                ui.red(
+                    f"Unknown choice '{choice}'. Enter q for the questions, r to review, s to submit, or x to leave."
+                )
+            )
     return True
 
 
@@ -147,10 +176,12 @@ def _lab_section(
         ui.out(ui.blue("  f) Finish and grade"))
         ui.out(ui.blue("  x) Leave without grading"))
         try:
-            choice = ui.ask("> ", typed=True).strip().lower()
+            choice = ui.ask_until("> ", deadline, typed=True).strip().lower()
         except KeyboardInterrupt:
             ui.out("")
             choice = "x"
+        except TimeUp:
+            break
         if choice.isdigit() and 1 <= int(choice) <= len(labs):
             lab_no = int(choice)
             touched.add(lab_no)
@@ -161,13 +192,13 @@ def _lab_section(
 
             run_exam_lab(ui, labs[lab_no - 1], deadline, status=status)
         elif choice in ("f", "finish"):
-            if _confirm(ui, "Finish the exam now? [y/N] "):
+            if _confirm(ui, "Finish the exam now? [y/N] ", deadline):
                 return True
         elif choice in ("x", "exit", "quit", "abandon"):
-            if _confirm(ui, "Leave the exam? Nothing is graded or recorded. [y/N] ", quit_means_yes=True):
+            if _confirm(ui, "Leave the exam? Nothing is graded or recorded. [y/N] ", deadline, quit_means_yes=True):
                 ui.out(ui.dim("Exam abandoned."))
                 return False
-        elif choice == "q":
+        elif choice in ("q", "r"):
             closed = "The question section is closed; it cannot be reopened." if qs else "This mock has no questions."
             ui.out(ui.red(f"{closed} Enter a lab number, f to finish, or x to leave."))
         elif choice:
@@ -198,12 +229,17 @@ def run_mock(ui: UI, seed: int | None = None, labs_only: bool = False) -> None:
         )
         ui.out("Two sections in order, as in the real exam: the questions first, then the labs.")
         ui.out("Submitting the question section starts the labs; the questions cannot be reopened.")
-    ui.out(
-        ui.dim(
+    if labs_only:
+        note = (
+            "The result is the average of the labs; there are no questions to weigh against them. "
+            f"The {PRACTICE_PASS_PCT:.0f}% target is this simulator's assumption."
+        )
+    else:
+        note = (
             "Format as reported by recent candidates (re-check NVIDIA's exam page before booking). The 50/50 "
             f"question/lab weighting and the {PRACTICE_PASS_PCT:.0f}% target are this simulator's assumptions."
         )
-    )
+    ui.out(ui.dim(note))
     ui.out(ui.dim("No hints, no solutions, no grading until you finish.\n"))
 
     with ui.private_history():
@@ -220,8 +256,8 @@ def run_mock(ui: UI, seed: int | None = None, labs_only: bool = False) -> None:
 
     elapsed = (time.time() - start) / 60
     res = qb.score(qs, answers)
-    # a lab that was never opened scores nothing: its untouched invariants are not the learner's work
-    lab_scores = {lab.scenario_required.id: lab.score() if i in touched else 0.0 for i, lab in enumerate(labs, 1)}
+    # a lab that was never opened, or only opened, scores nothing: its untouched invariants are not the learner's work
+    lab_scores = {lab.scenario_required.id: lab.exam_score() if i in touched else 0.0 for i, lab in enumerate(labs, 1)}
     lab_pct = 100.0 * sum(lab_scores.values()) / max(1, len(lab_scores))
     total = lab_pct if labs_only else combined_score(res["pct"], list(lab_scores.values()))
     verdict = ui.green("PASS") if total >= PRACTICE_PASS_PCT else ui.red("NOT YET")
@@ -232,6 +268,10 @@ def run_mock(ui: UI, seed: int | None = None, labs_only: bool = False) -> None:
     for i, lab in enumerate(labs, 1):
         if i not in touched:
             ui.out(f"  Lab {lab.scenario_required.id}: not attempted")
+            continue
+        if not lab.achieved_something():
+            ui.out(f"  Lab {lab.scenario_required.id}: opened, nothing achieved (0%)")
+            ui.out(ui.dim("    Criteria that were already met at the start count once you achieve one of the others."))
             continue
         ui.out(f"  Lab {lab.scenario_required.id}: {lab_scores[lab.scenario_required.id] * 100:.0f}% of objectives")
         show_results(ui, lab.grade(), kinds=lab.scenario_required.kinds)

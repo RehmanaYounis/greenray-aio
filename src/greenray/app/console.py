@@ -5,6 +5,7 @@ Built on prompt_toolkit so it behaves the same on Windows, WSL, macOS and Linux.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
@@ -74,15 +75,34 @@ class LabCompleter(Completer):
                 yield Completion(base + slash + name, start_position=-len(word), display=name)
 
 
+class TimeUp(Exception):
+    """The exam clock ran out while a prompt was waiting, or before what was typed could count."""
+
+
 class LineReader:
     """A prompt_toolkit session shared by one UI; swap the completer per lab."""
 
-    def __init__(self, history_file: Path | None):
+    def __init__(self, history_file: Path | None, **session_options):
         history = FileHistory(str(history_file)) if history_file else InMemoryHistory()
-        self.session: PromptSession = PromptSession(history=history, enable_history_search=True)
+        self.session: PromptSession = PromptSession(history=history, enable_history_search=True, **session_options)
         self.completer: Completer | None = None
 
-    def read(self, prompt: str, typed: bool = False) -> str:
+    def read(self, prompt: str, typed: bool = False, timeout: float | None = None) -> str:
+        """Read a line. With ``timeout`` the prompt closes itself after that many seconds and raises TimeUp."""
+
+        def arm_timer() -> None:
+            app = self.session.app
+
+            def expire() -> None:
+                if not app.is_done:  # whatever is half typed is discarded with the prompt
+                    app.exit(exception=TimeUp())
+
+            asyncio.get_running_loop().call_later(max(0.0, timeout or 0.0), expire)
+
         return self.session.prompt(
-            ANSI(prompt), completer=self.completer, complete_while_typing=False, style=TYPED if typed else None
+            ANSI(prompt),
+            completer=self.completer,
+            complete_while_typing=False,
+            style=TYPED if typed else None,
+            pre_run=arm_timer if timeout is not None else None,
         )
