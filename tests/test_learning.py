@@ -109,6 +109,59 @@ def test_every_guide_is_for_a_real_command_and_scenario_agnostic():
         assert not any(i in text for i in ids), name
 
 
+CORE_TOOLS = [
+    "sacct",
+    "salloc",
+    "scancel",
+    "sshare",
+    "sprio",
+    "sbatch",
+    "srun",
+    "squeue",
+    "sinfo",
+    "scontrol",
+    "sacctmgr",
+    "nvidia-smi",
+    "dcgmi",
+    "nvsm",
+    "cmsh",
+    "kubectl",
+    "helm",
+    "docker",
+    "enroot",
+    "ngc",
+    "journalctl",
+    "dmesg",
+    "systemctl",
+    "ipmitool",
+    "ibstat",
+    "ibstatus",
+    "ibdev2netdev",
+    "ibv_devinfo",
+    "mlxlink",
+    "perfquery",
+    "mst",
+    "munge",
+    "unmunge",
+    "showmount",
+    "exportfs",
+    "cm-wlm-setup",
+    "cm-kubernetes-setup",
+    "cmha",
+    "cm-chroot-sw-img",
+    "dpkg",
+    "apt-get",
+    "nvidia-bug-report.sh",
+    "nv-fabricmanager",
+    "pdsh",
+]
+
+
+def test_every_core_tool_has_a_guide():
+    """`explain` must do better than the one-line fallback for the tools the labs send learners to."""
+    assert sorted(set(CORE_TOOLS) - set(guides.names())) == []
+
+
 @requires_solutions
 def test_guides_do_not_contain_reference_solutions():
     text = "\n".join(guides.guide(n) for n in guides.names())

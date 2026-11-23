@@ -34,6 +34,7 @@ All notable changes are listed here. The project follows [Semantic Versioning](h
 - `greenray mock --labs-only`: the opening note no longer mentions the 50/50 question/lab weighting, which does not apply; it says the result is the average of the labs.
 
 ### Added
+- `explain` guides for sacct, salloc, scancel, sshare, sprio, ngc, the fabric tools (ibstatus, ibv_devinfo, perfquery, mst), munge and unmunge, showmount and exportfs, the BCM wizards (cm-wlm-setup, cm-kubernetes-setup, cmha, cm-chroot-sw-img), dpkg, apt-get, nvidia-bug-report.sh, nv-fabricmanager and the lab helpers, which used to fall back to the one-line help.
 - Mock exam: flagged questions can be reviewed before the question section is submitted. `r` in the section menu, or `q` once every question is answered, lists the flagged and unanswered questions and reopens any question by number to change its answer or remove the flag. After the submit step the questions stay closed, as before.
 
 ## [1.7.8] - 2026-11-22

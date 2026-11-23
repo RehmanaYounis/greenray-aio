@@ -394,3 +394,276 @@ ssh:
     - "ssh NODE CMD            run CMD on NODE and print its output"
   read:
     - "The prompt shows which node you are on. Many tools only report the node they run on."
+
+sacct:
+  summary: "Slurm accounting: the final state of finished jobs"
+  purpose: Reads the accounting database (slurmdbd) for jobs that squeue no longer shows, with their state, exit code, nodes and resources.
+  when: A job "disappeared", ended early or failed overnight and you need what Slurm decided and where it ran.
+  options:
+    - "-j JOBID[,JOBID]        one or more jobs (a step suffix such as 1234.batch matches the job)"
+    - "-u USER / -a            one user's jobs; root sees everyone, others need -a to widen"
+    - "-X                      allocations only, without the .batch and .extern step rows"
+    - "-S / -E WHEN            jobs that started or ended in a window (YYYY-MM-DD[THH:MM], now-2days)"
+    - "--format=JobID,JobName%30,State%20,ExitCode,NodeList,Elapsed,ReqMem   pick columns; %N widens one"
+    - "-p / -P                 '|'-delimited output when a column is cut off (OUT_OF_ME+)"
+    - "-s STATES               only jobs in these states (FAILED, TIMEOUT, OOM)"
+  read:
+    - "State and ExitCode together: COMPLETED 0:0; FAILED 1:0 (the script exited 1); OUT_OF_MEMORY 0:125; TIMEOUT 0:0; NODE_FAIL; CANCELLED by USERID."
+    - "NodeList says which node to read journals and dmesg on; Elapsed against Timelimit explains a TIMEOUT."
+    - "A '+' at the end of a value means the column was too narrow; widen it with --format or use -p."
+  errors:
+    - "'Problem talking to the database': slurmdbd is down or unreachable, accounting cannot be read."
+    - "'option requires an argument': -j and --jobs need a job id."
+
+salloc:
+  summary: ask for an interactive allocation and work inside it
+  purpose: Reserves nodes, CPUs, GPUs and memory like sbatch, then opens a shell on the submit host with SLURM_* set; srun inside it lands on the allocated nodes.
+  when: Debugging a job interactively, testing a container or a GPU before writing the batch script.
+  options:
+    - "-N NODES -n TASKS -c CPUS --gres=gpu:N --mem=SIZE -t TIME -p PARTITION   the same resource options as sbatch"
+    - "salloc ... srun CMD     run one command in the allocation and release it"
+    - "--test-only             show when and where the allocation would start, without creating it"
+  read:
+    - "'Granted job allocation N' then your prompt again: you are still on the submit host; srun or ssh to reach the nodes."
+    - "exit (or Ctrl-D) prints 'Relinquishing job allocation N' and frees the nodes; scancel N does the same from elsewhere."
+  errors:
+    - "'Requested node configuration is not available': the resources asked for do not exist on any node."
+
+scancel:
+  summary: cancel or signal Slurm jobs
+  purpose: Ends pending or running jobs, one by id or a whole set by user, partition, state or name, or sends them a signal.
+  when: A job is stuck, wrong, or has to make way; cleaning up after a user; draining work before maintenance.
+  options:
+    - "scancel JOBID [JOBID...]        by id; 1234_3 is one array task, 1234 the whole array"
+    - "-u USER / -p PARTITION / -t PENDING|RUNNING / -n NAME   filters, combined; required when no id is given"
+    - "-s SIGNAL                       send a signal (USR1, TERM) instead of cancelling"
+    - "--me                            only your own jobs"
+  read:
+    - "No output means success; sacct shows the job as CANCELLED by your uid afterwards."
+  errors:
+    - "'Access/permission denied': the job belongs to another user and you are not root or a Slurm admin."
+    - "'Invalid job id specified': the id does not exist or has already finished."
+
+sshare:
+  summary: fair-share usage and shares per account and user
+  purpose: "Shows the share tree Slurm uses for priority: raw shares, normalised shares, usage so far and the resulting fair-share factor."
+  when: Users ask why their jobs wait behind others, or when checking that accounts and limits are set up as intended.
+  options:
+    - "(no options)            your own account tree"
+    - "-a                      every user; -A ACCOUNTS / -u USERS to narrow"
+    - "-l                      add LevelFS, the within-level fair-share value"
+  read:
+    - "FairShare near 1 has used little of its share and is favoured; near 0 has used more than its share."
+    - "A user missing from the tree has no association: sacctmgr add user is the fix, not a priority change."
+
+sprio:
+  summary: why a pending job has the priority it has
+  purpose: "Breaks a pending job's priority into its factors: age, fair-share, job size, partition and QOS."
+  when: Two pending jobs are ordered unexpectedly, or you need to see which factor dominates on this cluster.
+  options:
+    - "-j JOBID                one job"
+    - "-l                      every factor as a column"
+  read:
+    - "The weights come from PriorityWeight* in slurm.conf; a factor with weight 0 never contributes."
+    - "Only pending jobs are listed; a running job has no priority to show."
+
+ngc:
+  summary: NVIDIA NGC command-line client (registry, configuration)
+  purpose: Logs the host in to nvcr.io with an API key, and lists or inspects container images and models in the NGC registry.
+  when: Pulling an NGC container fails with an authentication error, or you need an image's tags and size before a pull.
+  options:
+    - "ngc config set            enter the API key, output format, org and team (saved under ~/.ngc)"
+    - "ngc config current        show what is configured and from where"
+    - "ngc registry image list [org/name]   images and tags; ngc registry image info org/name:tag   details"
+    - "ngc registry image pull org/name:tag   pull through the configured credentials"
+  read:
+    - "The API key is the '$oauthtoken' user's password for docker login nvcr.io and enroot import; the same key serves both."
+  errors:
+    - "'Invalid apikey' or 401: wrong or expired key; set it again with ngc config set."
+    - "'Unauthorized' on a private image: the key's org or team does not match the image's."
+
+nvidia-bug-report.sh:
+  summary: collect the diagnostic bundle NVIDIA support asks for
+  purpose: Gathers the driver state, nvidia-smi output, dmesg, Xids, lspci, kernel modules and system logs into nvidia-bug-report.log.gz in the current directory.
+  when: Before opening a hardware or driver case, and before a reboot or GPU reset that would erase the evidence.
+  options:
+    - "(no options)            run as root on the affected node; takes a few seconds"
+  read:
+    - "The file name printed at the end is what goes into the support ticket, together with the GPU's serial and UUID."
+    - "Collect it before resetting the GPU or rebooting: the ring buffer and Xid history disappear with them."
+
+nv-fabricmanager:
+  summary: the NVIDIA Fabric Manager binary behind the nvidia-fabricmanager service
+  purpose: Configures the NVSwitch fabric on DGX nodes; without it running, the GPUs cannot use NVLink across switches and CUDA jobs fail to start.
+  when: NCCL or CUDA report fabric errors, or nvidia-smi shows NVLinks down on a node with NVSwitches.
+  options:
+    - "--version               the installed version, which must match the driver"
+    - "systemctl and journalctl on the nvidia-fabricmanager unit   whether the service runs and why it stopped"
+  read:
+    - "A version that differs from the driver, or NVSwitch firmware that differs between switches, keeps the service from starting."
+
+ibstatus:
+  summary: compact state of the InfiniBand ports
+  purpose: Prints each HCA port's state, physical state, rate, LID and GID without the detail of ibstat.
+  when: A quick check that every port is ACTIVE at the expected rate after a cable, firmware or driver change.
+  options:
+    - "(no options)            every port; ibstatus mlx5_3 or mlx5_3:1 for one"
+  read:
+    - "state 4: ACTIVE and phys state 5: LinkUp is healthy; 1: DOWN / 2: Polling means no link; INIT means a link without a subnet manager."
+    - "rate below the fabric's nominal speed (400 Gb/sec 4X NDR) points at a cable, transceiver or port setting."
+
+ibv_devinfo:
+  summary: the RDMA verbs view of the HCAs
+  purpose: Lists the RDMA devices with firmware, node GUID, port state and MTU, as applications using libibverbs (NCCL, GPUDirect RDMA) see them.
+  when: A port looks fine in ibstat but RDMA traffic fails, or you need firmware versions and GUIDs for a ticket.
+  options:
+    - "-l                      device names only"
+    - "-d mlx5_N               one device; -v adds every attribute"
+  read:
+    - "port state PORT_ACTIVE and link_layer InfiniBand; a device missing here is missing for RDMA even if the netdev exists."
+
+perfquery:
+  summary: InfiniBand port error and traffic counters
+  purpose: "Reads the performance counters of a port: symbol errors, link recoveries, link downs, receive errors and the data counters."
+  when: A fabric link is flapping or slow and you need to know whether errors are accumulating, and whether they stop after a fix.
+  options:
+    - "(no options)            the local port 1; perfquery LID PORT for a remote port"
+    - "-x                      extended (64-bit) counters, needed for the data counters at NDR rates"
+    - "-r                      read then reset the counters; run it, wait, run again to measure a rate"
+  read:
+    - "SymbolErrorCounter and LinkDownedCounter rising on one port isolate the bad cable or transceiver; a clean port stays at 0."
+
+mst:
+  summary: Mellanox Software Tools device service
+  purpose: Loads the MST kernel modules and lists the NVIDIA networking devices the firmware tools (mlxconfig, mlxlink, flint) address.
+  when: mlxconfig or mlxlink say no devices are found, or you need the /dev/mst device names.
+  options:
+    - "mst start               load the modules and create the /dev/mst devices"
+    - "mst status [-v]         module state and the devices with their PCI addresses and names"
+  read:
+    - "'MST PCI module is not loaded' means mst start has not been run since boot; the firmware tools need it."
+
+munge:
+  summary: create a MUNGE credential to test the key
+  purpose: Encodes a credential with the local munge.key; decoding it on another node proves both share the key and have munged running, which Slurm needs between every node.
+  when: Slurm reports 'Invalid credential' or a node will not register with the controller.
+  options:
+    - "munge -n | unmunge                   round trip on one node"
+    - "munge -n | ssh NODE unmunge          the key check that matters: encode here, decode there"
+  read:
+    - "STATUS: Success (0) with the right ENCODE_HOST; 'Invalid credential' means different keys, 'Socket' errors mean munged is not running."
+
+unmunge:
+  summary: decode a MUNGE credential
+  purpose: Validates a credential read from stdin and prints who created it, where and when.
+  when: The other half of the munge key test across nodes.
+  options:
+    - "munge -n | unmunge"
+  read:
+    - "STATUS: Success (0) is the only good answer; anything else names the mismatch (key, clock skew, daemon)."
+
+showmount:
+  summary: what an NFS server exports
+  purpose: Asks an NFS server for its export list and the clients allowed to mount each export.
+  when: A mount fails or a node is missing a shared file system and you need to know whether the server offers it to that node.
+  options:
+    - "showmount -e SERVER     the export list"
+  read:
+    - "An export that lists a network the node is not in, or that is missing, is a server-side fix in /etc/exports and exportfs, not a client one."
+
+exportfs:
+  summary: show or reload the NFS exports on the server
+  purpose: Lists what the server currently exports with its options, and reloads /etc/exports after an edit.
+  when: After changing /etc/exports, or to check whether the running export table matches the file.
+  options:
+    - "exportfs -v             the active exports with their options (rw, no_root_squash, ...)"
+    - "exportfs -ra            re-export everything from /etc/exports; -s prints the file as the kernel reads it"
+  read:
+    - "A line in /etc/exports that is not in exportfs -v has not been applied yet."
+
+cm-wlm-setup:
+  summary: BCM's workload-manager setup wizard
+  purpose: "Installs and configures Slurm (or another scheduler) on a BCM cluster: the controller role, the client role per category, the submit hosts and the queues. It is interactive, so the lab shows what it produced instead."
+  when: Understanding where a BCM cluster's Slurm configuration lives, or adding Slurm to a cluster that has none.
+  options:
+    - "cmsh -c \"wlm; list\" / \"wlm; use slurm; jobqueue; list\"   the instance and queues the wizard created"
+    - "configurationoverlay mode in cmsh                            the role assignments it made"
+  read:
+    - "Everything the wizard writes is a cmsh object; slurm.conf is generated from those objects, which is why hand edits do not last."
+
+cm-kubernetes-setup:
+  summary: BCM's Kubernetes setup wizard
+  purpose: Deploys a Kubernetes cluster on BCM nodes with the operators BCM ships, and manages the users who get a kubeconfig. The deployment is interactive; user management works from the command line.
+  when: Giving a user access to the cluster, or finding out what the wizard installed.
+  options:
+    - "cm-kubernetes-setup --add-user NAME     create the user's kubeconfig; --list-users shows who has one"
+    - "kubectl get nodes / helm list -A       what the wizard deployed"
+  read:
+    - "Users added here get ~/.kube/config on the head node; a user who cannot run kubectl usually has not been added."
+
+cmha:
+  summary: BCM head node high-availability status
+  purpose: Reports which head node is active and which is passive, the shared state and the result of the last failover checks.
+  when: After a head node failover, or when cmsh and the services behave as if the head is not the active one.
+  options:
+    - "cmha status"
+  read:
+    - "The active head node runs CMDaemon's primary; a check that reports a failure names the service that did not come over."
+
+cm-chroot-sw-img:
+  summary: run a command inside a BCM software image
+  purpose: Enters the image directory under /cm/images as a chroot so packages and files can be changed in the image before it is pushed to nodes.
+  when: Installing a package or driver into the image that every node of a category boots from.
+  options:
+    - "cm-chroot-sw-img /cm/images/IMAGE            an interactive shell in the image (not available in the lab)"
+    - "chroot /cm/images/IMAGE apt-get install PKG  the same change as one command"
+  read:
+    - "A change in the image reaches nodes only after imageupdate (running nodes) or a reboot that reprovisions."
+
+dpkg:
+  summary: installed Debian packages on the node or in an image
+  purpose: Lists installed packages with their versions; combined with chroot it shows what a BCM image contains.
+  when: Checking which driver, CUDA, DCGM, Fabric Manager or Slurm version a node has, and whether every node agrees.
+  options:
+    - "dpkg -l [PATTERN]       installed packages matching the pattern (nvidia-*, slurm*)"
+    - "chroot /cm/images/IMAGE dpkg -l PATTERN   the same inside an image"
+  read:
+    - "ii in the first column is installed; rc is removed with config files left; pdsh -w NODES dpkg -l PKG compares nodes."
+
+apt-get:
+  summary: install or update Debian packages
+  purpose: Installs packages on a node or, through chroot, into a BCM software image.
+  when: Adding a tool or a newer package to an image before pushing it to nodes.
+  options:
+    - "apt-get update && apt-get install -y PKG"
+    - "chroot /cm/images/IMAGE apt-get install -y PKG   change the image, then imageupdate"
+  read:
+    - "Installing on one running node fixes only that node and is lost at the next reprovision; the image is the durable place."
+
+hwticket:
+  summary: lab helper standing in for the vendor support portal
+  purpose: Opens and lists hardware support cases for a node and a component, with the evidence summary support expects.
+  when: A lab asks you to hand a failing GPU, cable, fan or PSU to hardware support after diagnosing it.
+  options:
+    - "hwticket create --node NODE --component gpu|fan|psu|cable|hca|nvswitch|memory --summary \"evidence\" [--severity 1-4]"
+    - "hwticket list / hwticket show ID"
+  read:
+    - "Support wants the part identified (index, serial, UUID or port) and the evidence (Xid, counters, SEL entries), plus an nvidia-bug-report.log.gz."
+
+reseat-cable:
+  summary: lab helper standing in for a technician's visit
+  purpose: Reseats the cable or transceiver of one InfiniBand port on a node, as a technician would in the data centre.
+  when: A lab's diagnosis points at a specific port with link errors and the fix is physical.
+  options:
+    - "reseat-cable NODE mlx5_N"
+  read:
+    - "Check the port again afterwards (ibstat, perfquery -r then re-read) to confirm the errors stopped."
+
+dataloader-bench:
+  summary: lab helper that runs only a training job's input pipeline
+  purpose: Measures the samples per second the data pipeline can deliver, against what the GPUs consume, to tell a storage or CPU bottleneck from a GPU one.
+  when: A training job shows low GPU utilisation and you suspect the input side.
+  options:
+    - "dataloader-bench [options]   see --help on the node"
+  read:
+    - "Delivered samples/s below what the GPUs can consume means the bottleneck is before the GPU: workers, storage or the network."
