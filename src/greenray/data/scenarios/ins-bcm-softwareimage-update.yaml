@@ -36,8 +36,8 @@ checks:
     expr: all(nd.get('packages', {}).get('nvidia-container-toolkit') == '1.16.2-1' for h, nd in nodes.items() if h.startswith('dgx-'))
   - desc: no DGX node was rebooted or power-cycled
     expr: all(d.get('reboots', 0) == 0 for k, d in bcm.devices.items() if k.startswith('dgx-')) and all(nd.up for h, nd in nodes.items() if h.startswith('dgx-'))
-  - desc: you ran an imageupdate dry run
-    expr: len(bcm.get('dryruns', [])) > 0
+  - desc: "every DGX node had an imageupdate dry run before its live update to the new image"
+    expr: "(lambda log, new: all(any(d.op == 'imageupdate' and d.dry and d.node == n and all(l.seq > d.seq for l in log if l.op == 'imageupdate' and not l.dry and l.node == n and l.image == new) for d in log) for n in ('dgx-01', 'dgx-02', 'dgx-03', 'dgx-04')))(bcm.get('provisioning', []), 'dgx-os-6.2-h100-ctk1162')"
 hints:
   - "List the images and the categories that use them: cmsh -c \"softwareimage; list\" and \"category; list\"."
   - "Clone first, then commit. The image directory /cm/images/<new> only exists after the commit. Then run apt-get inside it with chroot /cm/images/<new> ... (cm-chroot-sw-img works too)."

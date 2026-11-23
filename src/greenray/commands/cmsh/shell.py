@@ -1436,6 +1436,7 @@ class Cmsh:
         note = [f"  (excluded by {lst}: {len(skipped)} file(s))"] if skipped else []
         self.bcm.synclog[n] = lines + (changes or ["(no file changes)"]) + note
         self.out.extend(lines)
+        self._log_provisioning("grabimage", n, img, dry=not wait)
         if not wait:
             self.bcm.grab_dryruns.append(n)
             self.p(f"grabimage -i {img} {n} {'.' * 10} [ COMPLETED ] (dry run; review with: synclog {n})")
@@ -1588,6 +1589,7 @@ class Cmsh:
             changes = self._diff(n, img)
             self.bcm.synclog[n] = lines + (changes or ["(no file changes)"])
             self.out.extend(lines)
+            self._log_provisioning("imageupdate", n, img, dry=not wait)
             if wait:
                 old_kernel = node.kernel
                 sync_image(self.state, n)
@@ -1602,6 +1604,11 @@ class Cmsh:
             else:
                 self.bcm.dryruns.append(n)
                 self.p(f"imageupdate -n {n} {'.' * 10} [ COMPLETED ] (dry run)")
+
+    def _log_provisioning(self, op: str, node: str, image: str, dry: bool) -> None:
+        """One ordered record of every grabimage and imageupdate, so a check can ask what came before what."""
+        log = self.bcm.setdefault("provisioning", [])
+        log.append(wrap({"seq": len(log), "op": op, "node": node, "image": image, "dry": dry}))
 
     def _diff(self, n, img):
         node_pk = node_packages(self.state, n)
