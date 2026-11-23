@@ -27,7 +27,7 @@ from ..core.errors import CommandError
 from ..core.shell import Shell
 from ..core.state import COMPUTE_NODES, HEAD, make_cluster
 from . import progress, reflect
-from .ui import UI
+from .ui import UI, TimeUp
 
 LAB_HELP = """\
 Lab commands (not part of the simulated cluster):
@@ -130,6 +130,18 @@ class LabSession:
     def score(self) -> float:
         results = self.grade()
         return sum(ok for _, ok, _ in results) / len(results) if results else 0.0
+
+    def achieved_something(self) -> bool:
+        """True once a criterion that was not already met at the start is met: the learner did part of the task."""
+        return any(ok and desc not in self.initially_true for desc, ok, _ in self.grade())
+
+    def exam_score(self) -> float:
+        """The lab's share of an exam score.
+
+        "Nothing was rebooted" and similar criteria are true before the first command. They count
+        once the learner has achieved something else, and not for opening the lab and leaving.
+        """
+        return self.score() if self.achieved_something() else 0.0
 
 
 def read_line(ui: UI, prompt: str) -> str:
@@ -476,7 +488,13 @@ def run_exam_lab(ui: UI, session: LabSession, deadline: float, status: Callable[
     while time.time() < deadline:
         left = int((deadline - time.time()) // 60)
         extra = f" · {status()}" if status else ""
-        line = read_line(ui, ui.dim(f"[{left}m left{extra}] ") + prompt(ui, session))
+        try:
+            line = ui.ask_until(ui.dim(f"[{left}m left{extra}] ") + prompt(ui, session), deadline)
+        except KeyboardInterrupt:  # cancels the line, as in bash
+            ui.out("^C")
+            continue
+        except TimeUp:  # a command still on the prompt line is discarded, not run
+            break
         cmd = line.strip()
         if cmd in ("back", "quit", "q"):
             return

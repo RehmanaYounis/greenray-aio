@@ -1,5 +1,12 @@
 from conftest import ScriptedUI, requires_solutions
 from greenray.app import mock
+from greenray.content import questions as qb
+
+
+def guesses(seed: int) -> list[str]:
+    """One syntactically valid answer per question of the mock drawn with ``seed``: "a", or "a b" for choose-two."""
+    qs = qb.pick(qb.load_bank(), mock.N_QUESTIONS, seed=seed)
+    return ["a b" if len(q["answer"]) == 2 else "a" for q in qs]
 
 
 def test_pick_labs_one_per_platform_and_never_on_ramp():
@@ -18,7 +25,7 @@ def test_combined_score():
 
 @requires_solutions
 def test_mock_runs_end_to_end():
-    ui = ScriptedUI(["q"] + ["a"] * 35 + ["y", "f", "y", "n", "n", "n", "n"])
+    ui = ScriptedUI(["q", *guesses(5), "y", "f", "y", "n", "n", "n", "n"])
     mock.run_mock(ui, seed=5)
     text = "\n".join(ui.output)
     assert "Result:" in text and "Questions:" in text
@@ -27,7 +34,7 @@ def test_mock_runs_end_to_end():
 
 @requires_solutions
 def test_mock_ends_with_a_report_card():
-    ui = ScriptedUI(["q"] + ["a"] * 35 + ["y", "f", "y", "n", "n", "n", "n"])
+    ui = ScriptedUI(["q", *guesses(5), "y", "f", "y", "n", "n", "n", "n"])
     mock.run_mock(ui, seed=5)
     text = "\n".join(ui.output)
     assert "Practise next:" in text and "greenray lab " in text
@@ -85,18 +92,18 @@ def test_questions_come_first_and_cannot_be_reopened_after_submission():
 
 @requires_solutions
 def test_answering_every_question_leads_to_the_submit_step_and_unanswered_count_as_wrong():
-    ui = ScriptedUI(["q", "a", "q", "s", "y", "f", "y", "n", "n", "n", "n"])
+    ui = ScriptedUI(["q", guesses(2)[0], "q", "s", "y", "f", "y", "n", "n", "n", "n"])
     mock.run_mock(ui, seed=2)
     assert "Questions: " in ui.text
     exam = mock.progress.load()["exams"][-1]
     assert exam["kind"] == "mock" and exam["total"] == 35 and exam["correct"] <= 1
-    ui = ScriptedUI(["q"] + ["a"] * 35 + ["n", "s", "y", "f", "y", "n", "n", "n", "n"])
+    ui = ScriptedUI(["q", *guesses(2), "n", "s", "y", "f", "y", "n", "n", "n", "n"])
     mock.run_mock(ui, seed=2)
     assert "All 35 questions answered." in ui.text and ui.text.count("Question section submitted.") == 1
 
 
 def test_untouched_labs_score_nothing_and_say_so():
-    ui = ScriptedUI(["q"] + ["a"] * 35 + ["y", "f", "y", "n", "n", "n", "n"])
+    ui = ScriptedUI(["q", *guesses(1), "y", "f", "y", "n", "n", "n", "n"])
     mock.run_mock(ui, seed=1)
     assert ui.text.count("not attempted") == 3 and "% of objectives" not in ui.text
     assert all(v == 0 for v in mock.progress.load()["exams"][-1]["labs"].values())

@@ -16,8 +16,8 @@ Every scenario has a short code next to its id: `tsh-1` is the first troubleshoo
 | `greenray incident [-d DOMAIN] [-t TOPIC]` | A random scenario as an incident: only the incident report is shown, and the id, title and success criteria stay hidden until the debrief. `-t` is a scenario tag such as `slurm`, `kubernetes`, `bcm`, `mig` or `infiniband` |
 | `greenray incident --id <code or id>` | A specific scenario as an incident, for a fresh independent attempt |
 | `greenray sandbox` | A healthy cluster to explore; nothing is graded |
-| `greenray mock` | The full mock exam: 35 questions, then 3 labs (one Slurm, one Kubernetes, one BCM), 120 minutes on one clock; submitting the questions starts the labs and closes the questions; graded at the end |
-| `greenray mock --labs-only` | The three labs alone in 40 minutes, for exam-day pacing |
+| `greenray mock` | The full mock exam: 35 questions, then 3 labs (one Slurm, one Kubernetes, one BCM), 120 minutes on one clock that ends the exam when it runs out; flagged questions can be reviewed until the questions are submitted, which starts the labs and closes the questions; graded at the end |
+| `greenray mock --labs-only` | The three labs alone in 40 minutes, for exam-day pacing; the result is the average of the labs |
 | `greenray exam [-n N] [-m MIN] [-d DOMAIN]` | A question drill: 60 questions in 120 minutes by default, weighted like the blueprint; `-d` restricts it to one domain |
 | `greenray progress` | Passed labs per domain, exam history and your weakest domain |
 | `greenray validate` | Self-test: every scenario starts broken, its reference solution fixes it, and no hint quotes a fix command |

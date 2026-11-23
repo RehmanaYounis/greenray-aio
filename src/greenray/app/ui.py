@@ -12,6 +12,7 @@ import io
 import os
 import shutil
 import sys
+import time
 from collections.abc import Callable, Iterable
 from contextlib import contextmanager
 from pathlib import Path
@@ -23,7 +24,7 @@ from rich.table import Table
 from rich.text import Text
 
 from ..core.shell import Context
-from .console import LabCompleter, LineReader
+from .console import LabCompleter, LineReader, TimeUp
 
 ACCENT = "green"  # GreenRay brand colour
 
@@ -136,6 +137,26 @@ class UI:
 
     def out(self, s: str = "") -> None:
         print(s)
+
+    def ask_until(self, prompt: str, deadline: float, typed: bool = False) -> str:
+        """Like ``ask``, for a prompt on an exam clock: raises TimeUp instead of returning a late line.
+
+        On a terminal the prompt closes by itself when the deadline passes. Where input cannot be
+        interrupted (a pipe), the line is refused once it arrives, so nothing typed late ever counts.
+        """
+        left = deadline - time.time()
+        if left <= 0:
+            raise TimeUp
+        if self.interactive:
+            try:
+                line = self._line_reader().read(prompt, typed, timeout=left)
+            except EOFError:
+                line = "quit"
+        else:
+            line = self.ask(prompt, typed)
+        if time.time() >= deadline:
+            raise TimeUp
+        return line
 
     def ask(self, prompt: str, typed: bool = False) -> str:
         """Read a line; EOF (Ctrl-D / end of piped input) reads as ``quit``. ``typed`` colours the input."""

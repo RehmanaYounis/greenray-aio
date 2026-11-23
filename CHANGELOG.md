@@ -28,6 +28,13 @@ All notable changes are listed here. The project follows [Semantic Versioning](h
 - Lab `adm-8` (`adm-slurm-partition-qos`): the proof job has to ask for 16 GPUs in the `interactive` partition, as the briefing says, in any spelling (`-N 2 --gres=gpu:8`, `--gpus=16`, `-N 2 --gpus-per-node=8`). A smaller over-cap request no longer counts.
 - Lab `tsh-9` (`tsh-slurm-node-down-munge`): the two evidence criteria need the authentication failure itself: the slurmd log or status of the affected node, the slurmctld log, or a `munge -n | unmunge` test that fails between the node and another host. Startup logs of a healthy node no longer count.
 - Lab `tsh-19` (`tsh-nvswitch-firmware-partial-update`): the title said the node ran at a fifth of the speed; the briefing and the benchmark show half (about 240 against 480 GB/s), and the title now says so.
+- Mock exam and question drill: the clock is enforced. A prompt that is still open when time runs out closes by itself and the exam is graded; an answer or a lab command typed after the deadline is neither recorded nor run. Before, a late answer counted and a late command changed the lab before grading.
+- Mock exam: opening a lab and leaving it earns nothing. Criteria that are already met when a lab starts ("nothing was rebooted") count once at least one other objective of that lab is achieved. Before, navigation alone could score up to a sixth of a lab.
+- Mock exam and question drill: an answer needs the number of letters the question asks for (one, or two where it says "Choose two"). `A B C D` on a single-answer question used to be accepted and marked wrong; now the learner stays on the question and is told how many it takes.
+- `greenray mock --labs-only`: the opening note no longer mentions the 50/50 question/lab weighting, which does not apply; it says the result is the average of the labs.
+
+### Added
+- Mock exam: flagged questions can be reviewed before the question section is submitted. `r` in the section menu, or `q` once every question is answered, lists the flagged and unanswered questions and reopens any question by number to change its answer or remove the flag. After the submit step the questions stay closed, as before.
 
 ## [1.7.8] - 2026-11-22
 
