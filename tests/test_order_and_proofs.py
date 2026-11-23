@@ -136,7 +136,69 @@ def test_adm9_private_key_and_no_reboot_are_still_graded():
     assert not one(results(s, shell), "no DGX node was rebooted")
 
 
-@pytest.mark.parametrize("code", ["ins-7", "adm-9"])
+# ---- adm-12: bob's job has to land in nlp without naming it
+
+ADM12_DEFAULT = "bob submitted without -A"
+
+
+def _adm12(*submissions: str) -> tuple[sc.Scenario, Shell]:
+    s, shell = lab("adm-12")
+    do(shell, *(step for step in s.solution if "su - bob" not in step), *submissions)
+    return s, shell
+
+
+def _script(shell: Shell, directive: str) -> None:
+    files = shell.ctx.state.nodes["bcm-head"].files
+    files["/home/bob/t.sbatch"] = f"#!/bin/bash\n#SBATCH {directive}\nhostname\n"
+
+
+@pytest.mark.parametrize(
+    "submit",
+    [
+        'su - bob -c "sbatch -A nlp --wrap=hostname"',
+        'su - bob -c "sbatch --account=nlp --wrap=hostname"',
+        'su - bob -c "sbatch --account nlp --wrap=hostname"',
+        'su - bob -c "srun -A nlp hostname"',
+    ],
+)
+def test_adm12_a_job_that_names_the_account_proves_nothing_about_the_default(submit):
+    s, shell = _adm12(submit)
+    assert any(j.user == "bob" and j.account == "nlp" for j in shell.ctx.state.slurm.jobs)
+    found = results(s, shell)
+    assert not one(found, ADM12_DEFAULT) and sum(found.values()) == len(found) - 1
+
+
+@pytest.mark.parametrize("directive", ["-A nlp", "--account=nlp"])
+def test_adm12_an_account_directive_in_the_script_is_explicit_too(directive):
+    s, shell = _adm12()
+    _script(shell, directive)
+    assert "Submitted batch job" in shell.run('su - bob -c "sbatch /home/bob/t.sbatch"')
+    assert not one(results(s, shell), ADM12_DEFAULT)
+
+
+@pytest.mark.parametrize(
+    "submissions",
+    [
+        ['su - bob -c "sbatch --wrap=hostname"'],
+        ["su - bob -c \"sbatch --wrap='sleep 600'\""],
+        ['su - bob -c "srun hostname"'],
+        ['su - bob -c "sbatch -A nlp --wrap=hostname"', 'su - bob -c "sbatch --wrap=hostname"'],
+    ],
+    ids=["sbatch", "reference", "srun", "explicit-then-default"],
+)
+def test_adm12_a_job_that_relies_on_the_default_passes(submissions):
+    s, shell = _adm12(*submissions)
+    assert all(results(s, shell).values()), results(s, shell)
+
+
+def test_adm12_a_script_without_an_account_directive_passes():
+    s, shell = _adm12()
+    _script(shell, "-J default-account-test")
+    do(shell, 'su - bob -c "sbatch /home/bob/t.sbatch"')
+    assert all(results(s, shell).values()), results(s, shell)
+
+
+@pytest.mark.parametrize("code", ["ins-7", "adm-9", "adm-12"])
 def test_reference_solution_still_earns_every_criterion(code):
     s, shell = lab(code)
     sc.replay_solution(s, shell)

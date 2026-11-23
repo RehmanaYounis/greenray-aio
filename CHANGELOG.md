@@ -24,6 +24,7 @@ All notable changes are listed here. The project follows [Semantic Versioning](h
 - Labs `tsh-7` and `tsh-15`: the kernel-module criterion needs `lsmod` on a DGX node; `lsmod` on the head node does not count.
 - Labs `wkl-9` (`wkl-k8s-replica-pending-after-mig`) and `wkl-3` (`wkl-k8s-taint-toleration`): the replicas have to keep the GPU request the briefing states, 4 GPUs each in `wkl-9` and 1 GPU each in `wkl-3`. In `wkl-9` lowering or removing the request used to get both replicas running without any repair.
 - Labs `ins-7` (`ins-bcm-softwareimage-update`) and `adm-9` (`adm-bcm-grabimage-sync`): the dry run has to come first. In `ins-7` every DGX node needs an `imageupdate` dry run before its live update to the new image, also when the rollout is split into batches; in `adm-9` a `grabimage` dry run of dgx-01 into the image has to precede the real grab. A dry run made after the change no longer counts.
+- Lab `adm-12` (`adm-slurm-fairshare-accounts`): bob's test job has to be charged to nlp without naming the account. A job submitted with `-A nlp` or `--account=nlp`, on the command line or as an `#SBATCH` line, proves only that he may use nlp, not that it is his default.
 
 ## [1.7.8] - 2026-11-22
 

@@ -58,7 +58,7 @@ checks:
   - desc: the enforcement is in slurm.conf, so it survives a restart
     expr: re.search(r'(?im)^AccountingStorageEnforce=\S*(associations|limits|safe|qos)', file('bcm-head', '/etc/slurm/slurm.conf')) is not None
   - desc: a job bob submitted without -A was charged to nlp
-    expr: any(j.user == 'bob' and j.account == 'nlp' and j.id > 4003 for j in slurm.jobs)
+    expr: "any(j.user == 'bob' and j.account == 'nlp' and j.id > 4003 and not j.get('account_explicit') for j in slurm.jobs)"
   - desc: you looked at the fair-share tree with sshare
     kind: evidence
     expr: "printed(r'\\d\\.\\d\\d\\d\\d\\d\\d', cmd=r'^sshare\\b')"

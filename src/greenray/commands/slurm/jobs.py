@@ -298,6 +298,7 @@ def _build_job(ctx, prog, opts, extra_check=True):
         "name": opts.get("name") or "",
         "user": user,
         "account": acct,
+        "account_explicit": "account" in opts,  # -A/--account on the command line or in an #SBATCH line
         "partition": part,
         "qos": qos,
         "state": "PENDING",
