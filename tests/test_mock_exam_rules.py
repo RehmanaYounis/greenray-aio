@@ -421,17 +421,23 @@ def test_an_abandoned_mock_records_nothing(script, labs_only):
 
 
 def test_exam_input_stays_out_of_the_persistent_history(tmp_path, monkeypatch):
-    from greenray.app.ui import UI
+    from greenray.app import ui as ui_module
 
+    made: list = []
+
+    class Reader:  # stands in for the terminal prompt, which needs a console that CI on Windows does not have
+        def __init__(self, history_file, **_options):
+            self.history_file = history_file
+            made.append(self)
+
+    monkeypatch.setattr(ui_module, "LineReader", Reader)
     history = tmp_path / "history"
-    ui = UI(color=False, history_file=history)
+    ui = ui_module.UI(color=False, history_file=history)
     ui.interactive = True  # as on a terminal: only there is any history kept
     lab_reader = ui._line_reader()
-    assert lab_reader.session.history.filename == str(history)
+    assert lab_reader.history_file == history
     with ui.private_history():
         private = ui._line_reader()
-        assert private is not lab_reader and not hasattr(private.session.history, "filename")
-        private.session.history.append_string("A C")
-        private.session.history.append_string("scontrol update nodename=dgx-01 state=resume")
-    assert ui._line_reader() is lab_reader
-    assert not history.exists() or "scontrol" not in history.read_text()
+        assert private is not lab_reader and private.history_file is None  # answers and commands stay in memory
+    assert ui._line_reader() is lab_reader and [r.history_file for r in made] == [history, None]
+    assert not history.exists()
