@@ -22,6 +22,7 @@ All notable changes are listed here. The project follows [Semantic Versioning](h
 - Labs `ins-4`, `ins-9`, `tsh-13` and `wkl-2`: the test pod has to be the pod the lab specifies. `nemo-finetune` has to run from the team's private image, `rdma-test` with its 8 GPUs and RDMA device, `nccl-test` with its 8 GPUs on dgx-03, and `cuda-test` with its GPU. A CPU-only pod with the same name no longer counts.
 - Lab `tsh-11` (`tsh-xid79-drained-node`): the bug report has to be collected on the node that failed, not on another node.
 - Labs `tsh-7` and `tsh-15`: the kernel-module criterion needs `lsmod` on a DGX node; `lsmod` on the head node does not count.
+- Labs `wkl-9` (`wkl-k8s-replica-pending-after-mig`) and `wkl-3` (`wkl-k8s-taint-toleration`): the replicas have to keep the GPU request the briefing states, 4 GPUs each in `wkl-9` and 1 GPU each in `wkl-3`. In `wkl-9` lowering or removing the request used to get both replicas running without any repair.
 
 ## [1.7.8] - 2026-11-22
 

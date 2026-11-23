@@ -92,8 +92,8 @@ checks:
   - desc: you looked at the nodes' labels or allocatable resources
     kind: evidence
     expr: "printed(r'\\S', cmd=r'^kubectl\\b.*\\b(describe (node|nodes|no)\\b|get (nodes|node|no)\\b.*(-L|--show-labels|-o))')"
-  - desc: both triton replicas are Running on nodes labelled team=inference
-    expr: "len([p for p in pods('default', 'triton-') if p.status == 'Running' and k8s.nodes[p.node].labels.get('team') == 'inference']) == 2"
+  - desc: "both triton replicas are Running with 4 GPUs each on nodes labelled team=inference"
+    expr: "len([p for p in pods('default', 'triton-') if p.status == 'Running' and k8s.nodes[p.node].labels.get('team') == 'inference' and int(p.requests.get('nvidia.com/gpu', 0)) == 4]) == 2"
   - desc: no triton replica is Pending
     expr: "not [p for p in pods('default', 'triton-') if p.status == 'Pending']"
   - desc: the Deployment still selects team=inference

@@ -70,8 +70,8 @@ checks:
     expr: "any(d.name == 'triton-inference' and tolerates(d.template.spec.get('tolerations'), {'key': 'nvidia.com/gpu', 'value': 'present', 'effect': 'NoSchedule'}) for d in k8s.deployments)"
   - desc: the pod template in /root/triton.yaml tolerates the taint
     expr: "any(d.kind == 'Deployment' and d.metadata.name == 'triton-inference' and tolerates(d.spec.template.spec.get('tolerations'), {'key': 'nvidia.com/gpu', 'value': 'present', 'effect': 'NoSchedule'}) for d in manifest('bcm-head', '/root/triton.yaml'))"
-  - desc: two triton-inference replicas Running on DGX nodes
-    expr: "len([p for p in pods('default', 'triton-inference-') if p.status == 'Running' and (p.node or '').startswith('dgx-')]) == 2"
+  - desc: "two triton-inference replicas Running on DGX nodes with 1 GPU each"
+    expr: "len([p for p in pods('default', 'triton-inference-') if p.status == 'Running' and (p.node or '').startswith('dgx-') and int(p.requests.get('nvidia.com/gpu', 0)) == 1]) == 2"
   - desc: no triton-inference pod left Pending
     expr: "not [p for p in pods('default', 'triton-inference-') if p.status == 'Pending']"
   - desc: kubectl showed you the scheduling events of the pods or the taints of a DGX node
