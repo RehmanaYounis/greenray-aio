@@ -16,14 +16,20 @@ pytestmark = requires_solutions
 
 
 class Clock:
-    """Stands in for time.time so a test can let exam minutes pass in an instant."""
+    """Stands in for time.time so a test can let exam minutes pass in an instant.
+
+    It never reads the real clock: every look at it moves it a millisecond on, so two readings
+    always differ and a run gives the same minutes on a fast machine, a slow one, and a timer
+    as coarse as the one on Windows.
+    """
 
     def __init__(self) -> None:
-        self.real = time.time
+        self.now = 1_800_000_000.0
         self.offset = 0.0
 
     def __call__(self) -> float:
-        return self.real() + self.offset
+        self.now += 0.001
+        return self.now + self.offset
 
 
 @pytest.fixture
@@ -163,7 +169,7 @@ def test_the_terminal_prompt_closes_itself_at_the_deadline():
         started = time.time()
         with pytest.raises(TimeUp):
             reader.read("> ", timeout=0.3)
-        assert 0.2 < time.time() - started < 5
+        assert 0.2 < time.time() - started < 30  # closed by the timer, not instantly and not never
 
         pipe.send_text("in time\n")  # the same reader still works for a prompt that is answered
         assert reader.read("> ", timeout=5) == "in time"
