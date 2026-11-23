@@ -486,7 +486,7 @@ wheels = [
 
 [[package]]
 name = "greenray-aio"
-version = "1.7.8"
+version = "1.8.0"
 source = { editable = "." }
 dependencies = [
     { name = "prompt-toolkit" },
