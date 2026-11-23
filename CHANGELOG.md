@@ -27,6 +27,7 @@ All notable changes are listed here. The project follows [Semantic Versioning](h
 - Lab `adm-12` (`adm-slurm-fairshare-accounts`): bob's test job has to be charged to nlp without naming the account. A job submitted with `-A nlp` or `--account=nlp`, on the command line or as an `#SBATCH` line, proves only that he may use nlp, not that it is his default.
 - Lab `adm-8` (`adm-slurm-partition-qos`): the proof job has to ask for 16 GPUs in the `interactive` partition, as the briefing says, in any spelling (`-N 2 --gres=gpu:8`, `--gpus=16`, `-N 2 --gpus-per-node=8`). A smaller over-cap request no longer counts.
 - Lab `tsh-9` (`tsh-slurm-node-down-munge`): the two evidence criteria need the authentication failure itself: the slurmd log or status of the affected node, the slurmctld log, or a `munge -n | unmunge` test that fails between the node and another host. Startup logs of a healthy node no longer count.
+- Lab `tsh-19` (`tsh-nvswitch-firmware-partial-update`): the title said the node ran at a fifth of the speed; the briefing and the benchmark show half (about 240 against 480 GB/s), and the title now says so.
 
 ## [1.7.8] - 2026-11-22
 

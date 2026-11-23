@@ -386,3 +386,16 @@ def test_tsh9_reference_solution_passes_in_every_variant():
         shell = Shell(s.build_state())
         sc.replay_solution(s, shell)
         assert all(ok for _desc, ok, _err in s.grade(shell)), (s.variant_label, s.grade(shell))
+
+
+def test_tsh19_title_matches_the_measured_slowdown():
+    s, shell = lab("tsh-19")
+    assert "half the speed" in s.title and "fifth" not in s.title
+    bench = "mpirun --allow-run-as-root -np 8 all_reduce_perf -b 8G -e 8G -f 2 -g 1"
+    peer = "dgx-01" if s.params["node"] != "dgx-01" else "dgx-02"
+
+    def busbw(host: str) -> float:
+        out = shell.run(f"ssh {host} {bench}")
+        return float(re.search(r"Avg bus bandwidth\s*:\s*([\d.]+)", out).group(1))
+
+    assert 1.9 < busbw(peer) / busbw(s.params["node"]) < 2.1
