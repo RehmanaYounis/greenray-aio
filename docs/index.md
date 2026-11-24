@@ -11,6 +11,8 @@ GreenRay AIO drops you into a broken or half-configured four-node DGX H100 clust
 
 A ninety-second lab, start to finish: install, ask what to practise, diagnose a slow node, fix it, read the debrief.
 
+Prefer a longer look? Watch [using GreenRay AIO on YouTube](https://www.youtube.com/watch?v=um3MJKw4RGE).
+
 ```
 root@bcm-head:~# ssh dgx-03
 root@dgx-03:~# dmesg | grep -i xid
