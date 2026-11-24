@@ -4,6 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/greenray-aio)](https://pypi.org/project/greenray-aio/)
 [![Python](https://img.shields.io/pypi/pyversions/greenray-aio)](https://pypi.org/project/greenray-aio/)
 [![Docs](https://img.shields.io/badge/docs-rehmanayounis.github.io-green)](https://rehmanayounis.github.io/greenray-aio/)
+[![Video](https://img.shields.io/badge/video-YouTube-red)](https://www.youtube.com/watch?v=um3MJKw4RGE)
 [![Licence](https://img.shields.io/badge/licence-Apache--2.0-blue)](LICENSE)
 
 Hands-on lab simulator and mock exam for the NVIDIA-Certified Professional: AI Operations (NCP-AIO) exam.
@@ -13,6 +14,8 @@ GreenRay AIO drops you into a broken or half-configured four-node DGX H100 clust
 https://github.com/user-attachments/assets/1ee913ab-575a-4479-ad3d-f7a6c9b4848c
 
 A ninety-second lab, start to finish: install, ask what to practise, diagnose a slow node, fix it, read the debrief.
+
+Prefer a longer look? Watch [using GreenRay AIO on YouTube](https://www.youtube.com/watch?v=um3MJKw4RGE).
 
 ```
 root@bcm-head:~# ssh dgx-03
