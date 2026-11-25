@@ -2,6 +2,11 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- Mock exam on a basic terminal (`TERM=dumb`, for example an Emacs shell): a prompt left idle stayed open after the deadline and grading waited for Enter. The prompt now closes when the time is up and grading starts without any input, as it already did on other terminals. What is still on the prompt line then, an answer or a lab command, is discarded.
+
 ## [1.8.0] - 2026-11-23
 
 ### Fixed

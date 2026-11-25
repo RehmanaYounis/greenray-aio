@@ -15,6 +15,7 @@ from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.history import FileHistory, InMemoryHistory
 from prompt_toolkit.styles import Style
+from prompt_toolkit.utils import is_dumb_terminal
 
 from ..core.shell import Context
 
@@ -86,9 +87,14 @@ class LineReader:
         history = FileHistory(str(history_file)) if history_file else InMemoryHistory()
         self.session: PromptSession = PromptSession(history=history, enable_history_search=True, **session_options)
         self.completer: Completer | None = None
+        # prompt_toolkit only falls back to its plain prompt when it picks the output itself
+        self._own_output = "output" in session_options
 
     def read(self, prompt: str, typed: bool = False, timeout: float | None = None) -> str:
         """Read a line. With ``timeout`` the prompt closes itself after that many seconds and raises TimeUp."""
+        style = TYPED if typed else None
+        if timeout is not None and is_dumb_terminal() and not self._own_output:
+            return self._read_plain(prompt, style, max(0.0, timeout))
 
         def arm_timer() -> None:
             app = self.session.app
@@ -103,6 +109,25 @@ class LineReader:
             ANSI(prompt),
             completer=self.completer,
             complete_while_typing=False,
-            style=TYPED if typed else None,
+            style=style,
             pre_run=arm_timer if timeout is not None else None,
         )
+
+    def _read_plain(self, prompt: str, style: Style | None, timeout: float) -> str:
+        """The timed read on a basic terminal (TERM=dumb, an Emacs shell, some CI consoles).
+
+        There prompt_toolkit builds a plainer prompt for every read, and a timer attached to the
+        session's usual prompt never starts: the prompt stayed open past the deadline until Enter.
+        Cancelling the read from outside works for whichever prompt is on screen.
+        """
+
+        async def timed() -> str:
+            reading = self.session.prompt_async(
+                ANSI(prompt), completer=self.completer, complete_while_typing=False, style=style
+            )
+            return await asyncio.wait_for(reading, timeout)
+
+        try:
+            return asyncio.run(timed())
+        except asyncio.TimeoutError:  # the builtin TimeoutError from Python 3.11 on
+            raise TimeUp from None
