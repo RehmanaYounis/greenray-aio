@@ -4,7 +4,12 @@ All notable changes are listed here. The project follows [Semantic Versioning](h
 
 ## [Unreleased]
 
+### Changed
+- `greenray list` and the Labs menu group each exam domain by level: easy, then medium, then hard, with the codes in order inside each group. Codes do not change; a lab added later now appears with the labs of its level and not at the end of the list.
+
 ### Fixed
+- Labs menu: the hint under the list said `greenray lab tsh-1`, which the prompt below it refused. Inside the menu the hint now shows the code alone, and the prompt also accepts the whole command.
+- Main menu: `clear` (or `cls`) clears the screen and shows the menu again; it used to be reported as an unknown choice.
 - Mock exam on a basic terminal (`TERM=dumb`, for example an Emacs shell): a prompt left idle stayed open after the deadline and grading waited for Enter. The prompt now closes when the time is up and grading starts without any input, as it already did on other terminals. What is still on the prompt line then, an answer or a lab command, is discarded.
 
 ## [1.8.0] - 2026-11-23
