@@ -52,6 +52,7 @@ SACCT_W = {
     "priority": 10,
     "cluster": 10,
     "maxrss": 10,
+    "maxvmsize": 10,
     "reqcpus": 8,
     "allocnodes": 10,
     "submitline": 40,
@@ -91,6 +92,7 @@ SACCT_HDR = {
     "priority": "Priority",
     "cluster": "Cluster",
     "maxrss": "MaxRSS",
+    "maxvmsize": "MaxVMSize",
     "reqcpus": "ReqCPUS",
     "allocnodes": "AllocNodes",
     "submitline": "SubmitLine",
@@ -105,6 +107,13 @@ SACCT_HDR = {
 }
 
 
+def _kilobytes(kb) -> str:
+    """A sampled memory figure as sacct prints it; nothing when the step has none recorded."""
+    if kb is None:
+        return ""
+    return f"{int(kb)}K" if int(kb) else "0"
+
+
 def _sacct_rows(state, j, steps=True):
     clock = state.slurm.clock
     elapsed = 0
@@ -113,8 +122,11 @@ def _sacct_rows(state, j, steps=True):
     ncpu = j.num_nodes * j.ntasks_per_node * j.cpus_per_task
     acpu = _alloc_cpu_count(state, j)
     gtres = f"gres/gpu={_job_gpus(j)}," if j.gpus_per_node else ""
-    tres = f"billing={ncpu},cpu={ncpu}," + gtres + f"mem=0,node={j.num_nodes}"
-    atres = f"billing={acpu},cpu={acpu}," + gtres + f"mem=0,node={j.num_nodes}"
+    # the memory the job asked for, per node; a job that named none shows 0, as in scontrol show job
+    req_mb = int(j.get("min_memory_mb") or 0)
+    rest = gtres + f"mem={mem_text(req_mb * j.num_nodes) if req_mb else 0},node={j.num_nodes}"
+    tres = f"billing={ncpu},cpu={ncpu}," + rest
+    atres = f"billing={acpu},cpu={acpu}," + rest
     st = j.state
     if st == "CANCELLED" and j.start_time is not None:
         st = "CANCELLED by 0"
@@ -144,13 +156,14 @@ def _sacct_rows(state, j, steps=True):
         "comment": "",
         "priority": str(j.priority),
         "cluster": "superpod",
-        "maxrss": "",
+        "maxrss": "",  # usage is gathered per step; the allocation line has none
+        "maxvmsize": "",
         "reqcpus": str(ncpu),
         "allocnodes": str(j.num_nodes),
         "submitline": j.command,
         "derivedexitcode": "0:0",
         "ncpus": str(acpu if j.start_time is not None else ncpu),
-        "reqmem": mem_text(int(j.get("min_memory_mb") or 0)),
+        "reqmem": mem_text(req_mb),
         "reqnodes": str(j.num_nodes),
         "uid": "0" if j.user == "root" else str(1000 + sum(map(ord, j.user)) % 500),
         "group": j.user,
@@ -162,6 +175,8 @@ def _sacct_rows(state, j, steps=True):
         return rows
 
     def step(sid, name, state_, code, nodes=None):
+        # what the accounting plugin sampled for this step, when the job's record carries it
+        used = (j.get("usage") or {}).get(str(sid)) or {}
         r = dict(base)
         r.update(
             {
@@ -176,8 +191,15 @@ def _sacct_rows(state, j, steps=True):
                 "reason": "",
                 "timelimit": "",
                 "ntasks": "1",
+                # a step has no request of its own: what was asked for is on the allocation line
+                "reqmem": "",
+                "reqtres": "",
+                "maxrss": _kilobytes(used.get("max_rss_kb")),
+                "maxvmsize": _kilobytes(used.get("max_vmsize_kb")),
             }
         )
+        if sid == "batch" and r["alloctres"]:  # billing is charged to the job, not to its batch step
+            r["alloctres"] = f"cpu={acpu}," + rest
         return r
 
     term = j.state if j.state in TERMINAL else "RUNNING"
