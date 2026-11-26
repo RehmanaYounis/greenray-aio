@@ -1,3 +1,8 @@
+---
+title: The simulated DGX cluster
+description: "The simulated four-node DGX H100 cluster behind the NCP-AIO labs: Base Command Manager, Slurm, Kubernetes with the GPU Operator, and the tools available on each node."
+---
+
 # The simulated cluster
 
 Every lab starts from the same healthy cluster, then the scenario breaks something in it. It is a small slice of a DGX SuperPOD managed by Base Command Manager.

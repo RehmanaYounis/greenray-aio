@@ -1,3 +1,8 @@
+---
+title: NCP-AIO study path
+description: "A study plan for the NVIDIA NCP-AIO exam: which labs to do in which order, how to use the mock exam, and how to read your results."
+---
+
 # Study path
 
 The exam tests whether you can operate a GPU cluster, not whether you can recite its documentation. GreenRay AIO is built around that: you learn each topic by fixing it, then prove it with the cause hidden, then rehearse the exam format against the clock.

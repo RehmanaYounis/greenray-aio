@@ -1,3 +1,8 @@
+---
+title: Getting started with NCP-AIO practice labs
+description: "Install GreenRay AIO with uv, pipx or Docker and run your first NCP-AIO practice lab in a few minutes."
+---
+
 # Getting started
 
 ## Install

@@ -1,4 +1,9 @@
-# GreenRay AIO
+---
+title: NCP-AIO practice labs and mock exam
+description: "GreenRay AIO is a free, open-source simulator for the NVIDIA NCP-AIO (AI Operations) exam. Hands-on labs on a simulated DGX cluster and a timed mock exam, with no GPU needed."
+---
+
+# GreenRay AIO: NCP-AIO practice labs and mock exam
 
 Hands-on lab simulator and mock exam for the NVIDIA-Certified Professional: AI Operations (NCP-AIO) exam.
 

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://rehmanayounis.github.io/greenray-aio/sitemap.xml
