@@ -1,3 +1,8 @@
+---
+title: NCP-AIO exam topics and coverage map
+description: "The NVIDIA NCP-AIO exam domains and topics, and the GreenRay AIO labs and questions that cover each one."
+---
+
 # Exam coverage map
 
 This maps every topic in the NCP-AIO blueprint to the hands-on scenarios (`greenray lab <id>`) and the question-bank tags that practise it. `pytest` checks that every scenario listed here exists, so the map can't silently go stale.

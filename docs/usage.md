@@ -1,3 +1,8 @@
+---
+title: Using the NCP-AIO lab and mock exam
+description: "Every GreenRay AIO command: practice labs, incident mode, question drills and the full NCP-AIO mock exam with 35 questions and 3 labs."
+---
+
 # Using the lab
 
 Installed with uv tool, pipx or Docker, the command is `greenray`. From a source checkout use `uv run greenray`. `greenray` on its own opens a menu: type the number of an entry or its name (`next`, `plan`, `lab tsh-1`, ...), and `help` explains the commands. The Labs entry lists every scenario and starts the one whose code or id you type.

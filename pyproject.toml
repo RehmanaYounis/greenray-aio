@@ -8,7 +8,8 @@ authors = [{ name = "Rehmana Younis" }]
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 keywords = [
-    "ncp-aio", "nvidia-certification", "ai-infrastructure", "ai-operations", "exam-prep",
+    "ncp-aio", "ncp-aio-exam", "nvidia", "nvidia-certification", "nvidia-ai-operations", "ai-infrastructure",
+    "ai-operations", "exam-prep", "practice-exam", "mock-exam",
     "slurm", "kubernetes", "gpu-operator", "base-command-manager", "dgx", "hpc", "simulator",
 ]
 classifiers = [

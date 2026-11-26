@@ -1,4 +1,4 @@
-# GreenRay AIO
+# GreenRay AIO: NCP-AIO practice labs and mock exam
 
 [![CI](https://github.com/RehmanaYounis/greenray-aio/actions/workflows/ci.yml/badge.svg)](https://github.com/RehmanaYounis/greenray-aio/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/greenray-aio)](https://pypi.org/project/greenray-aio/)
