@@ -8,26 +8,38 @@ from . import progress, reflect, study
 from .ui import UI
 
 
-def list_scenarios(ui: UI) -> None:
+def list_scenarios(ui: UI, at_prompt: bool = False) -> None:
+    """Every lab by exam domain, easy ones first. ``at_prompt``: a prompt for the code follows.
+
+    Codes are fixed names, so a lab added later has a high number whatever its level;
+    grouping by level keeps the list readable without ever renumbering.
+    """
     prog = progress.load()["scenarios"]
     scenarios = sc.load_all()
     for d in DOMAINS:
-        items = sorted((s for s in scenarios if s.domain == d), key=sc.code_order)
+        in_domain = sorted((s for s in scenarios if s.domain == d), key=sc.code_order)
         rows, styles = [], []
-        for s in items:
-            p = prog.get(s.id)
-            mark = "✔" if p and p["passed"] else ("…" if p else " ")
-            rows.append([mark, s.code, s.id, s.title, ui.level(s.difficulty, s.difficulty)])
-            styles.append("green" if mark == "✔" else ("yellow" if mark == "…" else ""))
+        for level in sc.DIFFICULTIES:
+            group = [s for s in in_domain if s.difficulty == level]
+            if not group:
+                continue
+            rows.append(["", ui.level(level, level.capitalize()), "", ""])
+            styles.append("")
+            for s in group:
+                p = prog.get(s.id)
+                mark = "✔" if p and p["passed"] else ("…" if p else " ")
+                rows.append([mark, s.code, s.id, s.title])
+                styles.append("green" if mark == "✔" else ("yellow" if mark == "…" else ""))
         ui.out("")
         if ui.color:
             ui.out(ui.bold(f"{d}  ({int(DOMAIN_WEIGHTS[d] * 100)}% of exam)"))
-            ui.out(ui.table(["", "Code", "Scenario", "Title", "Level"], rows, styles))
+            ui.out(ui.table(["", "Code", "Scenario", "Title"], rows, styles))
         else:
             ui.out(f"{d}  ({int(DOMAIN_WEIGHTS[d] * 100)}% of exam)")
-            for mark, code, sid, title, level in rows:
-                ui.out(f"  {mark} {code:<7} {sid:<42} {title}  {level}")
-    ui.out(ui.dim("\nStart one with its code or id: greenray lab tsh-1"))
+            for mark, code, sid, title in rows:
+                ui.out(f"    {mark} {code:<7} {sid:<42} {title}" if sid else f"  {code}")
+    # the hint has to be what works where it is read: a shell command, or just the code at the menu's prompt
+    ui.out(ui.dim(f"\nStart one with its code or id: {'tsh-1' if at_prompt else 'greenray lab tsh-1'}"))
 
 
 def show_progress(ui: UI) -> None:

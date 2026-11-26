@@ -98,7 +98,10 @@ def menu(ui: UI) -> None:
             continue
         words = raw.lower().removeprefix("greenray").split()
         choice = MENU_WORDS.get(words[0], words[0]) if words else ""
-        if choice in ("help", "?", "h"):
+        if choice in ("clear", "cls"):
+            if ui.interactive:
+                ui.out("\033[H\033[2J")
+        elif choice in ("help", "?", "h"):
             ui.out(ui.panel(MENU_HELP.rstrip(), title="How to use GreenRay AIO"))
         elif choice == "0":
             for i, d in enumerate(DOMAINS, 1):
@@ -109,10 +112,14 @@ def menu(ui: UI) -> None:
         elif choice == "1":
             key = words[1] if len(words) > 1 else ""
             if not key:
-                list_scenarios(ui)
+                list_scenarios(ui, at_prompt=True)
                 ui.set_completer([w for s in sc.load_all() for w in (s.code, s.id)], lambda: None)
                 try:
-                    key = ui.ask("\nLab code or id (blank to go back): ").strip()
+                    typed = ui.ask("\nLab code or id (blank to go back): ").split()
+                    # the whole command is what the docs and the list outside the menu show, so take that too
+                    while typed and typed[0].lower() in ("greenray", "lab"):
+                        typed.pop(0)
+                    key = " ".join(typed)
                 except KeyboardInterrupt:
                     ui.out("")
                     key = ""

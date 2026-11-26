@@ -15,7 +15,7 @@ Every scenario has a short code next to its id: `tsh-1` is the first troubleshoo
 | --- | --- |
 | `greenray next` | What to practise next: the on-ramp first, then the easiest unpassed lab in your weakest exam domain, then guided passes to redo as unguided incidents |
 | `greenray plan` | A four-week schedule covering every scenario, with your passes ticked off |
-| `greenray list` | All scenarios by exam domain, with your pass marks |
+| `greenray list` | All scenarios by exam domain, grouped easy, medium, hard, with your pass marks |
 | `greenray lab <code or id>` | A scenario in guided mode: title, objectives and hints are available |
 | `greenray lab <code or id> --variant N` | A specific variant of a scenario that has several (another node, GPU or job); without the flag one is picked at random |
 | `greenray incident [-d DOMAIN] [-t TOPIC]` | A random scenario as an incident: only the incident report is shown, and the id, title and success criteria stay hidden until the debrief. `-t` is a scenario tag such as `slurm`, `kubernetes`, `bcm`, `mig` or `infiniband` |
