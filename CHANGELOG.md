@@ -8,6 +8,8 @@ All notable changes are listed here. The project follows [Semantic Versioning](h
 - `greenray list` and the Labs menu group each exam domain by level: easy, then medium, then hard, with the codes in order inside each group. Codes do not change; a lab added later now appears with the labs of its level and not at the end of the list.
 
 ### Fixed
+- `sacct`: memory accounting was empty. `ReqTRES` and `AllocTRES` always said `mem=0`, `MaxRSS` was never filled and `MaxVMSize` was not a field. The memory a job asked for is now in `ReqMem` and both TRES columns; `MaxRSS` and `MaxVMSize` are on the step lines when the job's record has usage, and stay empty when it has none. Step lines no longer repeat the job's `ReqMem` and `ReqTRES`, and the batch step's `AllocTRES` has no billing entry.
+- Lab `tsh-1` (`tsh-first-look-at-logs`): the job's accounting now agrees with its logs. It asked for 200G on 224 CPUs, the batch step's last sampled `MaxRSS` is just under that, and the kernel log has the `memory: usage ..., limit ...` line that states the cgroup limit. Grading is unchanged.
 - Labs menu: the hint under the list said `greenray lab tsh-1`, which the prompt below it refused. Inside the menu the hint now shows the code alone, and the prompt also accepts the whole command.
 - Main menu: `clear` (or `cls`) clears the screen and shows the menu again; it used to be reported as an unknown choice.
 - Mock exam on a basic terminal (`TERM=dumb`, for example an Emacs shell): a prompt left idle stayed open after the deadline and grading waited for Enter. The prompt now closes when the time is up and grading starts without any input, as it already did on other terminals. What is still on the prompt line then, an answer or a lab command, is discarded.
