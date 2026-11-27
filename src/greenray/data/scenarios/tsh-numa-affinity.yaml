@@ -38,6 +38,7 @@ setup:
           "#SBATCH --gres=gpu:4\n"
           "#SBATCH --ntasks-per-node=4\n"
           "#SBATCH --cpus-per-task=16\n"
+          "#SBATCH --mem=256G\n"
           "#SBATCH -t 01:00:00\n"
           "#SBATCH -o /root/resnet-dali-%j.out\n"
           "srun numactl --show\n")
@@ -57,14 +58,18 @@ setup:
       st.users['alice'] = {'name': 'alice', 'default_account': 'root'}
       st.users['bob'] = {'name': 'bob', 'default_account': 'root'}
       st.jobs.append({'id': 4990, 'name': 'resnet-dali', 'user': 'alice', 'state': 'COMPLETED', 'num_nodes': 1,
+                      'min_memory_mb': 262144,
                       'ntasks_per_node': 4, 'cpus_per_task': 16, 'gpus_per_node': 4, 'nodelist': ['dgx-01'],
                       'submit_time': -9000, 'start_time': -8900, 'end_time': -5300, 'batch': True,
                       'command': '/root/resnet-dali.sbatch', 'stdout': '/root/resnet-dali-4990.out'})
       st.jobs.append({'id': 5000, 'name': 'resnet-dali', 'user': 'alice', 'state': 'COMPLETED', 'num_nodes': 1,
+                      'min_memory_mb': 262144,
                       'ntasks_per_node': 4, 'cpus_per_task': 16, 'gpus_per_node': 4, 'nodelist': ['dgx-03'],
                       'submit_time': -5000, 'start_time': -4900, 'end_time': -1300, 'batch': True,
                       'command': '/root/resnet-dali.sbatch', 'stdout': '/root/resnet-dali-5000.out'})
       st.jobs.append({'id': 5001, 'name': 'eval-vit', 'user': 'bob', 'state': 'RUNNING', 'num_nodes': 1,
+                      # both jobs name their memory, or the first would hold the whole node and the second could not share it
+                      'min_memory_mb': 131072,
                       'ntasks_per_node': 4, 'cpus_per_task': 8, 'gpus_per_node': 4, 'nodelist': ['dgx-03'],
                       'alloc_gpus': {'dgx-03': [0, 1, 2, 3]}, 'submit_time': -1200, 'start_time': -1100,
                       'batch': True, 'duration': None, 'command': '/home/bob/eval.sbatch'})

@@ -208,6 +208,46 @@ def _alloc_cpu_count(state, j) -> int:
     return req
 
 
+def _memory_tracked(state) -> bool:
+    """Whether slurm.conf makes memory a resource jobs are allocated (SelectTypeParameters names it)."""
+    return "memory" in str(_param(state, "SelectTypeParameters", "")).lower()
+
+
+def _req_mem_mb(state, j) -> int:
+    """Memory per node the job asks for: its own figure, else slurm.conf's default; 0 when neither is set."""
+    asked = int(j.get("min_memory_mb") or 0)
+    if asked:
+        return asked
+    per = {
+        "DefMemPerNode": 1,
+        "DefMemPerCPU": int(j.get("ntasks_per_node") or 1) * int(j.get("cpus_per_task") or 1),
+        "DefMemPerGPU": int(j.get("gpus_per_node") or 0),
+    }
+    for key, count in per.items():
+        value = str(_param(state, key, "0"))
+        if value.isdigit() and int(value):
+            return int(value) * count
+    return 0
+
+
+def _alloc_mem_mb(state, j, name) -> int:
+    """Memory the job holds on one node.
+
+    With memory tracked and no figure from the job or from slurm.conf, Slurm gives the job
+    all of the node's memory, which is also why nothing else can then share that node.
+    """
+    asked = _req_mem_mb(state, j)
+    if asked or not _memory_tracked(state):
+        return asked
+    sn = state.slurm.nodes.get(name)
+    return int(sn.get("real_memory") or 0) if sn else 0
+
+
+def _job_alloc_mem_mb(state, j) -> int:
+    """Memory allocated to a job that has started, over all its nodes."""
+    return sum(_alloc_mem_mb(state, j, n) for n in j.nodelist or [])
+
+
 def _job_gpus(j) -> int:
     return int(j.gpus_per_node) * int(j.num_nodes)
 
@@ -366,9 +406,9 @@ def _fits(state, j, name) -> list | None:
     cpus = sn.cpus if j.exclusive else j.ntasks_per_node * j.cpus_per_task
     if sn.alloc_cpus + cpus > sn.cpus:
         return None
-    need_mem = int(j.get("min_memory_mb") or 0)
+    need_mem = _alloc_mem_mb(state, j, name)
     if need_mem:
-        used_mem = sum(int(o.get("min_memory_mb") or 0) for o in running)
+        used_mem = sum(_alloc_mem_mb(state, o, name) for o in running)
         if used_mem + need_mem > int(sn.get("real_memory") or 0):
             return None
     if not _reservation_allows(state, j, name):
