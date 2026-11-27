@@ -1,6 +1,7 @@
 id: wkl-slurm-pending-reasons
 code: wkl-8
 title: Three teams, three stuck jobs - read the pending reasons
+name: Slurm pending reasons
 domain: Workload Management
 difficulty: medium
 time_limit_min: 15

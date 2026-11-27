@@ -27,6 +27,10 @@ from ..core.shell import Context
 from .console import LabCompleter, LineReader, TimeUp
 
 ACCENT = "green"  # GreenRay brand colour
+# softer than the terminal's own green, yellow and red, which glare on a dark background
+LEVEL_STYLE = {"easy": "#7ee787", "medium": "#e3b341", "hard": "#f47067"}
+PASSED, STARTED, OPEN = "✔", "◐", "·"
+MARK_STYLE = {PASSED: "#7ee787", STARTED: "#e3b341"}
 
 
 class UI:
@@ -119,6 +123,48 @@ class UI:
                 box=box.ROUNDED,
                 expand=True,
                 padding=(0, 1),
+            )
+        )
+
+    def tiles(self, items: list[tuple[str, str, str]]) -> str:
+        """A row of small panels, each a label over a figure: (label, figure, colour of the figure)."""
+        if not self.color:
+            return "   ".join(f"{label}: {figure}" for label, figure, _ in items)
+        grid = Table.grid(expand=True, padding=(0, 1))
+        cells = []
+        for label, figure, colour in items:
+            grid.add_column(ratio=1)
+            body = Text()
+            body.append(label + "\n", style="dim")
+            body.append_text(Text.from_ansi(figure, style=f"bold {colour}".strip()))
+            cells.append(Panel(body, box=box.ROUNDED, border_style="dim", padding=(0, 1)))
+        grid.add_row(*cells)
+        return self._render(grid)
+
+    def lab_panel(self, title: str, note: str, rows: list[tuple[str, str, str, str]]) -> str:
+        """One exam domain as a panel of labs: (mark, code, name, level) per row."""
+        if not self.color:
+            lines = [f"{title}  ({note})"]
+            lines += [f"  {mark} {code:<7} {name:<36} {level}" for mark, code, name, level in rows]
+            return "\n".join(lines)
+        t = Table(box=None, expand=True, show_edge=False, pad_edge=False, header_style="dim", padding=(0, 1))
+        t.add_column("ID", width=7, no_wrap=True, style="dim")
+        t.add_column("LAB", ratio=1, no_wrap=True, overflow="ellipsis")
+        t.add_column("LEVEL", width=7, no_wrap=True)
+        t.add_column("", width=1)
+        for mark, code, name, level in rows:
+            done = Text(mark, style=MARK_STYLE.get(mark, "dim"))
+            t.add_row(code, name, Text(level, style=LEVEL_STYLE[level]), done)
+        return self._render(
+            Panel(
+                t,
+                title=f"[bold]{title}[/]",
+                title_align="left",
+                subtitle=f"[dim]{note}[/]",
+                subtitle_align="right",
+                border_style="dim",
+                box=box.ROUNDED,
+                padding=(1, 2),
             )
         )
 

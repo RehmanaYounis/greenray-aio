@@ -1,6 +1,7 @@
 id: tsh-gpudirect-peermem
 code: tsh-7
 title: Inter-node NCCL lost half its bandwidth after the driver update
+name: GPUDirect and nvidia-peermem
 domain: Troubleshooting and Optimization
 difficulty: medium
 time_limit_min: 15

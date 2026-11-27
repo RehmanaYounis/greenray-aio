@@ -2,6 +2,11 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- The lab list (`greenray list` and the Labs menu) is redrawn. Three tiles show the number of labs, how many you have passed and your progress. Each exam domain is a panel with its exam weight and your passes, and each lab is one line: code, a short name, level and a mark for passed or started. The long scenario ids and wrapped titles are gone from the rows, the level colours are softer, and a box at the end names the lab to do next. Every lab has a short name for this (`name` in the scenario file).
+
 ## [1.9.0] - 2026-11-27
 
 ### Changed

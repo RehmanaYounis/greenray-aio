@@ -1,6 +1,7 @@
 id: tsh-xid79-drained-node
 code: tsh-11
 title: "A DGX node drained overnight and a fine-tuning job died"
+name: Xid 79 and a drained node
 domain: Troubleshooting and Optimization
 difficulty: medium
 time_limit_min: 15

@@ -1,6 +1,7 @@
 id: tsh-dcgm-diag-failure
 code: tsh-12
 title: NCCL hangs and crashes that follow dgx-03
+name: DCGM diagnostics
 domain: Troubleshooting and Optimization
 difficulty: hard
 time_limit_min: 20

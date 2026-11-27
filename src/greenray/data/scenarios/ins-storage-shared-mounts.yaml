@@ -1,6 +1,7 @@
 id: ins-storage-shared-mounts
 code: ins-6
 title: Jobs on the new DGX category can't find /home
+name: Shared storage mounts
 domain: Installation and Deployment
 difficulty: medium
 time_limit_min: 20

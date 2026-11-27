@@ -48,6 +48,7 @@ class Scenario:
     briefing: str
     checks: list
     code: str = ""  # short handle such as tsh-3, fixed for the scenario's lifetime
+    name: str = ""  # the topic in a few words, for lists; the title stays the symptom a learner is handed
     difficulty: str = "medium"
     time_limit_min: int = 15
     objectives: list = field(default_factory=list)

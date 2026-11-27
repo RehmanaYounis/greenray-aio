@@ -1,6 +1,7 @@
 id: adm-slurm-partition-qos
 code: adm-8
 title: Create an interactive GPU partition with a per-user GPU cap
+name: Partition with a per-user GPU cap
 domain: Administration
 difficulty: medium
 time_limit_min: 20

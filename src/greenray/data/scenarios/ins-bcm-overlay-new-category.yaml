@@ -1,6 +1,7 @@
 id: ins-bcm-overlay-new-category
 code: ins-10
 title: A node moved to a new category is not in sinfo at all
+name: BCM category overlays
 domain: Installation and Deployment
 difficulty: medium
 time_limit_min: 15

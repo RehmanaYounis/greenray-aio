@@ -1,6 +1,7 @@
 id: ins-bcm-softwareimage-update
 code: ins-7
 title: Patch the DGX software image and push it to running nodes
+name: Update the DGX software image
 domain: Installation and Deployment
 difficulty: hard
 time_limit_min: 20

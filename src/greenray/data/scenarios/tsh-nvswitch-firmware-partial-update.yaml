@@ -1,6 +1,7 @@
 id: tsh-nvswitch-firmware-partial-update
 code: tsh-19
 title: One DGX runs NCCL at half the speed of its neighbours
+name: NVSwitch firmware mismatch
 domain: Troubleshooting and Optimization
 difficulty: hard
 time_limit_min: 25

@@ -1,6 +1,7 @@
 id: tsh-power-cap-persistence
 code: tsh-3
 title: "Training is slow on one DGX node - find the clock limiter"
+name: GPU power cap
 domain: Troubleshooting and Optimization
 difficulty: easy
 time_limit_min: 10

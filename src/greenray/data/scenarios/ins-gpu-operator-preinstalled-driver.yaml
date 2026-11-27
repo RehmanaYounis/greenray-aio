@@ -1,6 +1,7 @@
 id: ins-gpu-operator-preinstalled-driver
 code: ins-3
 title: Install the GPU Operator on DGX nodes that already have a driver
+name: GPU Operator deployment
 domain: Installation and Deployment
 difficulty: medium
 time_limit_min: 20

@@ -5,41 +5,55 @@ from __future__ import annotations
 from ..content import scenarios as sc
 from ..content.domains import DOMAIN_WEIGHTS, DOMAINS
 from . import progress, reflect, study
-from .ui import UI
+from .ui import OPEN, PASSED, STARTED, UI
 
 
 def list_scenarios(ui: UI, at_prompt: bool = False) -> None:
     """Every lab by exam domain, easy ones first. ``at_prompt``: a prompt for the code follows.
 
     Codes are fixed names, so a lab added later has a high number whatever its level;
-    grouping by level keeps the list readable without ever renumbering.
+    ordering by level keeps the list readable without ever renumbering.
     """
-    prog = progress.load()["scenarios"]
+    data = progress.load()
+    prog = data["scenarios"]
     scenarios = sc.load_all()
+    passed = sum(bool(prog.get(s.id, {}).get("passed")) for s in scenarios)
+    share = round(100 * passed / len(scenarios)) if scenarios else 0
+    ui.out("")
+    ui.out(
+        ui.tiles(
+            [
+                ("Labs", str(len(scenarios)), ""),
+                ("Passed", str(passed), "green"),
+                ("Progress", f"{share}%  {ui.bar(passed, len(scenarios), 14)}", ""),
+            ]
+        )
+    )
     for d in DOMAINS:
-        in_domain = sorted((s for s in scenarios if s.domain == d), key=sc.code_order)
-        rows, styles = [], []
-        for level in sc.DIFFICULTIES:
-            group = [s for s in in_domain if s.difficulty == level]
-            if not group:
-                continue
-            rows.append(["", ui.level(level, level.capitalize()), "", ""])
-            styles.append("")
-            for s in group:
-                p = prog.get(s.id)
-                mark = "✔" if p and p["passed"] else ("…" if p else " ")
-                rows.append([mark, s.code, s.id, s.title])
-                styles.append("green" if mark == "✔" else ("yellow" if mark == "…" else ""))
+        labs = sorted(
+            (s for s in scenarios if s.domain == d),
+            key=lambda s: (sc.DIFFICULTIES.index(s.difficulty), sc.code_order(s)),
+        )
+        rows = []
+        for s in labs:
+            p = prog.get(s.id)
+            mark = PASSED if p and p["passed"] else (STARTED if p else OPEN)
+            rows.append((mark, s.code, s.name or s.title, s.difficulty))
+        done = sum(mark == PASSED for mark, *_ in rows)
         ui.out("")
-        if ui.color:
-            ui.out(ui.bold(f"{d}  ({int(DOMAIN_WEIGHTS[d] * 100)}% of exam)"))
-            ui.out(ui.table(["", "Code", "Scenario", "Title"], rows, styles))
-        else:
-            ui.out(f"{d}  ({int(DOMAIN_WEIGHTS[d] * 100)}% of exam)")
-            for mark, code, sid, title in rows:
-                ui.out(f"    {mark} {code:<7} {sid:<42} {title}" if sid else f"  {code}")
+        ui.out(ui.lab_panel(d, f"{int(DOMAIN_WEIGHTS[d] * 100)}% of exam · {done}/{len(rows)} passed", rows))
+    nxt = study.recommend(data, limit=1)
+    if nxt:
+        s = nxt[0].scenario
+        body = f"{ui.bold(s.name or s.title)}\n{s.title}\n{ui.dim(' · '.join(s.tags))}"
+        ui.out("")
+        ui.out(ui.panel(body, title=f"Next up · {s.code}", subtitle=f"{s.difficulty} · ~{s.time_limit_min} min"))
     # the hint has to be what works where it is read: a shell command, or just the code at the menu's prompt
-    ui.out(ui.dim(f"\nStart one with its code or id: {'tsh-1' if at_prompt else 'greenray lab tsh-1'}"))
+    ui.out(
+        ui.dim(
+            f"\n{PASSED} passed   {STARTED} started   Start one with its code: {'tsh-1' if at_prompt else 'greenray lab tsh-1'}"
+        )
+    )
 
 
 def show_progress(ui: UI) -> None:

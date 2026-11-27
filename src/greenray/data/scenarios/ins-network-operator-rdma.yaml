@@ -1,6 +1,7 @@
 id: ins-network-operator-rdma
 code: ins-9
 title: Deploy the NVIDIA Network Operator for RDMA workloads
+name: Network Operator and RDMA
 domain: Installation and Deployment
 difficulty: hard
 time_limit_min: 20

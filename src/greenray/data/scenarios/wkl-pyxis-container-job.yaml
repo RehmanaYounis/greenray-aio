@@ -1,6 +1,7 @@
 id: wkl-pyxis-container-job
 code: wkl-5
 title: Run an NGC PyTorch container through Slurm with Pyxis
+name: NGC container with Pyxis
 domain: Workload Management
 difficulty: medium
 time_limit_min: 15

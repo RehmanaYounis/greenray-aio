@@ -102,6 +102,24 @@ def code_problems(scenarios: list[sc.Scenario]) -> list[str]:
     return problems
 
 
+NAME_WIDTH = 34  # what the lab list's column holds without wrapping
+
+
+def name_problems(scenarios: list[sc.Scenario]) -> list[str]:
+    """Every lab has a short name of its own that fits the list."""
+    problems = [
+        f"{s.id}: needs a name of at most {NAME_WIDTH} characters"
+        for s in scenarios
+        if not 0 < len(s.name) <= NAME_WIDTH
+    ]
+    seen: dict[str, str] = {}
+    for s in scenarios:
+        if s.name and s.name.lower() in seen:
+            problems.append(f"{s.id}: name {s.name!r} is already used by {seen[s.name.lower()]}")
+        seen.setdefault(s.name.lower(), s.id)
+    return problems
+
+
 def structural_problems() -> list[str]:
     """Problems that don't need the private solutions (safe to run in public CI)."""
     problems = []
@@ -116,6 +134,7 @@ def structural_problems() -> list[str]:
         if not s.objectives:
             problems.append(f"{s.id}: no objectives")
     problems += code_problems(scenarios)
+    problems += name_problems(scenarios)
     bank = qb.load_bank()
     if set(DOMAINS) - {q["domain"] for q in bank}:
         problems.append("some domains have no questions")

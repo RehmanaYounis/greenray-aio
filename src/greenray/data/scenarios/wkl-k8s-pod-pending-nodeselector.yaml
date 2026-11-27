@@ -1,6 +1,7 @@
 id: wkl-k8s-pod-pending-nodeselector
 code: wkl-2
 title: The cuda-test pod has been Pending for twenty minutes
+name: "Pending pod: node selector"
 domain: Workload Management
 difficulty: easy
 time_limit_min: 10

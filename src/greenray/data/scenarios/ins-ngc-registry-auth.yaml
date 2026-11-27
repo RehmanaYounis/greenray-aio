@@ -1,6 +1,7 @@
 id: ins-ngc-registry-auth
 code: ins-4
 title: Pull a private NGC container with docker and Kubernetes
+name: Private NGC registry access
 domain: Installation and Deployment
 difficulty: medium
 time_limit_min: 20

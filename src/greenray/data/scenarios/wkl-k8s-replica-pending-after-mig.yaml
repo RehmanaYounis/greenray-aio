@@ -1,6 +1,7 @@
 id: wkl-k8s-replica-pending-after-mig
 code: wkl-9
 title: One triton replica is Pending since the ML team got their MIG slices
+name: Pending replica after MIG
 domain: Workload Management
 difficulty: hard
 time_limit_min: 20
