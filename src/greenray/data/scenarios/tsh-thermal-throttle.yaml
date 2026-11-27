@@ -1,7 +1,7 @@
 id: tsh-thermal-throttle
 code: tsh-10
 title: "One slow GPU - thermal slowdown on a DGX node"
-name: Thermal throttling
+name: GPU thermal throttling
 domain: Troubleshooting and Optimization
 difficulty: medium
 time_limit_min: 15

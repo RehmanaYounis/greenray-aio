@@ -1,7 +1,7 @@
 id: tsh-docker-gpu-runtime
 code: tsh-4
 title: Inference containers down after a Docker config change
-name: Docker GPU runtime
+name: Docker lost the NVIDIA runtime
 domain: Troubleshooting and Optimization
 difficulty: medium
 time_limit_min: 20

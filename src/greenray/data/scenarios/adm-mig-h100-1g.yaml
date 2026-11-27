@@ -1,7 +1,7 @@
 id: adm-mig-h100-1g
 code: adm-6
 title: Partition an H100 into seven 1g.10gb MIG slices
-name: MIG slices on an H100
+name: Create MIG slices on a GPU
 domain: Administration
 difficulty: medium
 time_limit_min: 12

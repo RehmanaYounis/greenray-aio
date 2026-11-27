@@ -1,7 +1,7 @@
 id: adm-bcm-wlm-default-queue
 code: adm-13
 title: A hand-added partition vanished overnight. Bring it back the BCM way
-name: Restore a queue the BCM way
+name: Restore a Slurm queue in BCM
 domain: Administration
 difficulty: medium
 time_limit_min: 15

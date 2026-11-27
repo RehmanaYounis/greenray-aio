@@ -49,11 +49,7 @@ def list_scenarios(ui: UI, at_prompt: bool = False) -> None:
         ui.out("")
         ui.out(ui.panel(body, title=f"Next up · {s.code}", subtitle=f"{s.difficulty} · ~{s.time_limit_min} min"))
     # the hint has to be what works where it is read: a shell command, or just the code at the menu's prompt
-    ui.out(
-        ui.dim(
-            f"\n{PASSED} passed   {STARTED} started   Start one with its code: {'tsh-1' if at_prompt else 'greenray lab tsh-1'}"
-        )
-    )
+    ui.out(ui.dim(f"\nStart one with its code: {'tsh-1' if at_prompt else 'greenray lab tsh-1'}"))
 
 
 def show_progress(ui: UI) -> None:

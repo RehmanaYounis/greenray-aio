@@ -29,7 +29,8 @@ from .console import LabCompleter, LineReader, TimeUp
 ACCENT = "green"  # GreenRay brand colour
 # softer than the terminal's own green, yellow and red, which glare on a dark background
 LEVEL_STYLE = {"easy": "#7ee787", "medium": "#e3b341", "hard": "#f47067"}
-PASSED, STARTED, OPEN = "✔", "◐", "·"
+# a lab's status in words: a lone symbol in the row read as a cursor
+PASSED, STARTED, OPEN = "passed", "started", ""
 MARK_STYLE = {PASSED: "#7ee787", STARTED: "#e3b341"}
 
 
@@ -142,16 +143,16 @@ class UI:
         return self._render(grid)
 
     def lab_panel(self, title: str, note: str, rows: list[tuple[str, str, str, str]]) -> str:
-        """One exam domain as a panel of labs: (mark, code, name, level) per row."""
+        """One exam domain as a panel of labs: (status, code, name, level) per row."""
         if not self.color:
             lines = [f"{title}  ({note})"]
-            lines += [f"  {mark} {code:<7} {name:<36} {level}" for mark, code, name, level in rows]
+            lines += [f"  {code:<7} {name:<36} {level:<7} {mark}".rstrip() for mark, code, name, level in rows]
             return "\n".join(lines)
         t = Table(box=None, expand=True, show_edge=False, pad_edge=False, header_style="dim", padding=(0, 1))
         t.add_column("ID", width=7, no_wrap=True, style="dim")
         t.add_column("LAB", ratio=1, no_wrap=True, overflow="ellipsis")
         t.add_column("LEVEL", width=7, no_wrap=True)
-        t.add_column("", width=1)
+        t.add_column("STATUS", width=7, no_wrap=True)
         for mark, code, name, level in rows:
             done = Text(mark, style=MARK_STYLE.get(mark, "dim"))
             t.add_row(code, name, Text(level, style=LEVEL_STYLE[level]), done)

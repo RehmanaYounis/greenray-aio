@@ -44,7 +44,7 @@ def listed(ui: ScriptedUI) -> list[tuple[str, str]]:
     """(level, code) for every lab line of a printed list, in the order shown."""
     found = []
     for line in "\n".join(ui.output).splitlines():
-        words = line.replace("✔", " ").replace("◐", " ").replace("·", " ").split()
+        words = [w for w in line.split() if w not in ("passed", "started")]
         if words and words[0].startswith(("tsh-", "adm-", "wkl-", "ins-")) and words[-1] in sc.DIFFICULTIES:
             found.append((words[-1], words[0]))
     return found
@@ -82,10 +82,10 @@ def test_the_list_shows_short_names_progress_and_what_to_do_next():
     text = ui.text
     assert "Labs: 53" in text and "Passed: 1" in text and "Progress: 2%" in text
     assert "Troubleshooting and Optimization  (23% of exam · 1/19 passed)" in text
-    rows = [line.split() for line in text.splitlines() if len(line.split()) > 2]
-    lines = {words[1]: words for words in rows if words[1].startswith("tsh-")}
-    assert lines["tsh-1"][0] == "✔" and " ".join(lines["tsh-1"][2:-1]) == "First look at job logs"
-    assert lines["tsh-2"][0] == "◐"
+    lines = {line.split()[0]: line.split() for line in text.splitlines() if line.strip().startswith("tsh-")}
+    assert lines["tsh-1"][1:] == ["Find", "why", "a", "job", "ended", "easy", "passed"]
+    assert lines["tsh-2"][-2:] == ["easy", "started"]
+    assert lines["tsh-3"][-1] == "easy"  # a lab not opened yet has no status word
     assert "tsh-first-look-at-logs" not in text  # the long ids and symptom titles stay out of the rows
     assert "Next up" in text and "greenray lab tsh-1" in text
 
