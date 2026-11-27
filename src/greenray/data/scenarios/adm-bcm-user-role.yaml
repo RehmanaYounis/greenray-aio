@@ -1,6 +1,7 @@
 id: adm-bcm-user-role
 code: adm-4
 title: Onboard a new ML engineer (cluster user, group, read-only BCM role, Slurm account)
+name: Onboard a user in BCM and Slurm
 domain: Administration
 difficulty: medium
 time_limit_min: 20

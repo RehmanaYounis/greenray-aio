@@ -19,6 +19,7 @@ Each scenario also carries a `code`, the short handle learners type (`tsh-3`). A
 id: tsh-example
 code: tsh-19                                # next free number in the domain; never reused
 title: Short, symptom-style title
+name: Topic in a few words                  # for the lab list; at most 34 characters, unique
 domain: Troubleshooting and Optimization   # one of the 4 blueprint domains, spelled exactly
 difficulty: medium                          # easy | medium | hard
 time_limit_min: 15

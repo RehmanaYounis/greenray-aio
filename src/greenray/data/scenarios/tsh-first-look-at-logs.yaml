@@ -1,6 +1,7 @@
 id: tsh-first-look-at-logs
 code: tsh-1
 title: "A user's training job disappeared overnight"
+name: Find why a job ended
 domain: Troubleshooting and Optimization
 difficulty: easy
 time_limit_min: 10

@@ -1,6 +1,7 @@
 id: ins-slurm-gres-config
 code: ins-5
 title: New DGX nodes are in Slurm, but GPU jobs are rejected
+name: Slurm GPU configuration
 domain: Installation and Deployment
 difficulty: medium
 time_limit_min: 20

@@ -1,6 +1,7 @@
 id: adm-bcm-wlm-new-queue
 code: adm-14
 title: Add a short queue on two nodes, the BCM way
+name: Add a Slurm queue in BCM
 domain: Administration
 difficulty: easy
 time_limit_min: 10

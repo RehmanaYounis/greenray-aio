@@ -1,6 +1,7 @@
 id: ins-container-toolkit-docker
 code: ins-1
 title: Docker can't see the GPUs on a freshly installed node
+name: Docker GPU visibility
 domain: Installation and Deployment
 difficulty: easy
 time_limit_min: 15

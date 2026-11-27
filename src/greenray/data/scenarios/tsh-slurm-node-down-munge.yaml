@@ -1,6 +1,7 @@
 id: tsh-slurm-node-down-munge
 code: tsh-9
 title: "A DGX node is DOWN \"Not responding\" after its disk swap"
+name: Node DOWN after a disk swap
 domain: Troubleshooting and Optimization
 difficulty: medium
 time_limit_min: 15

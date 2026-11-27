@@ -1,6 +1,7 @@
 id: tsh-which-gpu-is-which
 code: tsh-2
 title: "The BMC reports PCIe errors on a bus id. Which GPU is that?"
+name: Map a PCI bus id to a GPU
 domain: Troubleshooting and Optimization
 difficulty: easy
 time_limit_min: 10

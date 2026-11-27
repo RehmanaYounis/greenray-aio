@@ -1,6 +1,7 @@
 id: adm-k8s-time-slicing
 code: adm-11
 title: Share dgx-04's GPUs between many small inference pods (time-slicing)
+name: GPU time-slicing in Kubernetes
 domain: Administration
 difficulty: hard
 time_limit_min: 20

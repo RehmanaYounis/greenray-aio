@@ -1,6 +1,7 @@
 id: wkl-runai-fractional-gpu
 code: wkl-6
 title: Two notebooks on one GPU with Run:ai fractions
+name: "Run:ai fractional GPUs"
 domain: Workload Management
 difficulty: medium
 time_limit_min: 15

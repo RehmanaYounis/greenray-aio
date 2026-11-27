@@ -1,6 +1,7 @@
 id: adm-bcm-monitoring-hot-node
 code: adm-15
 title: Make BCM drain a node whose GPUs run hot
+name: Auto-drain hot nodes with BCM
 domain: Administration
 difficulty: medium
 time_limit_min: 20

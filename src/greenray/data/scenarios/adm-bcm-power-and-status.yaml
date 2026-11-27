@@ -1,6 +1,7 @@
 id: adm-bcm-power-and-status
 code: adm-3
 title: A DGX is DOWN in BCM — bring it back with out-of-band power control
+name: Recover a DOWN node via its BMC
 domain: Administration
 difficulty: medium
 time_limit_min: 12

@@ -4,7 +4,7 @@ import pytest
 
 from conftest import ScriptedUI
 from greenray import cli
-from greenray.app import reports, study
+from greenray.app import progress, reports, study
 from greenray.content import scenarios as sc
 from greenray.content import validate
 
@@ -41,14 +41,12 @@ def test_on_ramp_labs_lead_each_domain():
 
 
 def listed(ui: ScriptedUI) -> list[tuple[str, str]]:
-    """(level heading, code) for every lab line of a printed list, in the order shown."""
-    found, level = [], ""
+    """(level, code) for every lab line of a printed list, in the order shown."""
+    found = []
     for line in "\n".join(ui.output).splitlines():
-        words = line.replace("✔", " ").replace("…", " ").split()
-        if words and words[0] in ("Easy", "Medium", "Hard"):
-            level = words[0].lower()
-        elif words and words[0].startswith(("tsh-", "adm-", "wkl-", "ins-")):
-            found.append((level, words[0]))
+        words = [w for w in line.split() if w not in ("passed", "started")]
+        if words and words[0].startswith(("tsh-", "adm-", "wkl-", "ins-")) and words[-1] in sc.DIFFICULTIES:
+            found.append((words[-1], words[0]))
     return found
 
 
@@ -76,13 +74,37 @@ def test_a_lab_added_later_is_listed_with_its_level_not_at_the_end():
     assert adm.index("adm-14") < adm.index("adm-3")
 
 
+def test_the_list_shows_short_names_progress_and_what_to_do_next():
+    progress.record_scenario("tsh-first-look-at-logs", True, 120, 0, False)
+    progress.record_scenario("tsh-which-gpu-is-which", False, 120, 1, True)
+    ui = ScriptedUI([])
+    reports.list_scenarios(ui)
+    text = ui.text
+    assert "Labs: 53" in text and "Passed: 1" in text and "Progress: 2%" in text
+    assert "Troubleshooting and Optimization  (23% of exam · 1/19 passed)" in text
+    lines = {line.split()[0]: line.split() for line in text.splitlines() if line.strip().startswith("tsh-")}
+    assert lines["tsh-1"][1:] == ["Find", "why", "a", "job", "ended", "easy", "passed"]
+    assert lines["tsh-2"][-2:] == ["easy", "started"]
+    assert lines["tsh-3"][-1] == "easy"  # a lab not opened yet has no status word
+    assert "tsh-first-look-at-logs" not in text  # the long ids and symptom titles stay out of the rows
+    assert "Next up" in text and "greenray lab tsh-1" in text
+
+
+def test_every_lab_has_a_short_name_that_fits_the_list():
+    assert validate.name_problems(sc.load_all()) == []
+    base = sc.load_all()[0]
+    assert validate.name_problems([sc.replace(base, name="")])
+    assert validate.name_problems([sc.replace(base, name="x" * 35)])
+    assert any("already used" in p for p in validate.name_problems([base, sc.replace(base, id="tsh-other")]))
+
+
 def test_the_hint_under_the_list_is_what_works_where_it_is_shown():
     ui = ScriptedUI([])
     reports.list_scenarios(ui)
-    assert "Start one with its code or id: greenray lab tsh-1" in ui.text
+    assert "Start one with its code: greenray lab tsh-1" in ui.text
     ui = ScriptedUI(["1", "", "q"])
     cli.menu(ui)
-    assert "Start one with its code or id: tsh-1" in ui.text and "greenray lab tsh-1" not in ui.text
+    assert "Start one with its code: tsh-1" in ui.text and "greenray lab tsh-1" not in ui.text
 
 
 @pytest.mark.parametrize("typed", ["greenray lab tsh-3", "lab tsh-3", "  TSH-3  "])

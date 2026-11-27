@@ -1,6 +1,7 @@
 id: tsh-numa-affinity
 code: tsh-17
 title: The same training job is 35% slower whenever it lands on dgx-03
+name: NUMA and GPU affinity
 domain: Troubleshooting and Optimization
 difficulty: hard
 time_limit_min: 25
