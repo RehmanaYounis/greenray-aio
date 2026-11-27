@@ -19,11 +19,19 @@ from .common import (
     fmt_elapsed,
     fmt_limit_upper,
     job_id_text,
-    mem_text,
 )
 from .fairshare import _acct_usage, _assoc_shares, _fs_factor, _level_total, _norm_acct, _user_usage
 from .sacctmgr import _assoc_walk
-from .scheduler import _alloc_cpu_count, _begin, _ensure, _job_gpus, _need_ctl
+from .scheduler import (
+    _alloc_cpu_count,
+    _alloc_mem_mb,
+    _begin,
+    _ensure,
+    _job_alloc_mem_mb,
+    _job_gpus,
+    _need_ctl,
+    _req_mem_mb,
+)
 
 SACCT_W = {
     "jobid": 12,
@@ -137,11 +145,15 @@ def _sacct_rows(state, j, steps=True):
     ncpu = j.num_nodes * j.ntasks_per_node * j.cpus_per_task
     acpu = _alloc_cpu_count(state, j)
     gtres = f"gres/gpu={_job_gpus(j)}," if j.gpus_per_node else ""
-    # the memory the job asked for, per node; a job that named none shows 0, as in scontrol show job
-    req_mb = int(j.get("min_memory_mb") or 0)
-    rest = gtres + f"mem={mem_text(req_mb * j.num_nodes) if req_mb else 0},node={j.num_nodes}"
-    tres = f"billing={ncpu},cpu={ncpu}," + rest
-    atres = f"billing={acpu},cpu={acpu}," + rest
+    # asked for and given are separate: a job that names no memory asks for 0 and is still allocated some
+    req_mb = _req_mem_mb(state, j)
+    alloc_mb = _job_alloc_mem_mb(state, j)
+
+    def with_mem(megabytes: int) -> str:
+        return gtres + f"mem={_units(megabytes, 2)},node={j.num_nodes}"
+
+    tres = f"billing={ncpu},cpu={ncpu}," + with_mem(req_mb * j.num_nodes)
+    atres = f"billing={acpu},cpu={acpu}," + with_mem(alloc_mb)
     st = j.state
     if st == "CANCELLED" and j.start_time is not None:
         st = "CANCELLED by 0"
@@ -213,8 +225,14 @@ def _sacct_rows(state, j, steps=True):
                 "maxvmsize": _units(_bytes(used.get("max_vmsize_kb")), 0),
             }
         )
-        if sid == "batch" and r["alloctres"]:  # billing is charged to the job, not to its batch step
-            r["alloctres"] = f"cpu={acpu}," + rest
+        if sid == "batch" and r["alloctres"] and j.nodelist:
+            # the batch script runs on the first node only, and billing is charged to the job
+            first = j.nodelist[0]
+            cpus = acpu // max(1, len(j.nodelist))
+            gpus = f"gres/gpu={j.gpus_per_node}," if j.gpus_per_node else ""
+            r["alloctres"] = f"cpu={cpus},{gpus}mem={_units(_alloc_mem_mb(state, j, first), 2)},node=1"
+        elif sid != "extern" and r["alloctres"]:
+            r["alloctres"] = r["alloctres"].removeprefix(f"billing={acpu},")
         return r
 
     term = j.state if j.state in TERMINAL else "RUNNING"

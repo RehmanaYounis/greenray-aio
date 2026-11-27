@@ -74,7 +74,7 @@ checks:
   - desc: bob's job 3002 is still running on dgx-01
     expr: jobs(id=3002)[0].state == 'RUNNING'
 hints:
-  - "Start with what the last run really got: sacct -j 3001 --format=JobID,JobName,NNodes,NTasks,AllocTRES,NodeList and the job's output file."
+  - "Start with what the last run really got: sacct -j 3001 --format=JobID,JobName,NNodes,NTasks,AllocTRES%60,NodeList and the job's output file."
   - "--gpus is the total for the whole job, so --gpus=8 over 2 nodes gives 4 GPUs per node. --gres=gpu:8 and --gpus-per-node=8 are per node. --ntasks-per-node is how many processes srun starts on each node."
   - "--exclusive gives the job whole nodes (all CPUs, memory, GPUs and NICs) even if it asked for less. Without it, another job could be placed next to yours."
   - "Edit the #SBATCH lines to: -N 2, --ntasks-per-node=8, --gpus-per-node=8 (or --gres=gpu:8), --exclusive. Submit it, then check squeue, scontrol show job <id> and the output file."

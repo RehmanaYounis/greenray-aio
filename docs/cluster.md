@@ -31,6 +31,14 @@ You start on `bcm-head` as root. `ssh dgx-01` moves your shell to a compute node
 
 `commands` inside a lab prints the full list for the current version, and `explain <command>` describes what a tool is for and what to look for in its output.
 
+## Slurm configuration
+
+The cluster's `slurm.conf` is on the head node at `/etc/slurm/slurm.conf`, and the simulator follows what it says.
+
+Memory is a tracked resource (`SelectTypeParameters=CR_Core_Memory`) with a default of 8 GB per CPU (`DefMemPerCPU=8192`). A job that names its memory (`--mem`, `--mem-per-cpu`, `--mem-per-gpu`) is allocated that much. A job that names none is allocated the default for its CPUs, so a one-CPU job holds 8 GB and several jobs can share a node. `sacct` (`ReqMem`, `ReqTRES`, `AllocTRES`), `scontrol show job`, `scontrol show node` (`AllocMem`, `AllocTRES`) and `scontrol show partition` report the same figures, and a job keeps what it was given when it started even if `slurm.conf` changes later.
+
+Remove the default and the cluster behaves as a real one does without it: a job that names no memory asks for 0 and is given all of the node's `RealMemory`, and a second job cannot share that node until the first ends (reason `Resources`). `DefMemPerNode` and `DefMemPerGPU` are honoured in its place.
+
 ## Limits
 
 Outputs are realistic but simplified. Only the options that matter for the exam are implemented, and a command that does not parse usually works in its canonical form. The shell runs one command line at a time: `for` and `while` loops, `if`, functions and background jobs (`&`) are not supported, and `cmsh` keeps its staged changes only until the end of the `cmsh -c` invocation, so `commit` belongs in the same script as the `set`. A tool's `--help` page lists exactly the options the simulator honours: the test-suite runs every one of them and fails if an option changes nothing. A `--long` option the tool does not know is refused in the tool's own words instead of being ignored, an unknown subcommand of `ipmitool` or `systemctl` likewise, and `ssh <host> <command>` ends with the exit status of the remote command, so `&&` and `||` behave as on a real node. The grader reads the end state of the cluster, so what matters is what you changed, not the exact flags you used to change it.
