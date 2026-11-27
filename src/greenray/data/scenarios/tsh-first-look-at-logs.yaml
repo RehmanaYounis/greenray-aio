@@ -25,9 +25,9 @@ setup:
       state.slurm.jobs.append({
           'id': {job}, 'name': '{jobname}', 'user': '{user}', 'partition': 'defq', 'state': 'OUT_OF_MEMORY',
           'exit_code': '0:125', 'num_nodes': 1, 'gpus_per_node': 8, 'nodelist': ['{node}'],
-          # asked for 200G; the last accounting sample before the kill saw a little less than the limit
+          # asked for 200G; the batch step peaked a few MB under the job's limit, the rest being the extern step's share
           'cpus_per_task': 224, 'min_memory_mb': 204800,
-          'usage': {'batch': {'max_rss_kb': 208347136, 'max_vmsize_kb': 411041792},
+          'usage': {'batch': {'max_rss_kb': 209711104, 'max_vmsize_kb': 411041792},
                     'extern': {'max_rss_kb': 0, 'max_vmsize_kb': 0}},
           'submit_time': -43200, 'start_time': -43000, 'end_time': -31200, 'batch': True,
           'command': '/home/{user}/{jobname}/train.sbatch', 'stdout': '/home/{user}/{jobname}/slurm-{job}.out'})

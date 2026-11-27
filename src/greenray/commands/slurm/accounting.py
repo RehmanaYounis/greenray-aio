@@ -107,11 +107,26 @@ SACCT_HDR = {
 }
 
 
-def _kilobytes(kb) -> str:
-    """A sampled memory figure as sacct prints it; nothing when the step has none recorded."""
-    if kb is None:
+def _units(amount: int | None, start: int) -> str:
+    """A memory figure as sacct prints it by default; nothing when none is recorded.
+
+    sacct moves a value up a unit only while that loses nothing (its test is a multiple of half
+    the next unit), so 204800 MB reads 200G and 203464 MB stays 203464M. Zero is a bare 0.
+    ``start`` is the unit the figure is in: 0 for bytes, 2 for megabytes.
+    """
+    if amount is None:
         return ""
-    return f"{int(kb)}K" if int(kb) else "0"
+    if not amount:
+        return "0"
+    value, unit = float(amount), start
+    while value >= 1024 and int(value) % 512 == 0 and unit < 5:
+        value, unit = value / 1024, unit + 1
+    suffix = " KMGTP"[unit].strip()
+    return f"{int(value)}{suffix}" if value == int(value) else f"{value:.2f}{suffix}"
+
+
+def _bytes(kb) -> int | None:
+    return None if kb is None else int(kb) * 1024
 
 
 def _sacct_rows(state, j, steps=True):
@@ -163,7 +178,7 @@ def _sacct_rows(state, j, steps=True):
         "submitline": j.command,
         "derivedexitcode": "0:0",
         "ncpus": str(acpu if j.start_time is not None else ncpu),
-        "reqmem": mem_text(req_mb),
+        "reqmem": _units(req_mb, 2),
         "reqnodes": str(j.num_nodes),
         "uid": "0" if j.user == "root" else str(1000 + sum(map(ord, j.user)) % 500),
         "group": j.user,
@@ -194,8 +209,8 @@ def _sacct_rows(state, j, steps=True):
                 # a step has no request of its own: what was asked for is on the allocation line
                 "reqmem": "",
                 "reqtres": "",
-                "maxrss": _kilobytes(used.get("max_rss_kb")),
-                "maxvmsize": _kilobytes(used.get("max_vmsize_kb")),
+                "maxrss": _units(_bytes(used.get("max_rss_kb")), 0),
+                "maxvmsize": _units(_bytes(used.get("max_vmsize_kb")), 0),
             }
         )
         if sid == "batch" and r["alloctres"]:  # billing is charged to the job, not to its batch step
