@@ -213,34 +213,61 @@ def _memory_tracked(state) -> bool:
     return "memory" in str(_param(state, "SelectTypeParameters", "")).lower()
 
 
+def _default_mem(state, j) -> tuple[str, int]:
+    """The slurm.conf memory default that applies to a job naming none: (parameter, megabytes), or ("", 0).
+
+    It is fixed when the job is submitted, so a later edit of slurm.conf does not rewrite the job.
+    """
+    kept = j.get("default_mem")
+    if kept is not None:
+        return str(kept[0]), int(kept[1])
+    keys = ["DefMemPerNode"] + (["DefMemPerGPU"] if int(j.get("gpus_per_node") or 0) else []) + ["DefMemPerCPU"]
+    for key in keys:
+        value = str(_param(state, key, "0"))
+        if value.isdigit() and int(value):
+            return key, int(value)
+    return "", 0
+
+
 def _req_mem_mb(state, j) -> int:
     """Memory per node the job asks for: its own figure, else slurm.conf's default; 0 when neither is set."""
     asked = int(j.get("min_memory_mb") or 0)
     if asked:
         return asked
-    per = {
+    key, each = _default_mem(state, j)
+    count = {
         "DefMemPerNode": 1,
-        "DefMemPerCPU": int(j.get("ntasks_per_node") or 1) * int(j.get("cpus_per_task") or 1),
         "DefMemPerGPU": int(j.get("gpus_per_node") or 0),
-    }
-    for key, count in per.items():
-        value = str(_param(state, key, "0"))
-        if value.isdigit() and int(value):
-            return int(value) * count
-    return 0
+        "DefMemPerCPU": int(j.get("ntasks_per_node") or 1) * int(j.get("cpus_per_task") or 1),
+    }.get(key, 0)
+    return each * count
 
 
-def _alloc_mem_mb(state, j, name) -> int:
-    """Memory the job holds on one node.
+def _mem_for_node(state, j, name) -> int:
+    """Memory the job would be given on a node if it started there now.
 
     With memory tracked and no figure from the job or from slurm.conf, Slurm gives the job
     all of the node's memory, which is also why nothing else can then share that node.
     """
+    sn = state.slurm.nodes.get(name)
+    key, each = _default_mem(state, j)
+    if not int(j.get("min_memory_mb") or 0) and key == "DefMemPerCPU" and j.get("exclusive") and sn:
+        return each * int(sn.get("cpus") or 0)  # an exclusive job holds every CPU of the node
     asked = _req_mem_mb(state, j)
     if asked or not _memory_tracked(state):
         return asked
-    sn = state.slurm.nodes.get(name)
     return int(sn.get("real_memory") or 0) if sn else 0
+
+
+def _alloc_mem_mb(state, j, name) -> int:
+    """Memory the job holds on one node: what it was given when it started."""
+    held = (j.get("alloc_mem") or {}).get(name)
+    return int(held) if held is not None else _mem_for_node(state, j, name)
+
+
+def _holds_memory(j) -> bool:
+    """A suspended job gives up its CPUs and GPUs but keeps its memory."""
+    return j.state in ("RUNNING", "SUSPENDED")
 
 
 def _job_alloc_mem_mb(state, j) -> int:
@@ -406,9 +433,10 @@ def _fits(state, j, name) -> list | None:
     cpus = sn.cpus if j.exclusive else j.ntasks_per_node * j.cpus_per_task
     if sn.alloc_cpus + cpus > sn.cpus:
         return None
-    need_mem = _alloc_mem_mb(state, j, name)
+    need_mem = _mem_for_node(state, j, name)
     if need_mem:
-        used_mem = sum(_alloc_mem_mb(state, o, name) for o in running)
+        holders = [o for o in state.slurm.jobs if o is not j and _holds_memory(o) and name in (o.nodelist or [])]
+        used_mem = sum(_alloc_mem_mb(state, o, name) for o in holders)
         if used_mem + need_mem > int(sn.get("real_memory") or 0):
             return None
     if not _reservation_allows(state, j, name):
@@ -480,6 +508,7 @@ def _start(state, j, chosen, add_procs=True):
     j.reason = "None"
     j.nodelist = list(chosen)
     j.alloc_gpus = {n: list(g) for n, g in chosen.items()}
+    j.alloc_mem = {n: _mem_for_node(state, j, n) for n in chosen}
     j.alloc_cores = {}
     for n, g in chosen.items():
         j.alloc_cores[n] = _alloc_cores(state, j, n, g)

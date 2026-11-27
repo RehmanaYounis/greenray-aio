@@ -24,7 +24,7 @@ setup:
   - python: |
       state.slurm.users['alice'] = {'name': 'alice', 'default_account': 'root'}
       state.slurm.jobs.append({
-          'id': 2301, 'name': 'llama-sft', 'user': 'alice', 'partition': 'defq', 'state': 'RUNNING', 'min_memory_mb': 524288,
+          'id': 2301, 'name': 'llama-sft', 'user': 'alice', 'partition': 'defq', 'state': 'RUNNING',
           'exit_code': '0:0', 'num_nodes': 1, 'gpus_per_node': 8, 'nodelist': ['dgx-01'],
           'submit_time': -90000, 'start_time': -86400, 'end_time': None, 'batch': True,
           'command': '/home/alice/sft/run.sbatch', 'duration': None, 'time_limit': None})

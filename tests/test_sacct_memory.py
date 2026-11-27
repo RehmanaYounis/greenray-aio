@@ -46,11 +46,11 @@ def test_steps_carry_no_request_of_their_own():
     assert "billing" not in rows["1001.batch"][2] and "billing" in rows["1001.extern"][2]
 
 
-def test_a_job_without_a_memory_request_or_recorded_usage_keeps_empty_usage_columns():
+def test_a_job_without_recorded_usage_keeps_empty_usage_columns():
     s = Shell(make_cluster())
     s.run("sbatch --wrap='sleep 600'")
     rows = table(s, "sacct -j 1001 --format=JobID,ReqMem,MaxRSS,MaxVMSize,ReqTRES")
-    assert rows["1001"] == ["0", "", "", "billing=1,cpu=1,mem=0,node=1"]
+    assert rows["1001"] == ["8G", "", "", "billing=1,cpu=1,mem=8G,node=1"]  # the cluster's default for one CPU
     assert rows["1001.batch"][1:3] == ["", ""]
 
 
@@ -86,11 +86,11 @@ def test_the_oom_jobs_accounting_agrees_with_the_kernel_log(variant):
 
 @pytest.mark.parametrize(
     ("megabytes", "shown"),
-    [(204800, "200G"), (1536, "1.50G"), (1500, "1500M"), (1048576, "1T"), (0, "0")],
+    [(204800, "200G"), (1536, "1.50G"), (1500, "1500M"), (1048576, "1T")],
 )
 def test_memory_is_printed_the_way_sacct_converts_units(megabytes, shown):
     s = Shell(make_cluster())
-    s.run(f"sbatch --mem={megabytes}M --wrap='sleep 600'" if megabytes else "sbatch --wrap='sleep 600'")
+    s.run(f"sbatch --mem={megabytes}M --wrap='sleep 600'")
     assert table(s, "sacct -j 1001 -X --format=JobID,ReqMem")["1001"] == [shown]
 
 

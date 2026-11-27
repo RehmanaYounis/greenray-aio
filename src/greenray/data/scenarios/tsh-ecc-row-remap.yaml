@@ -34,7 +34,7 @@ setup:
       ])
       st = state.slurm
       st.users['{user}'] = {'name': '{user}', 'default_account': 'root'}
-      st.jobs.append({'id': {job}, 'name': '{jobname}', 'user': '{user}', 'partition': 'defq', 'state': 'RUNNING', 'min_memory_mb': 131072,
+      st.jobs.append({'id': {job}, 'name': '{jobname}', 'user': '{user}', 'partition': 'defq', 'state': 'RUNNING',
                       'num_nodes': 1, 'gpus_per_node': 8, 'ntasks_per_node': 8, 'nodelist': ['{node}'],
                       'alloc_gpus': {'{node}': list(range(8))}, 'start_time': 0, 'submit_time': 0,
                       'duration': None, 'command': '/home/{user}/{jobname}.sbatch'})

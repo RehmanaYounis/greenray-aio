@@ -49,7 +49,9 @@ from .scheduler import (
     _alloc_mem_mb,
     _begin,
     _controller_ok,
+    _default_mem,
     _ensure,
+    _holds_memory,
     _job_alloc_mem_mb,
     _job_gpus,
     _need_ctl,
@@ -208,10 +210,10 @@ def _show_node(state, sn, details=False):
     cfg_tres = f"cpu={sn.cpus},mem={sn.real_memory}M,billing={sn.cpus}" + (f",gres/gpu={gc}" if gc else "")
     used_g = len(used_idx)
     alloc_mem = sum(
-        _alloc_mem_mb(state, o, sn.name) for o in state.slurm.jobs if o.state == "RUNNING" and sn.name in o.nodelist
+        _alloc_mem_mb(state, o, sn.name) for o in state.slurm.jobs if _holds_memory(o) and sn.name in (o.nodelist or [])
     )
     alloc_tres = ""
-    if sn.alloc_cpus:
+    if sn.alloc_cpus or alloc_mem:
         alloc_tres = f"cpu={sn.alloc_cpus}" + (f",mem={mem_text(alloc_mem)}" if alloc_mem else "")
         alloc_tres += f",gres/gpu={used_g}" if used_g else ""
     parts = [p.name for p in state.slurm.partitions.values() if sn.name in expand_hostlist(p.nodes)]
@@ -286,6 +288,12 @@ def _min_memory(state, j) -> str:
         return f"MinMemoryCPU={mem_text(j.mem_per_cpu)}"
     if j.get("mem_per_gpu"):
         return f"MinMemoryGPU={mem_text(j.mem_per_gpu)}"
+    if not int(j.get("min_memory_mb") or 0):  # a default is reported in the unit slurm.conf gives it in
+        key, each = _default_mem(state, j)
+        if key == "DefMemPerCPU":
+            return f"MinMemoryCPU={mem_text(each)}"
+        if key == "DefMemPerGPU":
+            return f"MinMemoryGPU={mem_text(each)}"
     return f"MinMemoryNode={mem_text(_req_mem_mb(state, j))}"
 
 

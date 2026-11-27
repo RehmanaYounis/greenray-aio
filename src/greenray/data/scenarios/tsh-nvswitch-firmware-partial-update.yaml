@@ -43,7 +43,7 @@ setup:
       ]
       state.slurm.users['{user}'] = {'name': '{user}', 'default_account': 'root'}
       state.slurm.jobs.append({
-          'id': {job}, 'name': 'allreduce-check', 'user': '{user}', 'partition': 'defq', 'state': 'RUNNING', 'min_memory_mb': 524288,
+          'id': {job}, 'name': 'allreduce-check', 'user': '{user}', 'partition': 'defq', 'state': 'RUNNING',
           'exit_code': '0:0', 'num_nodes': 1, 'gpus_per_node': 8, 'nodelist': ['{node}'],
           'submit_time': -1500, 'start_time': -1200, 'end_time': None, 'batch': True,
           'command': '/home/{user}/bench/allreduce.sbatch', 'duration': None, 'time_limit': None})

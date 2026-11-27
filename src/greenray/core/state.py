@@ -311,6 +311,7 @@ SlurmUser=slurm
 AuthType=auth/munge
 SelectType=select/cons_tres
 SelectTypeParameters=CR_Core_Memory
+DefMemPerCPU=8192
 GresTypes=gpu
 ProctrackType=proctrack/cgroup
 TaskPlugin=task/affinity,task/cgroup

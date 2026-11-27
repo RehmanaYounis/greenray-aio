@@ -35,7 +35,9 @@ You start on `bcm-head` as root. `ssh dgx-01` moves your shell to a compute node
 
 The cluster's `slurm.conf` is on the head node at `/etc/slurm/slurm.conf`, and the simulator follows what it says.
 
-Memory is a tracked resource (`SelectTypeParameters=CR_Core_Memory`) and no default is set. A job that names its memory (`--mem`, `--mem-per-cpu`, `--mem-per-gpu`) is allocated that much. A job that names none asks for 0 and is given all of the node's `RealMemory`, so no other job can share that node until it ends; a second job waits with reason `Resources`. Give jobs a `--mem` when they should share a node, or set `DefMemPerCPU`, `DefMemPerGPU` or `DefMemPerNode` in `slurm.conf`, which then becomes the request of every job that names none. `sacct` (`ReqMem`, `ReqTRES`, `AllocTRES`), `scontrol show job`, `scontrol show node` (`AllocMem`, `AllocTRES`) and `scontrol show partition` all report the same figures.
+Memory is a tracked resource (`SelectTypeParameters=CR_Core_Memory`) with a default of 8 GB per CPU (`DefMemPerCPU=8192`). A job that names its memory (`--mem`, `--mem-per-cpu`, `--mem-per-gpu`) is allocated that much. A job that names none is allocated the default for its CPUs, so a one-CPU job holds 8 GB and several jobs can share a node. `sacct` (`ReqMem`, `ReqTRES`, `AllocTRES`), `scontrol show job`, `scontrol show node` (`AllocMem`, `AllocTRES`) and `scontrol show partition` report the same figures, and a job keeps what it was given when it started even if `slurm.conf` changes later.
+
+Remove the default and the cluster behaves as a real one does without it: a job that names no memory asks for 0 and is given all of the node's `RealMemory`, and a second job cannot share that node until the first ends (reason `Resources`). `DefMemPerNode` and `DefMemPerGPU` are honoured in its place.
 
 ## Limits
 

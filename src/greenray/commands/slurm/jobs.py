@@ -30,7 +30,16 @@ from .common import (
 )
 from .conf import _enforce, _gpu_types_enabled, _param, _pyxis_client_ok
 from .nodes import _conf_gpus, _finish
-from .scheduler import _begin, _default_partition, _ensure, _job_defaults, _need_ctl, _part_nodes, schedule
+from .scheduler import (
+    _begin,
+    _default_mem,
+    _default_partition,
+    _ensure,
+    _job_defaults,
+    _need_ctl,
+    _part_nodes,
+    schedule,
+)
 from .steps import _CURRENT, _expand_pattern, _run_step
 
 OPTS_ARG = {
@@ -517,6 +526,7 @@ def _new_job(state, job):
     s.jobs.append(job)
     j = s.jobs[-1]
     _job_defaults(state, j)
+    j.default_mem = list(_default_mem(state, j))
     return j
 
 
