@@ -23,7 +23,7 @@ from .common import (
 )
 from .fairshare import _acct_usage, _assoc_shares, _fs_factor, _level_total, _norm_acct, _user_usage
 from .sacctmgr import _assoc_walk
-from .scheduler import _alloc_cpu_count, _begin, _ensure, _job_gpus, _need_ctl
+from .scheduler import _alloc_cpu_count, _begin, _ensure, _job_alloc_mem_mb, _job_gpus, _need_ctl, _req_mem_mb
 
 SACCT_W = {
     "jobid": 12,
@@ -137,11 +137,15 @@ def _sacct_rows(state, j, steps=True):
     ncpu = j.num_nodes * j.ntasks_per_node * j.cpus_per_task
     acpu = _alloc_cpu_count(state, j)
     gtres = f"gres/gpu={_job_gpus(j)}," if j.gpus_per_node else ""
-    # the memory the job asked for, per node; a job that named none shows 0, as in scontrol show job
-    req_mb = int(j.get("min_memory_mb") or 0)
-    rest = gtres + f"mem={mem_text(req_mb * j.num_nodes) if req_mb else 0},node={j.num_nodes}"
-    tres = f"billing={ncpu},cpu={ncpu}," + rest
-    atres = f"billing={acpu},cpu={acpu}," + rest
+    # asked for and given are separate: a job that names no memory asks for 0 and is still allocated some
+    req_mb = _req_mem_mb(state, j)
+    alloc_mb = _job_alloc_mem_mb(state, j)
+
+    def with_mem(megabytes: int) -> str:
+        return gtres + f"mem={mem_text(megabytes) if megabytes else 0},node={j.num_nodes}"
+
+    tres = f"billing={ncpu},cpu={ncpu}," + with_mem(req_mb * j.num_nodes)
+    atres = f"billing={acpu},cpu={acpu}," + with_mem(alloc_mb)
     st = j.state
     if st == "CANCELLED" and j.start_time is not None:
         st = "CANCELLED by 0"
@@ -214,7 +218,7 @@ def _sacct_rows(state, j, steps=True):
             }
         )
         if sid == "batch" and r["alloctres"]:  # billing is charged to the job, not to its batch step
-            r["alloctres"] = f"cpu={acpu}," + rest
+            r["alloctres"] = f"cpu={acpu}," + with_mem(alloc_mb)
         return r
 
     term = j.state if j.state in TERMINAL else "RUNNING"

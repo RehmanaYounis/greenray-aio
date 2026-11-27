@@ -31,7 +31,7 @@ from .common import (
     parse_time,
     time_arg,
 )
-from .conf import _parse_gres_conf, _partition_from_conf
+from .conf import _param, _parse_gres_conf, _partition_from_conf
 from .nodes import (
     _conf_gpus,
     _derive_state,
@@ -44,7 +44,19 @@ from .nodes import (
     _used_gpu_idx,
     apply_config,
 )
-from .scheduler import _alloc_cpu_count, _begin, _controller_ok, _ensure, _job_gpus, _need_ctl, _part_nodes, schedule
+from .scheduler import (
+    _alloc_cpu_count,
+    _alloc_mem_mb,
+    _begin,
+    _controller_ok,
+    _ensure,
+    _job_alloc_mem_mb,
+    _job_gpus,
+    _need_ctl,
+    _part_nodes,
+    _req_mem_mb,
+    schedule,
+)
 from .status import _job_tres_per_node
 
 
@@ -195,7 +207,13 @@ def _show_node(state, sn, details=False):
     used_idx = sorted(_used_gpu_idx(state, sn.name))
     cfg_tres = f"cpu={sn.cpus},mem={sn.real_memory}M,billing={sn.cpus}" + (f",gres/gpu={gc}" if gc else "")
     used_g = len(used_idx)
-    alloc_tres = (f"cpu={sn.alloc_cpus}" + (f",gres/gpu={used_g}" if used_g else "")) if sn.alloc_cpus else ""
+    alloc_mem = sum(
+        _alloc_mem_mb(state, o, sn.name) for o in state.slurm.jobs if o.state == "RUNNING" and sn.name in o.nodelist
+    )
+    alloc_tres = ""
+    if sn.alloc_cpus:
+        alloc_tres = f"cpu={sn.alloc_cpus}" + (f",mem={mem_text(alloc_mem)}" if alloc_mem else "")
+        alloc_tres += f",gres/gpu={used_g}" if used_g else ""
     parts = [p.name for p in state.slurm.partitions.values() if sn.name in expand_hostlist(p.nodes)]
     lines = [
         f"NodeName={sn.name} Arch=x86_64 CoresPerSocket=56 ",
@@ -210,7 +228,7 @@ def _show_node(state, sn, details=False):
     lines += [
         f"   NodeAddr={sn.name} NodeHostName={sn.name} Version={SLURM_VERSION}",
         f"   OS=Linux {node.kernel if node else '5.15.0'} #43-Ubuntu SMP ",
-        f"   RealMemory={sn.real_memory} AllocMem=0 FreeMem=2011234 Sockets=2 Boards=1",
+        f"   RealMemory={sn.real_memory} AllocMem={alloc_mem} FreeMem=2011234 Sockets=2 Boards=1",
         f"   State={_scontrol_node_state(sn)} ThreadsPerCore=2 TmpDisk=0 Weight={sn.get('weight', 1)} Owner=N/A MCS_label=N/A",
         f"   Partitions={','.join(parts)} ",
         f"   BootTime={sn.boot_time} SlurmdStartTime={sn.boot_time}",
@@ -246,7 +264,7 @@ def _show_partition(state, p):
                 "   OverTimeLimit=NONE PreemptMode=OFF",
                 f"   State={p.state} TotalCPUs={cpus} TotalNodes={len(nodes)} SelectTypeParameters=NONE",
                 "   JobDefaults=(null)",
-                "   DefMemPerNode=UNLIMITED MaxMemPerNode=UNLIMITED",
+                f"   {_default_memory(state)} MaxMemPerNode=UNLIMITED",
                 f"   TRES={tres}",
             ]
         )
@@ -254,12 +272,21 @@ def _show_partition(state, p):
     )
 
 
-def _min_memory(j) -> str:
+def _default_memory(state) -> str:
+    """The memory default a partition reports: the one slurm.conf sets, else unlimited."""
+    for key in ("DefMemPerNode", "DefMemPerCPU", "DefMemPerGPU"):
+        value = str(_param(state, key, "0"))
+        if value.isdigit() and int(value):
+            return f"{key}={value}"
+    return "DefMemPerNode=UNLIMITED"
+
+
+def _min_memory(state, j) -> str:
     if j.get("mem_per_cpu"):
         return f"MinMemoryCPU={mem_text(j.mem_per_cpu)}"
     if j.get("mem_per_gpu"):
         return f"MinMemoryGPU={mem_text(j.mem_per_gpu)}"
-    return f"MinMemoryNode={mem_text(int(j.get('min_memory_mb') or 0))}"
+    return f"MinMemoryNode={mem_text(_req_mem_mb(state, j))}"
 
 
 def _show_job(state, j, details=False):
@@ -277,11 +304,11 @@ def _show_job(state, j, details=False):
     ncpu = _alloc_cpu_count(state, j) if j.state == "RUNNING" else j.num_nodes * j.ntasks_per_node * j.cpus_per_task
     rcpu = j.num_nodes * j.ntasks_per_node * j.cpus_per_task
     gp = f",gres/gpu={_job_gpus(j)}" if j.gpus_per_node else ""
-    mem = mem_text(int(j.get("min_memory_mb") or 0) * j.num_nodes)
+    mem = mem_text(_req_mem_mb(state, j) * j.num_nodes)
     req_tres = (
         f"cpu={rcpu},mem={mem},node={j.num_nodes},billing={rcpu}{gp}"  # scontrol order (cpu,mem,node,billing,gres)
     )
-    alloc_tres = f"cpu={ncpu},mem={mem},node={j.num_nodes},billing={ncpu}{gp}"
+    alloc_tres = f"cpu={ncpu},mem={mem_text(_job_alloc_mem_mb(state, j))},node={j.num_nodes},billing={ncpu}{gp}"
     out = f"StdOut={j.stdout}" if j.stdout else "StdOut=/dev/null"
     array = (
         f" ArrayJobId={j.array_job_id} ArrayTaskId={j.array_task_id}"
@@ -327,7 +354,7 @@ def _show_job(state, j, details=False):
     elif j.get("comment"):
         lines.append(f"   Comment={j.comment}")
     lines += [
-        f"   {_min_memory(j)} Features={j.get('features') or '(null)'} Reservation={j.get('reservation') or '(null)'}",
+        f"   {_min_memory(state, j)} Features={j.get('features') or '(null)'} Reservation={j.get('reservation') or '(null)'}",
         f"   Command={j.command or '(null)'}",
         f"   WorkDir={j.work_dir}",
         f"   StdErr={j.get('stderr') or j.stdout or '/dev/null'}",

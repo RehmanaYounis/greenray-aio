@@ -37,7 +37,7 @@ setup:
       ])
       st = state.slurm
       st.users['vip'] = {'name': 'vip', 'default_account': 'root'}
-      st.jobs.append({'id': 4410, 'name': 'eval-405b', 'user': 'vip', 'partition': 'defq', 'state': 'RUNNING',
+      st.jobs.append({'id': 4410, 'name': 'eval-405b', 'user': 'vip', 'partition': 'defq', 'state': 'RUNNING', 'min_memory_mb': 131072,
                       'num_nodes': 1, 'gpus_per_node': 2, 'ntasks_per_node': 2, 'nodelist': ['dgx-03'],
                       'alloc_gpus': {'dgx-03': [0, 1]}, 'start_time': 0, 'submit_time': 0, 'duration': None,
                       'command': '/home/vip/eval.sbatch'})
