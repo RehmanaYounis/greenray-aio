@@ -296,7 +296,7 @@ def make_head() -> dict:
         "/etc/os-release": OS_RELEASE,
         "/etc/slurm/slurm.conf": SLURM_CONF,
         "/etc/slurm/gres.conf": "AutoDetect=nvml\nName=gpu Type=h100 File=/dev/nvidia[0-7]\n",
-        "/etc/slurm/cgroup.conf": "ConstrainCores=yes\nConstrainDevices=yes\nConstrainRAMSpace=yes\n",
+        "/etc/slurm/cgroup.conf": "CgroupPlugin=cgroup/v1\nConstrainCores=yes\nConstrainDevices=yes\nConstrainRAMSpace=yes\n",
         "/root/.ngc/config": "",
         "/root/gpu-operator-values.yaml": "driver:\n  enabled: true\ntoolkit:\n  enabled: true\n",
     }

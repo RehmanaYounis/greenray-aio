@@ -120,3 +120,14 @@ def test_the_extra_memory_queries_work_in_a_guided_session():
     ui = ScriptedUI([f"sacct -j {job} --format=JobID,State%20,ReqMem,MaxRSS", "check", "quit"])
     lab.run_lab(ui, concrete("tsh-first-look-at-logs", 0))
     assert "200G" in ui.text and "204796M" in ui.text
+
+
+def test_the_cluster_names_the_accounting_setup_that_reports_virtual_memory():
+    """MaxVMSize is only filled under cgroup v1 accounting, so the lab's value needs the cluster to say that is what it runs."""
+    s, job, node = oom_lab(0)
+    assert "CgroupPlugin=cgroup/v1" in s.run("cat /etc/slurm/cgroup.conf")
+    assert "ConstrainRAMSpace=yes" in s.run("cat /etc/slurm/cgroup.conf")
+    assert "JobAcctGatherType=jobacct_gather/cgroup" in s.run("cat /etc/slurm/slurm.conf")
+    # the kernel's OOM report uses the v1 layout of Slurm's cgroups
+    assert f"task_memcg=/slurm/uid_1002/job_{job}/step_batch" in s.run(f"ssh {node} 'journalctl -k'")
+    assert table(s, f"sacct -j {job} --format=JobID,MaxVMSize")[f"{job}.batch"] == ["392G"]
