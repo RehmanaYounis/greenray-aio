@@ -2,7 +2,7 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.9.0] - 2026-11-27
 
 ### Changed
 - `greenray list` and the Labs menu group each exam domain by level: easy, then medium, then hard, with the codes in order inside each group. Codes do not change; a lab added later now appears with the labs of its level and not at the end of the list.
