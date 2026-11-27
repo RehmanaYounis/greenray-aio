@@ -198,6 +198,73 @@ def test_array_tasks_and_srun_steps_carry_the_allocation():
     assert "dgx-" in s.run("srun -c 2 hostname")
 
 
+def test_an_exclusive_job_with_memory_per_cpu_is_sized_for_the_whole_node():
+    s = cluster()
+    s.run("sbatch --exclusive -w dgx-02 --mem-per-cpu=1G --wrap='sleep 600'")
+    assert "cpu=224,mem=224G" in sacct(s, 1001, "AllocTRES")[0]
+    assert f"AllocMem={224 * 1024}" in s.run("scontrol show node dgx-02")
+
+
+def test_a_suspended_job_still_shows_what_it_holds():
+    s = cluster()
+    s.run("sbatch -w dgx-01 -c 4 --wrap='sleep 600'")
+    s.run("scontrol suspend 1001")
+    assert "AllocTRES=cpu=4,mem=32G" in s.run("scontrol show job 1001")
+    assert "mem=32G" in sacct(s, 1001, "AllocTRES")[0]
+    assert f"AllocMem={4 * PER_CPU}" in s.run("scontrol show node dgx-01")
+
+
+def test_a_default_no_node_can_cover_is_refused_at_submission_like_a_typed_one():
+    s = cluster("sed -i 's/^DefMemPerCPU=.*/DefMemPerCPU=16384/' /etc/slurm/slurm.conf")
+    refusal = "Requested node configuration is not available"
+    assert refusal in s.run("sbatch -c 224 --mem-per-cpu=16384 --wrap='sleep 600'")
+    assert refusal in s.run("sbatch -c 224 --wrap='sleep 600'")
+    assert refusal in s.run("sbatch --exclusive --wrap='sleep 600'")
+    assert "Submitted batch job" in s.run("sbatch -c 64 --wrap='sleep 600'")
+
+
+def test_a_node_added_without_real_memory_still_runs_jobs():
+    s = cluster(
+        "echo 'NodeName=cpu-01 CPUs=64 State=UNKNOWN' >> /etc/slurm/slurm.conf",
+        "sed -i 's/^PartitionName=defq Nodes=dgx-\\[01-04\\]/PartitionName=defq Nodes=dgx-[01-04],cpu-01/' /etc/slurm/slurm.conf",
+    )
+    assert "cpu-01" in s.run("sinfo -N")
+    s.run("sbatch -w cpu-01 --wrap='sleep 600'")
+    assert sacct(s, 1001, "State")[0] == "RUNNING"
+
+
+def test_sacct_copes_with_a_started_job_that_has_no_node_list():
+    state = make_cluster()
+    state.slurm.jobs.append(
+        {
+            "id": 900,
+            "user": "alice",
+            "state": "FAILED",
+            "start_time": -500,
+            "end_time": -100,
+            "exit_code": "1:0",
+            "batch": True,
+        }
+    )
+    out = Shell(state).run("sacct -j 900 --format=JobID,State,AllocTRES%50,NodeList")
+    assert "internal simulator error" not in out and "900.batch" in out and "None assigned" in out
+
+
+def test_jobs_a_lab_starts_with_keep_their_memory_when_slurm_conf_changes():
+    scenario = next(s for s in sc.find("tsh-17").all_variants())
+    s = Shell(scenario.build_state())
+    fields = "State,ReqMem,AllocTRES"
+    before = [sacct(s, job, fields) for job in (5000, 5001)]
+    held = re.search(r"AllocMem=(\d+)", s.run("scontrol show node dgx-03")).group(1)
+    assert before[1][:2] == ["RUNNING", "256G"]
+    for edit in ("sed -i 's/^DefMemPerCPU=.*/DefMemPerCPU=1024/' /etc/slurm/slurm.conf", NO_DEFAULT):
+        s.run(edit)
+        s.run("scontrol reconfigure")
+        assert [sacct(s, job, fields) for job in (5000, 5001)] == before
+        node = s.run("scontrol show node dgx-03")
+        assert f"AllocMem={held}" in node and int(held) <= real_memory(s, "dgx-03")
+
+
 def lab_states():
     for raw in sc.load_all():
         yield from raw.all_variants()
@@ -227,7 +294,7 @@ def test_tracking_memory_does_not_stop_a_learners_small_job_in_any_lab():
                 shell.run(NOT_TRACKED)
             shell.run("scontrol reconfigure")  # in both, so the only difference is the memory setting
             nodes = sorted(shell.ctx.state.slurm.nodes)
-            outcomes.append([node in shell.run(f"srun -w {node} hostname") for node in nodes])
+            outcomes.append([shell.run(f"srun -w {node} hostname").strip() == node for node in nodes])
         if outcomes[0] != outcomes[1]:
             differences.append(scenario.code)
     assert differences == []

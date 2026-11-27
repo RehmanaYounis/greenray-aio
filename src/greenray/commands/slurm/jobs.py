@@ -36,6 +36,8 @@ from .scheduler import (
     _default_partition,
     _ensure,
     _job_defaults,
+    _knows_memory,
+    _mem_for_node,
     _need_ctl,
     _part_nodes,
     schedule,
@@ -345,6 +347,10 @@ def _build_job(ctx, prog, opts, extra_check=True):
         job["min_memory_mb"] = job["mem_per_gpu"] * (job["gpus_per_node"] or 0)
     biggest = max([int(s.nodes[n].get("real_memory", 0)) for n in pnodes] + [0])
     if job.get("min_memory_mb", 0) and biggest and job["min_memory_mb"] > biggest:
+        raise fail("Requested node configuration is not available")
+    # the same goes for memory that comes from slurm.conf's default: refused now, not parked forever
+    sized = [n for n in pnodes if _knows_memory(s.nodes[n])]
+    if sized and all(_mem_for_node(state, job, n) > int(s.nodes[n].real_memory) for n in sized):
         raise fail("Requested node configuration is not available")
     usable_after_exclude = [n for n in pnodes if n not in job["exc_nodes"]]
     if job["exc_nodes"] and (num_nodes or 1) > len(usable_after_exclude):

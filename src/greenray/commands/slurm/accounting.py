@@ -225,7 +225,7 @@ def _sacct_rows(state, j, steps=True):
                 "maxvmsize": _units(_bytes(used.get("max_vmsize_kb")), 0),
             }
         )
-        if sid == "batch" and r["alloctres"]:
+        if sid == "batch" and r["alloctres"] and j.nodelist:
             # the batch script runs on the first node only, and billing is charged to the job
             first = j.nodelist[0]
             cpus = acpu // max(1, len(j.nodelist))

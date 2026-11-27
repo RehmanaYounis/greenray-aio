@@ -28,8 +28,14 @@ PARAMETERS (the ones these labs use)
 
        SelectType=select/cons_tres
        SelectTypeParameters=CR_Core_Memory
-              Consumable resources: cores and memory are allocated, so a
-              job without --mem takes the whole node's memory.
+              Consumable resources: cores and memory are allocated. A job
+              without --mem gets the default below; with no default it
+              takes the whole node's memory.
+
+       DefMemPerCPU=8192
+              Memory in MB given per allocated CPU to a job that names
+              none. DefMemPerNode and DefMemPerGPU are the alternatives;
+              set only one of the three.
 
        AccountingStorageEnforce=associations,limits,qos
               Which accounting rules slurmctld applies. Without "limits",

@@ -91,6 +91,7 @@ def _ensure(state):
         _node_defaults(state, sn)
     for j in s.jobs:
         _job_defaults(state, j)
+        _pin_memory(state, j)
     for name, sn in s.nodes.items():
         if sn.get("_reregister"):
             sn["_reregister"] = False
@@ -229,6 +230,15 @@ def _default_mem(state, j) -> tuple[str, int]:
     return "", 0
 
 
+def _pin_memory(state, j) -> None:
+    """Record a job's memory default and allocation once, for jobs a lab starts with as for submitted ones."""
+    if j.get("default_mem") is None:
+        j.default_mem = list(_default_mem(state, j))
+    started = j.get("start_time") is not None or _holds_memory(j)
+    if j.get("alloc_mem") is None and started and j.get("nodelist"):
+        j.alloc_mem = {n: _mem_for_node(state, j, n) for n in j.nodelist}
+
+
 def _req_mem_mb(state, j) -> int:
     """Memory per node the job asks for: its own figure, else slurm.conf's default; 0 when neither is set."""
     asked = int(j.get("min_memory_mb") or 0)
@@ -251,8 +261,11 @@ def _mem_for_node(state, j, name) -> int:
     """
     sn = state.slurm.nodes.get(name)
     key, each = _default_mem(state, j)
-    if not int(j.get("min_memory_mb") or 0) and key == "DefMemPerCPU" and j.get("exclusive") and sn:
-        return each * int(sn.get("cpus") or 0)  # an exclusive job holds every CPU of the node
+    if j.get("exclusive") and sn:  # an exclusive job holds every CPU of the node, so a per-CPU figure covers them all
+        if j.get("mem_per_cpu"):
+            return int(j.get("mem_per_cpu")) * int(sn.get("cpus") or 0)
+        if not int(j.get("min_memory_mb") or 0) and key == "DefMemPerCPU":
+            return each * int(sn.get("cpus") or 0)
     asked = _req_mem_mb(state, j)
     if asked or not _memory_tracked(state):
         return asked
@@ -263,6 +276,11 @@ def _alloc_mem_mb(state, j, name) -> int:
     """Memory the job holds on one node: what it was given when it started."""
     held = (j.get("alloc_mem") or {}).get(name)
     return int(held) if held is not None else _mem_for_node(state, j, name)
+
+
+def _knows_memory(sn) -> bool:
+    """A node line without RealMemory leaves it at 1 MB; such a node's memory is not policed."""
+    return int(sn.get("real_memory") or 0) > 1
 
 
 def _holds_memory(j) -> bool:
@@ -434,7 +452,7 @@ def _fits(state, j, name) -> list | None:
     if sn.alloc_cpus + cpus > sn.cpus:
         return None
     need_mem = _mem_for_node(state, j, name)
-    if need_mem:
+    if need_mem and _knows_memory(sn):
         holders = [o for o in state.slurm.jobs if o is not j and _holds_memory(o) and name in (o.nodelist or [])]
         used_mem = sum(_alloc_mem_mb(state, o, name) for o in holders)
         if used_mem + need_mem > int(sn.get("real_memory") or 0):

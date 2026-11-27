@@ -340,7 +340,7 @@ def _show_job(state, j, details=False):
         f"   NodeList={compress_hostlist(j.nodelist) or '(null)'}",
         f"   NumNodes={j.num_nodes} NumCPUs={ncpu} NumTasks={j.num_nodes * j.ntasks_per_node} CPUs/Task={j.cpus_per_task} ReqB:S:C:T=0:0:*:*",
         f"   ReqTRES={req_tres}",
-        f"   AllocTRES={alloc_tres if j.state == 'RUNNING' else '(null)'}",
+        f"   AllocTRES={alloc_tres if _holds_memory(j) else '(null)'}",
     ]
     if j.gpus_per_node:
         lines.append(f"   TresPerNode={_job_tres_per_node(j)}")
