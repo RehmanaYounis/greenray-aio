@@ -25,6 +25,10 @@ setup:
       state.slurm.jobs.append({
           'id': {job}, 'name': '{jobname}', 'user': '{user}', 'partition': 'defq', 'state': 'OUT_OF_MEMORY',
           'exit_code': '0:125', 'num_nodes': 1, 'gpus_per_node': 8, 'nodelist': ['{node}'],
+          # asked for 200G; the batch step peaked a few MB under the job's limit, the rest being the extern step's share
+          'cpus_per_task': 224, 'min_memory_mb': 204800,
+          'usage': {'batch': {'max_rss_kb': 209711104, 'max_vmsize_kb': 411041792},
+                    'extern': {'max_rss_kb': 0, 'max_vmsize_kb': 0}},
           'submit_time': -43200, 'start_time': -43000, 'end_time': -31200, 'batch': True,
           'command': '/home/{user}/{jobname}/train.sbatch', 'stdout': '/home/{user}/{jobname}/slurm-{job}.out'})
       state.slurm.next_job_id = {job} + 1
@@ -44,6 +48,7 @@ setup:
       d.dmesg.extend([
           "[112440.118331] python invoked oom-killer: gfp_mask=0xcc0(GFP_KERNEL), order=0, oom_score_adj=0",
           "[112440.118402] oom-kill:constraint=CONSTRAINT_MEMCG,nodemask=(null),cpuset=step_batch,mems_allowed=0-1,oom_memcg=/slurm/uid_1002/job_{job},task_memcg=/slurm/uid_1002/job_{job}/step_batch,task=python,pid=48213,uid=1002",
+          "[112440.118420] memory: usage 209715200kB, limit 209715200kB, failcnt 48112",
           "[112440.118455] Memory cgroup out of memory: Killed process 48213 (python) total-vm:412055216kB, anon-rss:201326592kB, file-rss:0kB, shmem-rss:0kB, UID:1002 pgtables:409600kB oom_score_adj:0",
       ])
       state.nodes['bcm-head'].journal['slurmctld'] = [

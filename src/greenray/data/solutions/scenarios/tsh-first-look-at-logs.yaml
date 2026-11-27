@@ -31,6 +31,7 @@ explanation: |
 edge_cases:
   - "Slurm only enforces memory limits when cgroup.conf has ConstrainRAMSpace=yes (and JobAcctGatherType or TaskPlugin uses cgroups). Without it the kernel OOM killer still runs, but system-wide, and Slurm reports a plain FAILED."
   - "A node that really crashed shows the job as NODE_FAIL, and sinfo/scontrol show the node DOWN with a reason. OUT_OF_MEMORY means the node kept running."
+  - "To size the resubmission, compare the request with the usage: sacct -j {job} --format=JobID,ReqMem,MaxRSS,MaxVMSize. ReqMem (200G) is on the job line, MaxRSS on the step lines. A step's MaxRSS at or just under ReqMem means the job ran into its limit; the kernel's 'memory: usage ..., limit ...' line gives the cgroup limit exactly."
   - "sacct output is truncated to column widths; use --format with a width (State%20) or -p for parsable output when a word is cut off, as with OUT_OF_ME+."
   - "journalctl -u slurmd on the node and journalctl -u slurmctld on the head node tell different halves of the story: the node knows why a step ended, the controller knows when the allocation was released."
   - "On a BCM cluster the GPU nodes may have small or no local journals (diskless or tmpfs /var/log). Then the detail is in the central syslog or in BCM's event log."

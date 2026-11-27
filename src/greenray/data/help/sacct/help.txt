@@ -26,10 +26,10 @@ Fields available for --format:
 AllocCPUS         AllocNodes        AllocTRES         Account
 Cluster           Comment           DerivedExitCode   Elapsed
 End               ExitCode          JobID             JobIDRaw
-JobName           MaxRSS            NNodes            NTasks
-NodeList          Partition         Priority          QOS
-Reason            ReqCPUS           ReqTRES           Start
-State             Submit            SubmitLine        Timelimit
-User              WorkDir
+JobName           MaxRSS            MaxVMSize         NNodes
+NTasks            NodeList          Partition         Priority
+QOS               Reason            ReqCPUS           ReqMem
+ReqTRES           Start             State             Submit
+SubmitLine        Timelimit         User              WorkDir
 
 (GreenRay AIO simulates the options listed above.)

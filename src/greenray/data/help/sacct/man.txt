@@ -26,6 +26,8 @@ OPTIONS
               JobID,JobName,State,ExitCode,NodeList,Elapsed,Timelimit.
               NCPUS, AllocCPUS, ReqMem, ReqTRES, AllocTRES, Start, End,
               Submit, Reason, QOS, Account, User are available too.
+              MaxRSS and MaxVMSize are the peak memory sampled for a
+              step; they are on the step lines, not on the job line.
 
        -b, --brief         JobID, State and ExitCode only.
        -l, --long          Many fields.
