@@ -52,6 +52,7 @@ SACCT_W = {
     "priority": 10,
     "cluster": 10,
     "maxrss": 10,
+    "maxvmsize": 10,
     "reqcpus": 8,
     "allocnodes": 10,
     "submitline": 40,
@@ -91,6 +92,7 @@ SACCT_HDR = {
     "priority": "Priority",
     "cluster": "Cluster",
     "maxrss": "MaxRSS",
+    "maxvmsize": "MaxVMSize",
     "reqcpus": "ReqCPUS",
     "allocnodes": "AllocNodes",
     "submitline": "SubmitLine",
@@ -105,6 +107,28 @@ SACCT_HDR = {
 }
 
 
+def _units(amount: int | None, start: int) -> str:
+    """A memory figure as sacct prints it by default; nothing when none is recorded.
+
+    sacct moves a value up a unit only while that loses nothing (its test is a multiple of half
+    the next unit), so 204800 MB reads 200G and 203464 MB stays 203464M. Zero is a bare 0.
+    ``start`` is the unit the figure is in: 0 for bytes, 2 for megabytes.
+    """
+    if amount is None:
+        return ""
+    if not amount:
+        return "0"
+    value, unit = float(amount), start
+    while value >= 1024 and int(value) % 512 == 0 and unit < 5:
+        value, unit = value / 1024, unit + 1
+    suffix = " KMGTP"[unit].strip()
+    return f"{int(value)}{suffix}" if value == int(value) else f"{value:.2f}{suffix}"
+
+
+def _bytes(kb) -> int | None:
+    return None if kb is None else int(kb) * 1024
+
+
 def _sacct_rows(state, j, steps=True):
     clock = state.slurm.clock
     elapsed = 0
@@ -113,8 +137,11 @@ def _sacct_rows(state, j, steps=True):
     ncpu = j.num_nodes * j.ntasks_per_node * j.cpus_per_task
     acpu = _alloc_cpu_count(state, j)
     gtres = f"gres/gpu={_job_gpus(j)}," if j.gpus_per_node else ""
-    tres = f"billing={ncpu},cpu={ncpu}," + gtres + f"mem=0,node={j.num_nodes}"
-    atres = f"billing={acpu},cpu={acpu}," + gtres + f"mem=0,node={j.num_nodes}"
+    # the memory the job asked for, per node; a job that named none shows 0, as in scontrol show job
+    req_mb = int(j.get("min_memory_mb") or 0)
+    rest = gtres + f"mem={mem_text(req_mb * j.num_nodes) if req_mb else 0},node={j.num_nodes}"
+    tres = f"billing={ncpu},cpu={ncpu}," + rest
+    atres = f"billing={acpu},cpu={acpu}," + rest
     st = j.state
     if st == "CANCELLED" and j.start_time is not None:
         st = "CANCELLED by 0"
@@ -144,13 +171,14 @@ def _sacct_rows(state, j, steps=True):
         "comment": "",
         "priority": str(j.priority),
         "cluster": "superpod",
-        "maxrss": "",
+        "maxrss": "",  # usage is gathered per step; the allocation line has none
+        "maxvmsize": "",
         "reqcpus": str(ncpu),
         "allocnodes": str(j.num_nodes),
         "submitline": j.command,
         "derivedexitcode": "0:0",
         "ncpus": str(acpu if j.start_time is not None else ncpu),
-        "reqmem": mem_text(int(j.get("min_memory_mb") or 0)),
+        "reqmem": _units(req_mb, 2),
         "reqnodes": str(j.num_nodes),
         "uid": "0" if j.user == "root" else str(1000 + sum(map(ord, j.user)) % 500),
         "group": j.user,
@@ -162,6 +190,8 @@ def _sacct_rows(state, j, steps=True):
         return rows
 
     def step(sid, name, state_, code, nodes=None):
+        # what the accounting plugin sampled for this step, when the job's record carries it
+        used = (j.get("usage") or {}).get(str(sid)) or {}
         r = dict(base)
         r.update(
             {
@@ -176,8 +206,15 @@ def _sacct_rows(state, j, steps=True):
                 "reason": "",
                 "timelimit": "",
                 "ntasks": "1",
+                # a step has no request of its own: what was asked for is on the allocation line
+                "reqmem": "",
+                "reqtres": "",
+                "maxrss": _units(_bytes(used.get("max_rss_kb")), 0),
+                "maxvmsize": _units(_bytes(used.get("max_vmsize_kb")), 0),
             }
         )
+        if sid == "batch" and r["alloctres"]:  # billing is charged to the job, not to its batch step
+            r["alloctres"] = f"cpu={acpu}," + rest
         return r
 
     term = j.state if j.state in TERMINAL else "RUNNING"
