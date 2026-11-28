@@ -2,6 +2,13 @@
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- `lspci -s` filters. `lspci -s 0000:2a:00.0` used to print every device; it now prints the one at that address, with the address rules of the real tool: domain, bus, device and function, any part left out or `*` matching anything, hexadecimal in either case, and its error messages for a malformed address. `-d`, `-n`, `-nn`, `-k`, `-v` and `-D` work as well, addresses are lowercase and the list is in address order.
+- PCI addresses come from one inventory. InfiniBand ports were listed by `lspci` under `mlx5_0` to `mlx5_7` and two of them shared a bus with a GPU. Each port now has its own address, and `lspci`, `ibdev2netdev -v`, `mst status` and the kernel log agree on it. The interfaces are named after their bus as the kernel does it, so they are now `ibp27s0`, `ibp44s0`, `ibp64s0`, `ibp79s0`, `ibp157s0`, `ibp173s0`, `ibp192s0` and `ibp206s0`. `lspci` also lists the PCIe switch port above each GPU, the one the kernel log names when it reports a bus error. GPU indexes, UUIDs, serial numbers and bus ids are unchanged.
+- `nvidia-smi --query-gpu=...` without `--format=csv` printed CSV anyway. A selective query now needs `--format=csv`, optionally with `noheader` and `nounits`, and is refused otherwise, as `--query-compute-apps` already was.
+
 ## [1.9.0] - 2026-11-27
 
 ### Changed

@@ -146,9 +146,16 @@ def make_gpu(node_no: int, idx: int) -> dict:
     }
 
 
+# PCI buses of the eight ConnectX-7 ports. They are clear of the GPUs, the switch ports above
+# the GPUs, the NVSwitches and the DPU, and they name the interfaces: bus 0x1b is ibp27s0.
+IB_BUSES = (0x1B, 0x2C, 0x40, 0x4F, 0x9D, 0xAD, 0xC0, 0xCE)
+
+
 def make_ib_port(idx: int) -> dict:
+    bus = IB_BUSES[idx]
     return {
         "ca": f"mlx5_{idx}",
+        "bus_id": f"0000:{bus:02x}:00.0",
         "port": 1,
         "state": "Active",  # Active / Down / Initializing / Armed
         "phys_state": "LinkUp",  # LinkUp / Polling / Disabled
@@ -161,7 +168,7 @@ def make_ib_port(idx: int) -> dict:
         "symbol_errors": 0,
         "link_downed": 0,
         "rcv_errors": 0,
-        "netdev": f"ibp{[24, 41, 58, 92, 155, 170, 187, 218][idx]}s0",
+        "netdev": f"ibp{bus}s0",
         "cable_ok": True,
     }
 
@@ -232,7 +239,10 @@ def make_node(name: str, node_no: int) -> dict:
             "[    0.000000] Linux version 5.15.0-1042-nvidia (buildd@lcy02-amd64-031)",
             "[    4.118221] nvidia: loading out-of-tree module taints kernel.",
             "[    4.532110] NVRM: loading NVIDIA UNIX x86_64 Kernel Module  550.90.07",
-            "[    5.010032] mlx5_core 0000:18:00.0: firmware version: 28.39.1002",
+            *(
+                f"[    5.0{10032 + 1811 * i}] mlx5_core {p['bus_id']}: firmware version: {p['fw']}"
+                for i, p in enumerate(ib)
+            ),
             "[    9.882134] nvidia-nvswitch: Probing for NVSwitch devices",
         ],
         "journal": {},  # service -> [log lines]

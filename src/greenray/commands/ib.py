@@ -20,6 +20,7 @@ import re
 from ..core.errors import CommandError
 from ..core.state import HEAD
 from . import HOOKS_REBOOT, HOOKS_SERVICE, command
+from .pci import ib_address
 from .system import known_dirs
 
 STATE_NUM = {"Down": 1, "Initializing": 2, "Armed": 3, "Active": 4}
@@ -106,8 +107,7 @@ def _rate_label(p) -> str:
 
 
 def _pci(p) -> str:
-    m = re.search(r"ibp(\d+)s0", p.netdev)
-    return f"{int(m.group(1)):02x}:00.0" if m else "18:00.0"
+    return ib_address(p)
 
 
 def _ib_ready(ctx):
@@ -171,7 +171,7 @@ def ibdev2netdev(ctx, args):
         state = "Up" if _active(p) and p.netdev not in ctx.node.get("netdev_admin_down", []) else "Down"
         if "-v" in args:
             out.append(
-                f"{p.bus_id if 'bus_id' in p else '0000:00:00.0'} {p.ca} (MT4129 - MCX755106AS-HEAT) ConnectX-7 fw {p.fw} port 1 ({state}) ==> {p.netdev} ({state})"
+                f"0000:{_pci(p)} {p.ca} (MT4129 - MCX755106AS-HEAT) ConnectX-7 fw {p.fw} port 1 ({state}) ==> {p.netdev} ({state})"
             )
         else:
             out.append(f"{p.ca} port 1 ==> {p.netdev} ({state})")

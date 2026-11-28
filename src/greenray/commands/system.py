@@ -1115,20 +1115,6 @@ def modprobe(ctx, args):
     return ""
 
 
-@command("lspci", help="lspci | grep -i nvidia")
-def lspci(ctx, args):
-    rows = []
-    for g in ctx.node.gpus:
-        if g.fallen_off_bus:
-            continue
-        rows.append(f"{g.bus_id[9:]} 3D controller: NVIDIA Corporation GH100 [H100 SXM5 80GB] (rev a1)")
-    for i in range(ctx.node.nvswitches):
-        rows.append(f"{0x05 + i:02x}:00.0 Bridge: NVIDIA Corporation Device 22a3 (rev a1)")
-    for p in ctx.node.ib:
-        rows.append(f"{p.ca}: Infiniband controller: Mellanox Technologies MT2910 Family [ConnectX-7]")
-    return "\n".join(rows) + "\n"
-
-
 @command("reboot", help="reboot the current node (clears transient GPU faults)")
 def reboot(ctx, args):
     from . import HOOKS_REBOOT
