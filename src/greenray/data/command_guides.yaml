@@ -251,6 +251,18 @@ mpirun:
     - "-x VAR[=value]          pass environment variables to remote ranks"
     - "--allow-run-as-root     required when running as root"
 
+lspci:
+  summary: list the PCI devices of a node
+  purpose: Shows what sits on the PCI buses (GPUs, NVSwitches, ConnectX ports, the PCIe switch ports above the GPUs) with each device's bus address.
+  when: A log or a BMC alert names a PCI address and you need to know which device that is, or you want to see whether a device is still on the bus.
+  options:
+    - "-s 2a:00.0   only the device at that address; parts left out match anything (-s 2a: is the whole bus)"
+    - "-d 10de:   only one vendor's devices (10de NVIDIA, 15b3 Mellanox)"
+    - "-nn   class and vendor:device numbers next to the names;  -k   the kernel driver;  -D   with the PCI domain"
+  read:
+    - "The address is bus:device.function in hexadecimal. nvidia-smi writes the same GPU as 00000000:2A:00.0."
+    - "A GPU that fell off the bus is missing here while the switch port above it is still listed."
+
 lsmod:
   summary: list loaded kernel modules
   purpose: Shows which drivers are loaded (nvidia, nvidia_uvm, nvidia_peermem, mlx5_core, nvidia_fs ...).

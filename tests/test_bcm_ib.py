@@ -364,7 +364,7 @@ def test_ibstat_down_port_shows_rate_10():
     out = s.run("ibstat mlx5_3")
     assert "State: Down" in out and "Physical state: Polling" in out and "Rate: 10" in out
     assert "4X NDR" in s.run("ibstatus mlx5_0")
-    assert "ibp92s0" in s.run("ip -br a") and "DOWN" in s.run("ip -br a | grep ibp92s0")
+    assert "ibp79s0" in s.run("ip -br a") and "DOWN" in s.run("ip -br a | grep ibp79s0")
 
 
 def test_mlxlink_toggle_vs_reseat():

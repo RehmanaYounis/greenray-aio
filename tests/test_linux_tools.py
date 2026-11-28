@@ -124,7 +124,7 @@ def test_diagnostic_tools_read_the_state():
     assert "6817" not in s.run("ss -tln")
     assert "Address: 10.141.0.2" in s.run("nslookup dgx-02")
     s.run("ssh dgx-01")
-    assert "Link detected: yes" in s.run("ethtool ibp24s0")
+    assert "Link detected: yes" in s.run("ethtool ibp27s0")
     assert "Static hostname: dgx-01" in s.run("hostnamectl")
     assert "nvidia_peermem.ko" in s.run("modinfo nvidia_peermem")
     assert s.run("htop").startswith("top - ")

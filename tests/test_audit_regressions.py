@@ -316,7 +316,7 @@ def test_docker_ps_quiet_format_and_consistent_ids():
 def test_ip_route_and_link_show():
     s = sh("dgx-01")
     assert s.run("ip route").startswith("default via 10.141.255.254")
-    assert "ibp24s0" in s.run("ip link show ibp24s0")
+    assert "ibp27s0" in s.run("ip link show ibp27s0")
 
 
 def test_helm_json_listing_and_stable_deploy_time():

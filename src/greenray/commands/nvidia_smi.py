@@ -311,13 +311,20 @@ QUERY_FIELDS = {
 }
 
 
+def _csv_options(fmt) -> tuple[bool, bool]:
+    """(noheader, nounits) of a ``--format=`` value. A selective query has to say csv; nothing else is offered."""
+    options = [o.strip() for o in (fmt or "").split(",") if o.strip()]
+    if "csv" not in options or any(o not in ("csv", "noheader", "nounits") for o in options):
+        raise CommandError("Invalid combination of input arguments. Please run 'nvidia-smi -h' for help.", 2)
+    return "noheader" in options, "nounits" in options
+
+
 def _query_csv(ctx, gpus, fields_spec, fmt):
     fields = [f.strip() for f in fields_spec.split(",") if f.strip()]
     bad = [f for f in fields if f not in QUERY_FIELDS]
     if bad:
         raise CommandError(f'Field "{bad[0]}" is not a valid field to query.', 2)
-    fmt = fmt or ""
-    noheader, nounits = "noheader" in fmt, "nounits" in fmt
+    noheader, nounits = _csv_options(fmt)
     rows = []
     if not noheader:
         hdr = []
@@ -649,7 +656,7 @@ def nvidia_smi(ctx, args):
     if "-h" in args or "--help" in args:
         return (
             "Usage: nvidia-smi [OPTION]...\n  -L  list GPUs\n  -q [-d SECTION]  query (MEMORY,ECC,TEMPERATURE,POWER,CLOCK,PERFORMANCE,ROW_REMAPPER,COMPUTE)\n"
-            "  --query-gpu=FIELDS --format=csv[,noheader,nounits]\n  -i ID  select GPU\n  -pm 0|1  persistence mode\n"
+            "  --query-gpu=FIELDS --format=csv[,noheader][,nounits]  (--format=csv is required)\n  -i ID  select GPU\n  -pm 0|1  persistence mode\n"
             "  -pl WATTS  power limit\n  -r  reset GPU\n  -e 0|1  ECC mode\n  -c MODE  compute mode\n  -mig 0|1  MIG mode\n"
             "  -lgc MIN,MAX / -rgc  lock/reset GPU clocks\n  -ac MEM,SM / -rac  applications clocks\n"
             "  --query-compute-apps=FIELDS --format=csv  processes per GPU\n  pmon [-c N]  process monitor\n"
@@ -885,9 +892,7 @@ def _query_apps(ctx, gpus, fields_spec, fmt):
     bad = [f for f in fields if f not in allowed]
     if bad:
         raise CommandError(f'Field "{bad[0]}" is not a valid field to query.', 2)
-    if not fmt or "csv" not in fmt:
-        raise CommandError("Invalid combination of input arguments. Please run 'nvidia-smi -h' for help.", 2)
-    noheader, nounits = "noheader" in fmt, "nounits" in fmt
+    noheader, nounits = _csv_options(fmt)
     units = {"used_memory": " [MiB]"}
     out = [] if noheader else [", ".join(f + ("" if nounits else units.get(f, "")) for f in fields)]
     for g in _visible(gpus):

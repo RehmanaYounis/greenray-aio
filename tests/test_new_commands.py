@@ -29,7 +29,7 @@ def test_lsblk_ibdev2netdev_last_and_chassis():
     assert s.run("lsblk -d -o NAME,SIZE").splitlines()[1].split() == ["nvme0n1", "1.7T"]
     assert "unknown column" in s.run("lsblk -o NOPE")
     lines = s.run("ibdev2netdev").splitlines()
-    assert len(lines) == 8 and lines[0] == "mlx5_0 port 1 ==> ibp24s0 (Up)"
+    assert len(lines) == 8 and lines[0] == "mlx5_0 port 1 ==> ibp27s0 (Up)"
     assert "ConnectX-7" in s.run("ibdev2netdev -v")
     assert "System Power         : on" in s.run("ipmitool chassis status")
     last = s.run("last")
